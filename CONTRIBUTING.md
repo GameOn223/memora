@@ -29,7 +29,7 @@ If your change needs to bend one of these, say so in the PR description and expl
 You'll need:
 
 - Flutter 3.47.4 (stable). `flutter --version` should report Dart 3.13.
-- Android SDK with platform 36 and NDK 29.0.13599879, plus JDK 17. Android Studio's bundled JDK works.
+- Android SDK with platform 36 and NDK 27.0.12077973, plus JDK 17. Android Studio's bundled JDK works.
 - A phone or emulator running Android 8.0 or newer for anything that touches capture, gallery or background work.
 
 Then:
