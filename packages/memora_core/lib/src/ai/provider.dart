@@ -25,6 +25,7 @@ class ProviderDescriptor {
     required this.capabilities,
     this.suggestedModels = const {},
     this.requiresApiKey = false,
+    this.apiKeyOptional = false,
     this.defaultBaseUrl,
     this.baseUrlEditable = false,
     this.apiKeyHint,
@@ -40,6 +41,10 @@ class ProviderDescriptor {
   /// Starting points for the model picker. Users can type any model id.
   final Map<Capability, List<String>> suggestedModels;
   final bool requiresApiKey;
+
+  /// The provider works without a key but uses one when the user saves it,
+  /// for example a self-hosted server behind an authenticating proxy.
+  final bool apiKeyOptional;
   final String? defaultBaseUrl;
   final bool baseUrlEditable;
 
