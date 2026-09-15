@@ -20,4 +20,5 @@ export 'src/model/understanding.dart';
 export 'src/ports/embedding_model.dart';
 export 'src/ports/platform.dart';
 export 'src/ports/stores.dart';
+export 'src/services/contracts.dart';
 export 'src/util/json.dart' show normalizeKey;
