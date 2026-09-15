@@ -22,4 +22,8 @@ export 'src/ports/embedding_model.dart';
 export 'src/ports/platform.dart';
 export 'src/ports/stores.dart';
 export 'src/services/contracts.dart';
+export 'src/text/amounts.dart';
+export 'src/text/dates.dart';
+export 'src/text/money_format.dart';
+export 'src/text/normalize.dart';
 export 'src/util/json.dart' show normalizeKey;
