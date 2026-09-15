@@ -10,10 +10,12 @@ resolution: workspace
 
 dependencies:
   archive: ^4.3.0
+  crypto: ^3.0.7
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.4.3
   go_router: ^18.0.1
+  http: ^1.6.0
   memora_core:
     path: ../packages/memora_core
   memora_database:

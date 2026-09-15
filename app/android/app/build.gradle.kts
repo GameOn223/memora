@@ -31,6 +31,10 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     signingConfigs {
@@ -51,6 +55,10 @@ android {
                 else signingConfigs.getByName("debug")
         }
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 kotlin {
@@ -61,4 +69,18 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("androidx.activity:activity-ktx:1.13.0")
+    implementation("androidx.fragment:fragment-ktx:1.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("androidx.exifinterface:exifinterface:1.4.2")
+    // Bundled Latin model, so OCR works offline from the first launch.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.30.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }
