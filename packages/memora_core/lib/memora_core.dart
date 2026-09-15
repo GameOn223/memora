@@ -12,6 +12,8 @@ export 'src/ai/provider.dart';
 export 'src/ai/registry.dart';
 export 'src/ai/router.dart';
 export 'src/ai/settings.dart';
+export 'src/embedding/wordpiece_tokenizer.dart';
+export 'src/extraction/rule_based_extractor.dart';
 export 'src/model/conversation.dart';
 export 'src/model/details.dart';
 export 'src/model/memory.dart';
