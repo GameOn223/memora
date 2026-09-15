@@ -24,6 +24,7 @@ export 'src/ports/embedding_model.dart';
 export 'src/ports/platform.dart';
 export 'src/ports/stores.dart';
 export 'src/processing/default_ingestor.dart';
+export 'src/processing/default_pipeline.dart';
 export 'src/processing/embedding_text.dart';
 export 'src/processing/fact_normalizer.dart';
 export 'src/processing/queue_policy_repository.dart';
