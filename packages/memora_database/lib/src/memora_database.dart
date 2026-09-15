@@ -5,6 +5,7 @@ import 'migrations/migration.dart';
 import 'sqlite_memory_store.dart';
 import 'sqlite_queue_store.dart';
 import 'sqlite_search_store.dart';
+import 'sqlite_vector_store.dart';
 
 /// The Memora SQLite database and the stores built on it.
 ///
@@ -56,6 +57,10 @@ class MemoraDatabase {
 
   /// Structured and full-text search.
   late final SearchStore search = SqliteSearchStore(connection);
+
+  /// Embedding vectors and nearest-neighbour search. File databases run large
+  /// scans in a separate isolate.
+  late final VectorStore vectors = SqliteVectorStore(connection, path: path);
 
   /// Closes the connection. The stores can't be used afterwards.
   void close() => connection.close();
