@@ -1,0 +1,16 @@
+name: memora_providers
+description: AI provider adapters for Memora. Each adapter implements the capability interfaces from memora_core.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+dependencies:
+  http: ^1.6.0
+  memora_core:
+    path: ../memora_core
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.31.1
