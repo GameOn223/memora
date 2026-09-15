@@ -12,11 +12,20 @@ class VisionRequest {
     required this.imageBytes,
     required this.mimeType,
     required this.takenAt,
+    this.absoluteImagePath,
     this.localeTag = 'en-IN',
+    this.defaultCurrency = 'INR',
   });
 
   final Uint8List imageBytes;
   final String mimeType;
+
+  /// Path of the original on disk. On-device adapters that read files, such
+  /// as OCR, use this instead of the bytes.
+  final String? absoluteImagePath;
+
+  /// Currency assumed when the image only shows a symbol such as Rs.
+  final String defaultCurrency;
 
   /// Helps the model resolve relative dates such as "due tomorrow".
   final DateTime takenAt;
@@ -33,10 +42,12 @@ class VerificationRequest {
     required this.mimeType,
     required this.attributeType,
     required this.expectedValue,
+    this.absoluteImagePath,
   });
 
   final Uint8List imageBytes;
   final String mimeType;
+  final String? absoluteImagePath;
 
   /// For example `amount`.
   final String attributeType;

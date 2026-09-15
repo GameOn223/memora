@@ -7,6 +7,7 @@ library;
 export 'src/ai/capabilities.dart';
 export 'src/ai/errors.dart';
 export 'src/ai/local_only_policy.dart';
+export 'src/ai/prompts.dart';
 export 'src/ai/provider.dart';
 export 'src/ai/registry.dart';
 export 'src/ai/router.dart';
