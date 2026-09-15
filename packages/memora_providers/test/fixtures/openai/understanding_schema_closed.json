@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": { "type": "string" },
+    "category": { "type": "string" },
+    "visual_description": { "type": "string" },
+    "extracted_text": { "type": "string" },
+    "keywords": { "type": "array", "items": { "type": "string" } },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "value": { "type": "string" }
+        },
+        "required": ["type", "value"],
+        "additionalProperties": false
+      }
+    },
+    "dates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "value": { "type": "string" }
+        },
+        "required": ["type", "value"],
+        "additionalProperties": false
+      }
+    },
+    "amounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "value": { "type": "number" },
+          "currency": { "type": "string" }
+        },
+        "required": ["type", "value", "currency"],
+        "additionalProperties": false
+      }
+    },
+    "attributes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "value": { "type": "string" }
+        },
+        "required": ["type", "value"],
+        "additionalProperties": false
+      }
+    },
+    "confidence": { "type": "number" }
+  },
+  "required": [
+    "summary",
+    "category",
+    "visual_description",
+    "extracted_text",
+    "keywords",
+    "entities",
+    "dates",
+    "amounts",
+    "attributes",
+    "confidence"
+  ],
+  "additionalProperties": false
+}

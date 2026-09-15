@@ -1,0 +1,42 @@
+{
+  "id": "gen-1789467400-abcDEF",
+  "provider": "Google",
+  "model": "google/gemini-3-flash",
+  "object": "chat.completion",
+  "created": 1789467400,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "tool_calls",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "refusal": null,
+        "reasoning": null,
+        "tool_calls": [
+          {
+            "index": 0,
+            "id": "tool_search_memories_Zx81",
+            "type": "function",
+            "function": {
+              "name": "search_memories",
+              "arguments": "{\"text\":\"bills\"}"
+            }
+          }
+        ],
+        "reasoning_details": [
+          {
+            "type": "reasoning.encrypted",
+            "data": "CiQB0e2Kb3sig",
+            "id": "tool_search_memories_Zx81",
+            "format": "google-gemini-v1",
+            "index": 0
+          }
+        ]
+      }
+    }
+  ],
+  "usage": { "prompt_tokens": 300, "completion_tokens": 20, "total_tokens": 320 }
+}

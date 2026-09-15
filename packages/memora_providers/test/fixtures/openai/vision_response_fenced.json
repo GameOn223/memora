@@ -1,0 +1,24 @@
+{
+  "id": "chatcmpl-8f1c0a2e-4b1d-4c55-9d1e-2b8f3f1a7c10",
+  "object": "chat.completion",
+  "created": 1789467100,
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Here is the extracted data:\n```json\n{\"summary\": \"IndiGo boarding pass BLR to DEL\", \"category\": \"ticket\", \"visual_description\": \"A boarding pass.\", \"extracted_text\": \"PNR K7Q2XZ\", \"keywords\": [\"flight\"], \"entities\": [{\"type\": \"company\", \"value\": \"IndiGo\"}], \"dates\": [], \"amounts\": [], \"attributes\": [{\"type\": \"booking_reference\", \"value\": \"K7Q2XZ\"}], \"confidence\": 0.7}\n```"
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "queue_time": 0.02,
+    "prompt_tokens": 1320,
+    "completion_tokens": 96,
+    "total_tokens": 1416
+  },
+  "x_groq": { "id": "req_01k5abc" }
+}

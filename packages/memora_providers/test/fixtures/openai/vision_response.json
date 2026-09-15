@@ -1,0 +1,25 @@
+{
+  "id": "chatcmpl-C9x2kLm0PqRsT",
+  "object": "chat.completion",
+  "created": 1789467000,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"summary\":\"Reliance electricity bill for August 2026\",\"category\":\"Utility Bill\",\"visual_description\":\"A utility bill displayed in a mobile app.\",\"extracted_text\":\"Reliance Energy\\nAmount due Rs 1,842\\nDue date 31 Aug 2026\",\"keywords\":[\"reliance\",\"electricity\",\"bill\"],\"entities\":[{\"type\":\"company\",\"value\":\"Reliance\"}],\"dates\":[{\"type\":\"due_date\",\"value\":\"2026-08-31\"}],\"amounts\":[{\"type\":\"total\",\"value\":1842,\"currency\":\"INR\"}],\"attributes\":[{\"type\":\"account_number\",\"value\":\"•••• 4471\"}],\"confidence\":0.86}",
+        "refusal": null,
+        "annotations": []
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1412,
+    "completion_tokens": 138,
+    "total_tokens": 1550
+  },
+  "system_fingerprint": "fp_6b68a8204b"
+}

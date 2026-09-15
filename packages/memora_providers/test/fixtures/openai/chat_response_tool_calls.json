@@ -1,0 +1,35 @@
+{
+  "id": "chatcmpl-C9x3aBc",
+  "object": "chat.completion",
+  "created": 1789467200,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_Xk2m9",
+            "type": "function",
+            "function": {
+              "name": "aggregate_results",
+              "arguments": "{\"attribute\":\"amount\",\"op\":\"max\"}"
+            }
+          },
+          {
+            "id": "call_Yq7p1",
+            "type": "function",
+            "function": { "name": "get_memory", "arguments": "{\"id\": \"m1\"" }
+          }
+        ],
+        "refusal": null,
+        "annotations": []
+      },
+      "logprobs": null,
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": { "prompt_tokens": 512, "completion_tokens": 40, "total_tokens": 552 }
+}

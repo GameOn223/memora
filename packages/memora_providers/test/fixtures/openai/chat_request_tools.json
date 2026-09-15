@@ -1,0 +1,47 @@
+{
+  "model": "gpt-4.1-mini",
+  "messages": [
+    { "role": "system", "content": "You answer questions about saved memories." },
+    { "role": "user", "content": "Which electricity bill was highest?" },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "search_memories",
+            "arguments": "{\"text\":\"electricity bill\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1",
+      "content": "{\"result_set_id\":\"rs1\",\"count\":3}"
+    },
+    {
+      "role": "assistant",
+      "content": "Checking the amounts."
+    },
+    { "role": "user", "content": "Only this year." }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "search_memories",
+        "description": "Hybrid search over memories.",
+        "parameters": {
+          "type": "object",
+          "properties": { "text": { "type": "string" } },
+          "required": ["text"]
+        }
+      }
+    }
+  ],
+  "temperature": 0.2,
+  "max_completion_tokens": 1024
+}
