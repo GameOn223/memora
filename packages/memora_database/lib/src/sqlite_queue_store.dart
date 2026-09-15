@@ -65,8 +65,8 @@ WHERE id = ?2''',
     _db.execute(
       '''
 UPDATE memories
-SET status = 'captured', lease_until = NULL, next_attempt_at = ?, failure_reason = ?,
-    updated_at = ?
+SET status = 'captured', lease_until = NULL, next_attempt_at = ?,
+    failure_reason = ?, updated_at = ?
 WHERE id = ?''',
       [toMillis(nextAttemptAt), reason, toMillis(now), id],
     );
@@ -102,8 +102,8 @@ WHERE id = ?''',
     _db.execute(
       '''
 UPDATE memories
-SET status = 'captured', attempts = 0, failure_reason = NULL, lease_until = NULL,
-    next_attempt_at = NULL, updated_at = ?
+SET status = 'captured', attempts = 0, failure_reason = NULL,
+    lease_until = NULL, next_attempt_at = NULL, updated_at = ?
 WHERE id = ? AND status = 'failed' ''',
       [toMillis(now), id],
     );

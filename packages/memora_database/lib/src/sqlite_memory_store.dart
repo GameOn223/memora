@@ -400,7 +400,8 @@ WHERE EXISTS (SELECT 1 FROM memories WHERE id = ?)''',
   @override
   Future<List<Memory>> missingThumbnails({int limit = 50}) async {
     final rows = _db.select(
-      "SELECT * FROM memories WHERE thumbnail_path IS NULL AND status != 'deleted' "
+      'SELECT * FROM memories '
+      "WHERE thumbnail_path IS NULL AND status != 'deleted' "
       'ORDER BY added_at ASC, seq ASC LIMIT ?',
       [limit],
     );
@@ -413,12 +414,10 @@ WHERE EXISTS (SELECT 1 FROM memories WHERE id = ?)''',
   /// since the previous call.
   @override
   Future<int> dataVersion() async {
-    final row = _db
-        .select(
-          'SELECT (SELECT data_version FROM pragma_data_version) AS data_version, '
-          'total_changes() AS changes',
-        )
-        .first;
+    final row = _db.select('''
+SELECT
+  (SELECT data_version FROM pragma_data_version) AS data_version,
+  total_changes() AS changes''').first;
     final dataVersion = row['data_version'] as int;
     final changes = row['changes'] as int;
     if (dataVersion != _seenDataVersion || changes != _seenTotalChanges) {

@@ -72,6 +72,14 @@ void main() {
       );
     });
 
+    test('leaves a schema that passes integrity checks', () {
+      expect(
+        db.connection.select('PRAGMA integrity_check').single.columnAt(0),
+        'ok',
+      );
+      expect(db.connection.select('PRAGMA foreign_key_check'), isEmpty);
+    });
+
     test('turns on foreign keys and a busy timeout', () {
       expect(db.connection.select('PRAGMA foreign_keys').single.columnAt(0), 1);
       expect(
