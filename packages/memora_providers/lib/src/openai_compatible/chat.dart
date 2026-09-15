@@ -2,9 +2,11 @@ import 'dart:convert';
 
 import 'package:memora_core/memora_core.dart';
 
+import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
+import '../shared/limits.dart';
 import '../shared/replay_cache.dart';
-import 'endpoint.dart';
+import 'message_text.dart';
 import 'presets.dart';
 
 /// Chat with tool calls over `POST /chat/completions`.
@@ -15,7 +17,7 @@ class OpenAiChatService implements ChatService {
   static final _reasoningDetails = TurnReplayCache<Object>();
   static var _generatedIds = 0;
 
-  final OpenAiEndpoint _endpoint;
+  final ProviderEndpoint _endpoint;
   final OpenAiCompatibleProfile _profile;
   final String modelId;
 

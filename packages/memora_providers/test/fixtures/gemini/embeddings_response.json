@@ -1,0 +1,6 @@
+{
+  "embeddings": [
+    { "values": [3, 4] },
+    { "values": [0, 2] }
+  ]
+}

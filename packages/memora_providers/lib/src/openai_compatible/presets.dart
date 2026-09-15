@@ -165,10 +165,6 @@ class OpenAiCompatibleProfile {
       useMaxCompletionTokens ? 'max_completion_tokens' : 'max_tokens';
 }
 
-/// Extra output tokens granted to reasoning models, which spend part of the
-/// limit thinking before they answer.
-const reasoningHeadroomTokens = 8192;
-
 final _reasoningModel = RegExp(r'^(gpt-5|o[1-9])');
 
 /// OpenAI reasoning models, including when routed through OpenRouter as

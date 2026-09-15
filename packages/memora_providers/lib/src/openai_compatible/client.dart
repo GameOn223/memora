@@ -3,10 +3,10 @@ import 'package:memora_core/memora_core.dart';
 
 import '../http/json_client.dart';
 import '../nvidia/rerank.dart';
+import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
 import 'chat.dart';
 import 'embeddings.dart';
-import 'endpoint.dart';
 import 'presets.dart';
 import 'vision.dart';
 
@@ -24,11 +24,12 @@ class OpenAiCompatibleClient implements ProviderClient {
        _apiKey = config.apiKey,
        _timeout = timeout,
        _profile = profile ?? OpenAiCompatibleProfile.forProvider(descriptor.id),
-       _endpoint = OpenAiEndpoint(
+       _endpoint = ProviderEndpoint(
          providerId: descriptor.id,
          baseUrl: config.baseUrl ?? descriptor.defaultBaseUrl,
          apiKey: config.apiKey,
          http: JsonClient(httpClient, timeout: timeout),
+         authHeaders: (key) => {'authorization': 'Bearer $key'},
        );
 
   @override
@@ -37,7 +38,7 @@ class OpenAiCompatibleClient implements ProviderClient {
   final String? _apiKey;
   final Duration _timeout;
   final OpenAiCompatibleProfile _profile;
-  final OpenAiEndpoint _endpoint;
+  final ProviderEndpoint _endpoint;
 
   @override
   VisionService? vision(String modelId) =>

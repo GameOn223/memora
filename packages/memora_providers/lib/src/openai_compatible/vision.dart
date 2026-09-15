@@ -3,11 +3,13 @@ import 'dart:typed_data';
 import 'package:memora_core/memora_core.dart';
 
 import '../http/errors.dart';
+import '../shared/endpoint.dart';
 import '../shared/image_payload.dart';
 import '../shared/json_extract.dart';
 import '../shared/json_read.dart';
 import '../shared/schema.dart';
-import 'endpoint.dart';
+import '../shared/verification.dart';
+import 'message_text.dart';
 import 'presets.dart';
 
 final _formatRejected = RegExp(
@@ -15,13 +17,11 @@ final _formatRejected = RegExp(
   caseSensitive: false,
 );
 
-const _verifyUserText = 'Check the field in this image.';
-
 /// Vision over `POST /chat/completions` with an image data URI.
 class OpenAiVisionService implements VisionService {
   OpenAiVisionService(this._endpoint, this._profile, this.modelId);
 
-  final OpenAiEndpoint _endpoint;
+  final ProviderEndpoint _endpoint;
   final OpenAiCompatibleProfile _profile;
   final String modelId;
 
@@ -46,7 +46,7 @@ class OpenAiVisionService implements VisionService {
   Future<VerificationResult> verify(VerificationRequest request) async {
     final json = await _requestJson(
       system: VisionPrompts.verifyInstructions(request),
-      userText: _verifyUserText,
+      userText: verifyUserText,
       image: _image(request.imageBytes, request.mimeType),
       schemaName: 'verification_result',
       schema: VisionPrompts.verificationSchema,
@@ -157,18 +157,4 @@ class OpenAiVisionService implements VisionService {
     }
     return extractJsonObject(messageText(message['content']));
   }
-}
-
-/// Reads `{confirmed, observed_value}` leniently.
-VerificationResult parseVerification(Map<String, Object?> json) {
-  final confirmed = switch (json['confirmed']) {
-    true || 'true' => true,
-    _ => false,
-  };
-  final observed = switch (json['observed_value']) {
-    final String s when s.trim().isNotEmpty => s.trim(),
-    final num n => n.toString(),
-    _ => null,
-  };
-  return VerificationResult(confirmed: confirmed, observedValue: observed);
 }

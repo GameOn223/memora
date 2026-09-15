@@ -4,21 +4,28 @@ import 'package:memora_core/memora_core.dart';
 
 import '../http/errors.dart';
 import '../http/json_client.dart';
-import '../shared/json_read.dart';
+import 'json_read.dart';
 
-/// One configured OpenAI-compatible server: base URL, key and transport.
-class OpenAiEndpoint {
-  OpenAiEndpoint({
+/// Builds the credential headers for a key. Called only with a non-empty key.
+typedef AuthHeaders = Map<String, String> Function(String apiKey);
+
+/// One configured provider server: base URL, key, headers and transport.
+class ProviderEndpoint {
+  ProviderEndpoint({
     required this.providerId,
     required String? baseUrl,
     required this._apiKey,
     required this._http,
+    required this._authHeaders,
+    this._extraHeaders = const {},
   }) : _baseUrl = baseUrl?.trim();
 
   final String providerId;
   final String? _baseUrl;
   final String? _apiKey;
   final JsonClient _http;
+  final AuthHeaders _authHeaders;
+  final Map<String, String> _extraHeaders;
 
   bool get hasApiKey => (_apiKey ?? '').isNotEmpty;
 
@@ -31,6 +38,7 @@ class OpenAiEndpoint {
         uri.host.isNotEmpty;
   }
 
+  /// [path] starts with a slash and may carry a query string.
   Uri url(String path) {
     if (!hasValidBaseUrl) {
       throw AiConfigurationException(
@@ -43,7 +51,8 @@ class OpenAiEndpoint {
   }
 
   Map<String, String> get headers => {
-    if (hasApiKey) 'authorization': 'Bearer $_apiKey',
+    ..._extraHeaders,
+    if (hasApiKey) ..._authHeaders(_apiKey!),
   };
 
   Future<Map<String, Object?>> post(
@@ -91,15 +100,4 @@ class OpenAiEndpoint {
       providerId: providerId,
     );
   }
-}
-
-/// Text of a message `content` given as a string or a list of parts.
-String messageText(Object? content) {
-  if (content is String) return content;
-  final buffer = StringBuffer();
-  for (final part in asList(content)) {
-    final text = asString(asObject(part)?['text']);
-    if (text != null) buffer.write(text);
-  }
-  return buffer.toString();
 }

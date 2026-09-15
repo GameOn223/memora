@@ -3,9 +3,9 @@ import 'dart:typed_data';
 
 import 'package:memora_core/memora_core.dart';
 
+import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
 import '../shared/vectors.dart';
-import 'endpoint.dart';
 import 'presets.dart';
 
 /// Embeddings over `POST /embeddings`.
@@ -32,7 +32,7 @@ class OpenAiEmbeddingService implements EmbeddingService {
 
   static final Map<String, int> _learnedDimensions = {};
 
-  final OpenAiEndpoint _endpoint;
+  final ProviderEndpoint _endpoint;
   final OpenAiCompatibleProfile _profile;
   final String modelId;
 

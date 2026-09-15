@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "name": "models/text-embedding-004",
+      "version": "004",
+      "displayName": "Text Embedding 004",
+      "supportedGenerationMethods": ["embedContent"]
+    },
+    {
+      "name": "models/gemini-3-flash",
+      "version": "3",
+      "displayName": "Gemini 3 Flash",
+      "supportedGenerationMethods": ["generateContent", "countTokens"]
+    }
+  ]
+}
