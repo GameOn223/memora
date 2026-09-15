@@ -1,6 +1,8 @@
+import 'package:memora_core/memora_core.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'migrations/migration.dart';
+import 'sqlite_memory_store.dart';
 
 /// The Memora SQLite database and the stores built on it.
 ///
@@ -43,6 +45,9 @@ class MemoraDatabase {
 
   /// The schema version, read from `PRAGMA user_version`.
   int get schemaVersion => connection.userVersion;
+
+  /// Memories and the facts derived from them.
+  late final MemoryStore memories = SqliteMemoryStore(connection);
 
   /// Closes the connection. The stores can't be used afterwards.
   void close() => connection.close();

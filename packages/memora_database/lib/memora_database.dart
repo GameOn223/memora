@@ -6,3 +6,4 @@
 library;
 
 export 'src/memora_database.dart' show MemoraDatabase;
+export 'src/sqlite_memory_store.dart' show SqliteMemoryStore;
