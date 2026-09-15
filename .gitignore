@@ -1,0 +1,42 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+*.g.dart.tmp
+pubspec_overrides.yaml
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android / Gradle
+.gradle/
+local.properties
+*.iml
+captures/
+.cxx/
+.externalNativeBuild/
+app/android/app/debug/
+app/android/app/profile/
+app/android/app/release/
+app/android/key.properties
+*.jks
+*.keystore
+
+# IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local model files and exports never belong in the repo
+*.onnx
+*.tflite
+memora-export-*.zip
+
+# Environment
+.env
+.env.*
