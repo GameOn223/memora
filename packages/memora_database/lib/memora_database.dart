@@ -6,7 +6,9 @@
 library;
 
 export 'src/memora_database.dart' show MemoraDatabase;
+export 'src/sqlite_conversation_store.dart' show SqliteConversationStore;
 export 'src/sqlite_memory_store.dart' show SqliteMemoryStore;
 export 'src/sqlite_queue_store.dart' show SqliteQueueStore;
 export 'src/sqlite_search_store.dart' show SqliteSearchStore;
+export 'src/sqlite_settings_store.dart' show SqliteSettingsStore;
 export 'src/sqlite_vector_store.dart' show SqliteVectorStore;

@@ -2,9 +2,11 @@ import 'package:memora_core/memora_core.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'migrations/migration.dart';
+import 'sqlite_conversation_store.dart';
 import 'sqlite_memory_store.dart';
 import 'sqlite_queue_store.dart';
 import 'sqlite_search_store.dart';
+import 'sqlite_settings_store.dart';
 import 'sqlite_vector_store.dart';
 
 /// The Memora SQLite database and the stores built on it.
@@ -61,6 +63,14 @@ class MemoraDatabase {
   /// Embedding vectors and nearest-neighbour search. File databases run large
   /// scans in a separate isolate.
   late final VectorStore vectors = SqliteVectorStore(connection, path: path);
+
+  /// Chat history and result sets.
+  late final ConversationStore conversations = SqliteConversationStore(
+    connection,
+  );
+
+  /// Non-secret settings stored as JSON.
+  late final SettingsStore settings = SqliteSettingsStore(connection);
 
   /// Closes the connection. The stores can't be used afterwards.
   void close() => connection.close();
