@@ -7,7 +7,7 @@ import 'fake_queue_store.dart';
 import 'fake_search_store.dart';
 import 'fake_vector_store.dart';
 
-export 'fake_memora_state.dart' show MemoryRow;
+export 'fake_memora_state.dart' show MemoryRow, vectorKey;
 
 /// One in-memory database implementing every storage port except settings
 /// and secrets. Pass the same instance wherever a store is needed.
