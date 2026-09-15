@@ -4,6 +4,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'migrations/migration.dart';
 import 'sqlite_memory_store.dart';
 import 'sqlite_queue_store.dart';
+import 'sqlite_search_store.dart';
 
 /// The Memora SQLite database and the stores built on it.
 ///
@@ -52,6 +53,9 @@ class MemoraDatabase {
 
   /// Queue bookkeeping for the processing pipeline.
   late final QueueStore queue = SqliteQueueStore(connection);
+
+  /// Structured and full-text search.
+  late final SearchStore search = SqliteSearchStore(connection);
 
   /// Closes the connection. The stores can't be used afterwards.
   void close() => connection.close();
