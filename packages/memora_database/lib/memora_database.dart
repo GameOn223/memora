@@ -1,0 +1,8 @@
+/// SQLite storage for Memora.
+///
+/// Implements the storage ports from `memora_core` with FTS5 full-text search,
+/// brute-force vector search and numbered migrations. See
+/// docs/architecture.md, section 6.
+library;
+
+export 'src/memora_database.dart' show MemoraDatabase;
