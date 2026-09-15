@@ -21,6 +21,8 @@ export 'src/model/understanding.dart';
 export 'src/ports/embedding_model.dart';
 export 'src/ports/platform.dart';
 export 'src/ports/stores.dart';
+export 'src/processing/embedding_text.dart';
+export 'src/processing/fact_normalizer.dart';
 export 'src/services/contracts.dart';
 export 'src/text/amounts.dart';
 export 'src/text/dates.dart';
