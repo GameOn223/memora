@@ -3,6 +3,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import 'migrations/migration.dart';
 import 'sqlite_memory_store.dart';
+import 'sqlite_queue_store.dart';
 
 /// The Memora SQLite database and the stores built on it.
 ///
@@ -48,6 +49,9 @@ class MemoraDatabase {
 
   /// Memories and the facts derived from them.
   late final MemoryStore memories = SqliteMemoryStore(connection);
+
+  /// Queue bookkeeping for the processing pipeline.
+  late final QueueStore queue = SqliteQueueStore(connection);
 
   /// Closes the connection. The stores can't be used afterwards.
   void close() => connection.close();

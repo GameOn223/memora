@@ -1,0 +1,170 @@
+import 'package:memora_core/memora_core.dart';
+import 'package:sqlite3/sqlite3.dart';
+
+import 'codec.dart';
+import 'rows.dart';
+import 'transactions.dart';
+
+/// Rows a worker may claim at `?1` (now, in millis).
+///
+/// A `processing` row counts when its lease has run out, which is how work
+/// held by a killed worker comes back.
+const _claimable = '''
+status IN ('captured', 'reprocessing', 'processing')
+AND (lease_until IS NULL OR lease_until < ?1)
+AND (next_attempt_at IS NULL OR next_attempt_at <= ?1)''';
+
+/// [QueueStore] on SQLite. See docs/architecture.md, section 5.2.
+class SqliteQueueStore implements QueueStore {
+  SqliteQueueStore(this._db);
+
+  final Database _db;
+
+  @override
+  Future<Memory?> claimNext(DateTime now, Duration lease) async {
+    return _db.transaction(() {
+      final rows = _db.select(
+        '''
+UPDATE memories
+SET status = 'processing',
+    lease_until = ?2,
+    attempts = attempts + 1,
+    updated_at = ?1
+WHERE id = (
+  SELECT id FROM memories
+  WHERE $_claimable
+  ORDER BY taken_at ASC, seq ASC
+  LIMIT 1
+)
+RETURNING *''',
+        [toMillis(now), toMillis(now.add(lease))],
+      );
+      return rows.isEmpty ? null : memoryFromRow(rows.first);
+    }, immediate: true);
+  }
+
+  @override
+  Future<void> markReady(String id, DateTime now) async {
+    _db.execute(
+      '''
+UPDATE memories
+SET status = 'ready', processed_at = ?1, updated_at = ?1, lease_until = NULL,
+    next_attempt_at = NULL, failure_reason = NULL
+WHERE id = ?2''',
+      [toMillis(now), id],
+    );
+  }
+
+  @override
+  Future<void> releaseForRetry(
+    String id, {
+    required DateTime nextAttemptAt,
+    required String reason,
+    required DateTime now,
+  }) async {
+    _db.execute(
+      '''
+UPDATE memories
+SET status = 'captured', lease_until = NULL, next_attempt_at = ?, failure_reason = ?,
+    updated_at = ?
+WHERE id = ?''',
+      [toMillis(nextAttemptAt), reason, toMillis(now), id],
+    );
+  }
+
+  @override
+  Future<void> releaseWithoutAttempt(String id, DateTime now) async {
+    _db.execute(
+      '''
+UPDATE memories
+SET status = 'captured', lease_until = NULL, attempts = MAX(attempts - 1, 0),
+    updated_at = ?
+WHERE id = ?''',
+      [toMillis(now), id],
+    );
+  }
+
+  @override
+  Future<void> markFailed(String id, String reason, DateTime now) async {
+    _db.execute(
+      '''
+UPDATE memories
+SET status = 'failed', failure_reason = ?, lease_until = NULL,
+    next_attempt_at = NULL, updated_at = ?
+WHERE id = ?''',
+      [reason, toMillis(now), id],
+    );
+  }
+
+  /// Only affects failed memories.
+  @override
+  Future<void> retry(String id, DateTime now) async {
+    _db.execute(
+      '''
+UPDATE memories
+SET status = 'captured', attempts = 0, failure_reason = NULL, lease_until = NULL,
+    next_attempt_at = NULL, updated_at = ?
+WHERE id = ? AND status = 'failed' ''',
+      [toMillis(now), id],
+    );
+  }
+
+  /// Only affects ready and failed memories.
+  @override
+  Future<void> requestReprocess(String id, DateTime now) async {
+    _db.execute(
+      '''
+UPDATE memories
+SET status = 'reprocessing', attempts = 0, failure_reason = NULL,
+    lease_until = NULL, next_attempt_at = NULL, updated_at = ?
+WHERE id = ? AND status IN ('ready', 'failed')''',
+      [toMillis(now), id],
+    );
+  }
+
+  /// Processing items, then waiting items oldest taken first with their
+  /// positions, then failed items, then up to [recentLimit] ready items with
+  /// the most recently processed first.
+  @override
+  Future<List<QueueItem>> queueItems({int recentLimit = 20}) async {
+    List<Memory> select(String sql, [List<Object?> args = const []]) => [
+      for (final row in _db.select(sql, args)) memoryFromRow(row),
+    ];
+
+    final processing = select(
+      "SELECT * FROM memories WHERE status = 'processing' "
+      'ORDER BY taken_at ASC, seq ASC',
+    );
+    final waiting = select(
+      'SELECT * FROM memories WHERE status IN $waitingStatuses '
+      'ORDER BY taken_at ASC, seq ASC',
+    );
+    final failed = select(
+      "SELECT * FROM memories WHERE status = 'failed' "
+      'ORDER BY taken_at ASC, seq ASC',
+    );
+    final ready = select(
+      "SELECT * FROM memories WHERE status = 'ready' "
+      'ORDER BY processed_at DESC, seq DESC LIMIT ?',
+      [recentLimit],
+    );
+
+    return [
+      for (final memory in processing)
+        QueueItem(memory: memory, position: null),
+      for (final (index, memory) in waiting.indexed)
+        QueueItem(memory: memory, position: index + 1),
+      for (final memory in failed) QueueItem(memory: memory, position: null),
+      for (final memory in ready) QueueItem(memory: memory, position: null),
+    ];
+  }
+
+  @override
+  Future<bool> hasWork(DateTime now) async {
+    final row = _db.select(
+      'SELECT EXISTS (SELECT 1 FROM memories WHERE $_claimable) AS work',
+      [toMillis(now)],
+    ).first;
+    return row['work'] == 1;
+  }
+}
