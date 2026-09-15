@@ -4,6 +4,14 @@
 /// See docs/providers.md for how to add one.
 library;
 
+export 'src/anthropic/chat.dart' show AnthropicChatService;
+export 'src/anthropic/client.dart';
+export 'src/anthropic/descriptor.dart';
+export 'src/anthropic/vision.dart'
+    show
+        AnthropicVisionService,
+        anthropicImageMimeTypes,
+        anthropicMaxImageBytes;
 export 'src/gemini/chat.dart' show GeminiChatService;
 export 'src/gemini/client.dart';
 export 'src/gemini/descriptor.dart';

@@ -1,0 +1,31 @@
+{
+  "id": "msg_01Hq3vTzK9pWc6b2mYxNa7Lr",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_01A09q90qw90lq917835lq9",
+      "name": "record_memory",
+      "input": {
+        "summary": "Swiggy order receipt from Meghana Foods",
+        "category": "receipt",
+        "visual_description": "A food delivery order summary in the Swiggy app.",
+        "extracted_text": "Meghana Foods\nItem total ₹640\nTo pay ₹702",
+        "keywords": ["swiggy", "food", "order", "biryani"],
+        "entities": [
+          { "type": "company", "value": "Swiggy" },
+          { "type": "organization", "value": "Meghana Foods" }
+        ],
+        "dates": [],
+        "amounts": [{ "type": "total", "value": 702, "currency": "INR" }],
+        "attributes": [{ "type": "order_number", "value": "1789446120" }],
+        "confidence": 0.82
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 1890, "output_tokens": 210 }
+}
