@@ -6,6 +6,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'codec.dart';
 import 'fts_query.dart';
 import 'rows.dart';
+import 'transactions.dart';
 
 /// Attribute types shown as a memory's identifier fact on cards.
 const _identifierTypes = [
@@ -146,9 +147,15 @@ LIMIT ?''', args);
     ];
   }
 
+  /// Reads the facts and the memories from one snapshot, so a card can't come
+  /// back without the attributes that were there when the read started.
   @override
   Future<List<MemoryCard>> cards(List<String> ids) async {
     if (ids.isEmpty) return const [];
+    return _db.transaction(() => _cards(ids));
+  }
+
+  List<MemoryCard> _cards(List<String> ids) {
     final idsJson = jsonEncode(ids);
 
     final facts = <String, _CardFacts>{};

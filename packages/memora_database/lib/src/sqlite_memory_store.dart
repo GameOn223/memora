@@ -83,10 +83,17 @@ RETURNING id''');
     return [for (final id in ids) ?byId[id]];
   }
 
+  /// Reads the memory and its facts from one snapshot, so a reprocess that
+  /// commits halfway through can't mix old entities with new keywords.
   @override
   Future<MemoryDetails?> getDetails(String id) async {
-    final memory = await getMemory(id);
-    if (memory == null) return null;
+    return _db.transaction(() => _details(id));
+  }
+
+  MemoryDetails? _details(String id) {
+    final rows = _db.select('SELECT * FROM memories WHERE id = ?', [id]);
+    if (rows.isEmpty) return null;
+    final memory = memoryFromRow(rows.first);
 
     final entities = [
       for (final row in _db.select(

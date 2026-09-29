@@ -141,6 +141,13 @@ WHERE id = ? AND status IN ('ready', 'failed')''',
     int waitingLimit = 200,
     int recentLimit = 20,
   }) async {
+    // One read transaction for all four queries. A worker claiming a memory
+    // halfway through would otherwise drop it from the answer, or show it
+    // twice.
+    return _db.transaction(() => _queueItems(waitingLimit, recentLimit));
+  }
+
+  List<QueueItem> _queueItems(int waitingLimit, int recentLimit) {
     List<Memory> select(String sql, [List<Object?> args = const []]) => [
       for (final row in _db.select(sql, args)) memoryFromRow(row),
     ];
