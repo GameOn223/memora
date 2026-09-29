@@ -4,6 +4,7 @@ import 'package:memora_core/memora_core.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'codec.dart';
+import 'fold.dart';
 import 'fts_query.dart';
 import 'rows.dart';
 import 'transactions.dart';
@@ -65,7 +66,7 @@ class SqliteSearchStore implements SearchStore {
         'EXISTS (SELECT 1 FROM entities e WHERE e.memory_id = m.id '
         r"AND e.normalized_value LIKE ? ESCAPE '\'",
       );
-      args.add('%${_escapeLike(_normalize(filter.value))}%');
+      args.add('%${_escapeLike(foldForMatch(filter.value))}%');
       if (filter.type case final type?) {
         clause.write(' AND e.type = ?');
         args.add(type);
@@ -252,9 +253,6 @@ LIMIT ?''',
         ScoredId(row['id'] as String, (row['shared'] as int).toDouble()),
     ];
   }
-
-  static String _normalize(String value) =>
-      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   static String _escapeLike(String value) => value
       .replaceAll(r'\', r'\\')

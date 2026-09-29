@@ -168,6 +168,36 @@ void main() {
       );
     });
 
+    test('matches entity values whose accents were folded away', () async {
+      // Entities are stored already folded, the way core normalizes them.
+      final cafe = await filed(
+        DateTime.utc(2026, 9, 2),
+        understanding(summary: 'Cafe Coffee Day receipt', category: 'receipt'),
+        facts(
+          entities: [
+            const StoredEntity(
+              type: 'company',
+              value: 'Café Coffee Day',
+              normalizedValue: 'cafe coffee day',
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        await structured(
+          const RetrievalQuery(entities: [EntityFilter(value: 'Café')]),
+        ),
+        [cafe],
+      );
+      expect(
+        await structured(
+          const RetrievalQuery(entities: [EntityFilter(value: 'CAFÉ  COFFEE')]),
+        ),
+        [cafe],
+      );
+    });
+
     test('matches entities by normalized substring', () async {
       expect(
         await structured(
