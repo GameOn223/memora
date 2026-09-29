@@ -1,0 +1,29 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "8f2b1a3c",
+              "name": "aggregate_results",
+              "args": { "attribute": "amount", "op": "max" }
+            },
+            "thoughtSignature": "CiwBjz1rX7sigA"
+          },
+          {
+            "functionCall": {
+              "name": "get_memory",
+              "args": { "id": "m1" }
+            }
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": { "promptTokenCount": 420, "candidatesTokenCount": 30, "totalTokenCount": 510 },
+  "modelVersion": "gemini-3-flash"
+}
