@@ -244,7 +244,7 @@ Errors are classified by the provider layer:
 
 | Error kind | Example | What happens |
 |------------|---------|--------------|
-| Transient | timeout, 429, 5xx | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After 3 attempts, `FAILED`. |
+| Transient | timeout, 429, 5xx | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After the fourth attempt, `FAILED`. |
 | Configuration | 401, 403, missing key, model not found | Row goes back to `CAPTURED` with no attempt used. The whole queue pauses with a message like "Check your NVIDIA key". |
 | Content | provider refused the image, unreadable file | `FAILED` right away with the reason. |
 
