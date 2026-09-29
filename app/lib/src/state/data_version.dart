@@ -17,7 +17,6 @@ final dataVersionProvider = NotifierProvider<DataVersionTicker, int>(
 );
 
 class DataVersionTicker extends Notifier<int> {
-  int? _last;
   Timer? _timer;
 
   @override
@@ -40,14 +39,7 @@ class DataVersionTicker extends Notifier<int> {
     if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
     final version = await ref.read(appServicesProvider).memories.dataVersion();
     if (!ref.mounted) return;
-    if (_last == null) {
-      _last = version;
-      return;
-    }
-    if (version != _last) {
-      _last = version;
-      state = state + 1;
-    }
+    if (version != state) state = version;
   }
 }
 
