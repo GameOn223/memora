@@ -14,6 +14,7 @@ import '../../widgets/fading_rule.dart';
 import '../../widgets/memory_tile.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/tap_area.dart';
+import 'empty_state.dart';
 import 'home_header.dart';
 
 /// The memories grid: date groups of tiles, with the ask bar on top.
@@ -22,6 +23,10 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(storageStatsProvider);
+    if (stats.hasValue && !ref.watch(hasMemoriesProvider)) {
+      return const EmptyState();
+    }
     final memories = ref.watch(memoriesProvider(const MemoryFilter())).value;
     final now = ref.watch(clockProvider).now();
     final groups = groupByTakenDate(memories ?? const [], now);
