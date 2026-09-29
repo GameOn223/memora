@@ -1,0 +1,82 @@
+import 'package:memora_core/memora_core.dart';
+
+import '../services/app_services.dart';
+import 'messages.g.dart';
+
+/// [CaptureService] for the Quick Settings tile and the share sheet.
+///
+/// Kotlin writes captures and shared images into `files/inbox/` because it
+/// can't safely write to the database. [ingestInbox] turns them into rows.
+class PlatformCaptureService implements CaptureService {
+  PlatformCaptureService({
+    required this._ingestor,
+    required this._scheduler,
+    CaptureHostApi? host,
+  }) : _host = host ?? CaptureHostApi();
+
+  final MemoryIngestor _ingestor;
+  final QueueScheduler _scheduler;
+  final CaptureHostApi _host;
+
+  Future<int>? _ingesting;
+
+  @override
+  Future<CaptureSetup> setup() async {
+    final status = await _host.status();
+    return CaptureSetup(
+      accessibilitySupported: status.accessibilitySupported,
+      accessibilityEnabled: status.accessibilityEnabled,
+      canRequestTile: status.canRequestTile,
+      notificationsAllowed: status.notificationsAllowed,
+    );
+  }
+
+  @override
+  Future<void> openAccessibilitySettings() => _host.openAccessibilitySettings();
+
+  @override
+  Future<bool> requestAddTile() => _host.requestAddTile();
+
+  @override
+  Future<bool> requestNotificationPermission() =>
+      _host.requestNotificationPermission();
+
+  @override
+  Future<int> ingestInbox() {
+    // Resume events can arrive in bursts. One drain at a time is enough.
+    return _ingesting ??= _ingest().whenComplete(() => _ingesting = null);
+  }
+
+  Future<int> _ingest() async {
+    final items = await _host.drainInbox();
+    if (items.isEmpty) return 0;
+    final bySource = <MemorySource, List<ImportedFile>>{};
+    for (final item in items) {
+      bySource
+          .putIfAbsent(memorySourceFromInbox(item.source), () => [])
+          .add(importedFileFromInbox(item));
+    }
+    var added = 0;
+    for (final entry in bySource.entries) {
+      final report = await _ingestor.ingest(entry.value, entry.key);
+      added += report.addedIds.length;
+    }
+    if (added > 0) await _scheduler.refresh();
+    return added;
+  }
+}
+
+MemorySource memorySourceFromInbox(String source) =>
+    source == MemorySource.share.dbValue
+    ? MemorySource.share
+    : MemorySource.tile;
+
+ImportedFile importedFileFromInbox(InboxItem item) => ImportedFile(
+  imagePath: item.relativePath,
+  sha256: item.sha256,
+  mimeType: item.mimeType,
+  width: item.width,
+  height: item.height,
+  byteSize: item.byteSize,
+  takenAt: DateTime.fromMillisecondsSinceEpoch(item.capturedAtMillis),
+);
