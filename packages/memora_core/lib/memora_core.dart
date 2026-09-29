@@ -26,6 +26,7 @@ export 'src/chat/tools/search_tools.dart';
 export 'src/chat/tools/tool.dart';
 export 'src/chat/tools/tool_registry.dart';
 export 'src/embedding/wordpiece_tokenizer.dart';
+export 'src/export/export_builder.dart';
 export 'src/extraction/rule_based_extractor.dart';
 export 'src/model/conversation.dart';
 export 'src/model/details.dart';
