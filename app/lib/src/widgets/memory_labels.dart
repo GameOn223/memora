@@ -12,6 +12,44 @@ String memoryTitle(Memory memory) {
   };
 }
 
+/// The line under a tile: the amount plus the next most useful fact, such
+/// as `₹1,842 · due 30 Sep` or `PNR K4T9RB · 06:35`.
+String? keyFact(MemoryDetails details) {
+  final attributes = details.attributes;
+  if (attributes.isEmpty) return null;
+  final parts = <String>[];
+  final amountIndex = attributes.indexWhere((a) => a.type == 'amount');
+  if (amountIndex >= 0) parts.add(attributes[amountIndex].value);
+
+  final candidates = <StoredAttribute>[];
+  for (final (i, a) in attributes.indexed) {
+    if (i == amountIndex || a.type == 'account_number') continue;
+    if (a.valueDate != null && a.type != 'due_date') continue;
+    candidates.add(a);
+  }
+  int rank(StoredAttribute a) => switch (a.type) {
+    'payment_status' => 0,
+    'due_date' => 1,
+    _ => 2,
+  };
+  candidates.sort((a, b) => rank(a).compareTo(rank(b)));
+  for (final a in candidates.take(2 - parts.length)) {
+    parts.add(
+      a.type == 'due_date'
+          ? 'due ${shortDate(a.valueDate) ?? a.value}'
+          : a.value,
+    );
+  }
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+/// `2026-09-30` becomes `30 Sep`.
+String? shortDate(String? isoDate) {
+  if (isoDate == null) return null;
+  final date = DateTime.tryParse(isoDate);
+  return date == null ? null : DateFormat('d MMM').format(date);
+}
+
 /// `utility_bill` becomes `utility bill`.
 String humanizeKey(String key) => key.replaceAll('_', ' ').trim();
 
