@@ -183,6 +183,7 @@ mixin FakeMemoryStore on FakeMemoraState implements MemoryStore {
 
   @override
   Future<void> addProcessingRecord(ProcessingRecord record) async {
+    if (failProcessingRecords) throw StateError('database is locked');
     rows[record.memoryId]?.processing.add(record);
     touch();
   }

@@ -73,9 +73,10 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     final Uint8List bytes;
     try {
       bytes = await _images.readBytes(memory.imagePath);
-    } on Exception catch (e) {
+    } on Object catch (e) {
+      final outcome = await _fail(memory, 'The image file could not be read.');
       await _record(memory.id, vision, ProcessingOutcome.failed, error: '$e');
-      return _fail(memory, 'The image file could not be read.');
+      return outcome;
     }
 
     final stopwatch = Stopwatch()..start();
@@ -112,60 +113,59 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
       await _queue.markReady(memory.id, _clock.now());
       return Processed(memory.id, ProcessingStatus.ready);
     } on AiConfigurationException catch (e) {
-      await _record(
-        memory.id,
-        vision,
-        ProcessingOutcome.failed,
-        latency: stopwatch.elapsed,
-        error: e.message,
-      );
+      // The status write comes first in every arm below. A processing record
+      // is bookkeeping, and losing one must never leave the row stuck in
+      // `processing` until its lease expires.
       await _queue.releaseWithoutAttempt(memory.id, _clock.now());
+      await _failureRecord(memory.id, vision, stopwatch, e.message);
       return QueueBlocked(
         ProviderConfigurationProblem(vision.provider.displayName, e.message),
       );
     } on AiContentException catch (e) {
-      await _record(
-        memory.id,
-        vision,
-        ProcessingOutcome.failed,
-        latency: stopwatch.elapsed,
-        error: e.message,
-      );
-      return _fail(memory, e.message);
-    } on FormatException catch (e) {
-      await _record(
-        memory.id,
-        vision,
-        ProcessingOutcome.failed,
-        latency: stopwatch.elapsed,
-        error: e.message,
-      );
-      return _fail(memory, 'The provider returned data Memora could not read.');
+      final outcome = await _fail(memory, e.message);
+      await _failureRecord(memory.id, vision, stopwatch, e.message);
+      return outcome;
     } on AiTransientException catch (e) {
-      await _record(
-        memory.id,
-        vision,
-        ProcessingOutcome.failed,
-        latency: stopwatch.elapsed,
-        error: e.message,
+      final outcome = await _retryOrFail(
+        memory,
+        e.message,
+        retryAfter: e.retryAfter,
       );
-      return _retryOrFail(memory, e.message, retryAfter: e.retryAfter);
+      await _failureRecord(memory.id, vision, stopwatch, e.message);
+      return outcome;
+    } on FormatException catch (e) {
+      // Structured output that could not be parsed is usually a one-off,
+      // so it gets the same retry ladder as a timeout.
+      final outcome = await _retryOrFail(
+        memory,
+        'The provider returned data Memora could not read.',
+      );
+      await _failureRecord(memory.id, vision, stopwatch, e.message);
+      return outcome;
     } on Object catch (e) {
       // Anything unexpected is retried like a transient error, so a bug in
       // one adapter can't leave a memory stuck in processing.
-      await _record(
-        memory.id,
-        vision,
-        ProcessingOutcome.failed,
-        latency: stopwatch.elapsed,
-        error: '$e',
-      );
-      return _retryOrFail(
+      final outcome = await _retryOrFail(
         memory,
         'Something went wrong while understanding this image.',
       );
+      await _failureRecord(memory.id, vision, stopwatch, '$e');
+      return outcome;
     }
   }
+
+  Future<void> _failureRecord(
+    String memoryId,
+    Resolved<Object> resolved,
+    Stopwatch stopwatch,
+    String error,
+  ) => _record(
+    memoryId,
+    resolved,
+    ProcessingOutcome.failed,
+    latency: stopwatch.elapsed,
+    error: error,
+  );
 
   Future<ProcessOutcome> _retryOrFail(
     Memory memory,
@@ -233,6 +233,9 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     }
   }
 
+  /// Writes one provenance row. It never throws: the detail screen losing a
+  /// line is a small loss next to a memory stuck in `processing` because the
+  /// database was busy for a moment.
   Future<void> _record(
     String memoryId,
     Resolved<Object> resolved,
@@ -241,20 +244,24 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     String? version,
     Duration? latency,
     String? error,
-  }) {
-    return _memories.addProcessingRecord(
-      ProcessingRecord(
-        memoryId: memoryId,
-        capability: capability,
-        provider: resolved.provider.id,
-        model: resolved.modelId,
-        version: version,
-        outcome: outcome,
-        latency: latency,
-        error: error,
-        createdAt: _clock.now(),
-      ),
-    );
+  }) async {
+    try {
+      await _memories.addProcessingRecord(
+        ProcessingRecord(
+          memoryId: memoryId,
+          capability: capability,
+          provider: resolved.provider.id,
+          model: resolved.modelId,
+          version: version,
+          outcome: outcome,
+          latency: latency,
+          error: error,
+          createdAt: _clock.now(),
+        ),
+      );
+    } on Object {
+      // Nothing to do about it here, and nothing depends on it.
+    }
   }
 
   @override

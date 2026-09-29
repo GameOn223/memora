@@ -259,7 +259,7 @@ void main() {
       },
     );
 
-    test('content and format errors fail right away', () async {
+    test('content errors fail right away, unreadable output retries', () async {
       final ai = await AiHarness.create(
         vision: ScriptedVisionService(
           analyze: [
@@ -277,11 +277,66 @@ void main() {
         ProcessingStatus.failed,
       );
       expect(db.rows['m1']!.failureReason, 'The provider refused this image');
+
       expect(
         (await pipeline.processNext() as Processed).status,
-        ProcessingStatus.failed,
+        ProcessingStatus.captured,
+        reason: 'broken structured output is usually a one-off',
       );
-      expect(db.rows['m2']!.status, ProcessingStatus.failed);
+      expect(db.rows['m2']!.nextAttemptAt, isNotNull);
+      expect(
+        db.rows['m2']!.failureReason,
+        'The provider returned data Memora could not read.',
+      );
+    });
+
+    test('two engines at once never claim the same memory', () async {
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(analyze: [_bill, _bill]),
+      );
+      seedCaptured('m1', takenAt: DateTime(2026, 9, 1));
+      seedCaptured('m2', takenAt: DateTime(2026, 9, 2));
+
+      final outcomes = await Future.wait([
+        pipelineFor(ai).processNext(),
+        pipelineFor(ai).processNext(),
+      ]);
+
+      expect(outcomes.whereType<Processed>().map((p) => p.memoryId).toSet(), {
+        'm1',
+        'm2',
+      }, reason: 'the claim is atomic, so each engine gets its own row');
+      expect(db.rows.values.map((r) => r.attempts), everyElement(1));
+      expect(
+        db.rows.values.map((r) => r.status),
+        everyElement(ProcessingStatus.ready),
+      );
+    });
+
+    test('a failing processing record never strands a memory', () async {
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(
+          analyze: [const AiTransientException('Timed out'), _bill],
+        ),
+      );
+      final pipeline = pipelineFor(ai);
+      seedCaptured('m1', takenAt: DateTime(2026, 9, 1));
+      seedCaptured('m2', takenAt: DateTime(2026, 9, 2));
+      db.failProcessingRecords = true;
+
+      expect(
+        (await pipeline.processNext() as Processed).status,
+        ProcessingStatus.captured,
+      );
+      expect(db.rows['m1']!.status, ProcessingStatus.captured);
+      expect(db.rows['m1']!.nextAttemptAt, isNotNull);
+
+      expect(
+        (await pipeline.processNext() as Processed).status,
+        ProcessingStatus.ready,
+      );
+      expect(db.rows['m2']!.status, ProcessingStatus.ready);
+      expect((await db.getDetails('m2'))!.processing, isEmpty);
     });
 
     test('an unreadable image file fails the memory', () async {
