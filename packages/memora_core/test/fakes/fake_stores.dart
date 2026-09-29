@@ -1,5 +1,9 @@
 import 'package:memora_core/memora_core.dart';
 
+export 'fake_ai.dart';
+export 'fake_image_files.dart';
+export 'fake_memora.dart';
+
 class InMemorySettingsStore implements SettingsStore {
   final Map<String, Object?> values = {};
 
