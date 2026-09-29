@@ -114,12 +114,21 @@ abstract interface class ProcessingPipeline {
 
 @immutable
 class RetrievalResult {
-  const RetrievalResult({required this.hits, required this.strategiesUsed});
+  const RetrievalResult({
+    required this.hits,
+    required this.strategiesUsed,
+    this.textMatched = true,
+  });
 
   final List<RankedMemory> hits;
 
   /// Strategies that actually ran. Semantic is skipped without embeddings.
   final Set<RetrievalStrategy> strategiesUsed;
+
+  /// False when the query had words, none of them matched anything inside
+  /// the filters, and the hits are the filtered memories instead. The answer
+  /// should say so rather than pretending the words matched.
+  final bool textMatched;
 }
 
 /// Hybrid search. See docs/architecture.md, section 8.

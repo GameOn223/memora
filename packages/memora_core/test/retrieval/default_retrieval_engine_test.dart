@@ -200,6 +200,28 @@ void main() {
 
     expect(ids(result), ['sep', 'aug', 'jul']);
     expect(foundBy(result, 'jul'), {RetrievalStrategy.structured});
+    expect(
+      result.textMatched,
+      isFalse,
+      reason: 'the answer has to admit the words matched nothing',
+    );
+  });
+
+  test('a search whose words matched says so', () async {
+    final (retrieval, _) = await engine();
+
+    final matched = await retrieval.search(
+      const RetrievalQuery(categories: {'utility_bill'}, text: 'august'),
+    );
+    final empty = await retrieval.search(const RetrievalQuery(text: 'zebra'));
+
+    expect(matched.textMatched, isTrue);
+    expect(empty.hits, isEmpty);
+    expect(
+      empty.textMatched,
+      isTrue,
+      reason: 'with no filters there is nothing to fall back to',
+    );
   });
 
   test('respects the limit', () async {

@@ -95,9 +95,10 @@ class DefaultRetrievalEngine implements RetrievalEngine {
         }
       }
     }
-    final textFoundNothing = rankings.every((r) => r.isEmpty);
-    if (text == null ||
-        (textFoundNothing && (candidates != null || truncated))) {
+    final textFoundNothing = text != null && rankings.every((r) => r.isEmpty);
+    final fellBackToFilters =
+        textFoundNothing && (candidates != null || truncated);
+    if (text == null || fellBackToFilters) {
       rankings
         ..clear()
         ..add(structuredRanking);
@@ -123,7 +124,11 @@ class DefaultRetrievalEngine implements RetrievalEngine {
       }
     }
     if (fused.isEmpty) {
-      return RetrievalResult(hits: const [], strategiesUsed: used);
+      return RetrievalResult(
+        hits: const [],
+        strategiesUsed: used,
+        textMatched: !fellBackToFilters,
+      );
     }
 
     final cards = await _search.cards([for (final f in fused) f.id]);
@@ -142,6 +147,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
           ),
       ],
       strategiesUsed: used,
+      textMatched: !fellBackToFilters,
     );
   }
 

@@ -378,7 +378,10 @@ void main() {
       final (events, conversation) = await ask(engine, 'reliance bills');
 
       final message = (events.last as ChatAnswered).message;
-      expect(message.content, 'Found 3 memories.');
+      expect(
+        message.content,
+        'Found 3 memories matching reliance, utility bills or invoices.',
+      );
       expect(message.presentation!.searchOnly, isTrue);
       expect(message.provider, isNull);
       expect(message.references.map((r) => r.memoryId).toSet(), {
@@ -423,7 +426,7 @@ void main() {
           .toList();
 
       final message = (events.last as ChatAnswered).message;
-      expect(message.content, 'Found 1 memory.');
+      expect(message.content, 'Found 1 memory matching receipts.');
       expect(message.references.single.memoryId, 'groceries');
     });
 
@@ -443,7 +446,7 @@ void main() {
           .toList();
 
       final message = (events.last as ChatAnswered).message;
-      expect(message.content, 'Found 2 memories.');
+      expect(message.content, 'Found 2 memories matching over ₹1,800.');
       expect(message.references.map((r) => r.memoryId), ['sep', 'aug']);
     });
 

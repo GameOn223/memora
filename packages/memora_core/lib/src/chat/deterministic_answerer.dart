@@ -88,7 +88,14 @@ class DeterministicAnswerer {
 
     if (hits.isEmpty) return reply('No memories matched.');
 
-    final found = 'Found ${memoriesCount(hits.length)}';
+    // When the words matched nothing inside the filters, say that rather
+    // than presenting the filtered list as if it answered the question.
+    final described = describeForHumans(query);
+    final found = result.textMatched
+        ? 'Found ${memoriesCount(hits.length)}'
+              '${described == null ? '' : ' matching $described'}'
+        : 'Nothing matched those words. Showing the '
+              '${memoriesCount(hits.length)} that matched the filters';
     final intent = parsed.aggregate;
     if (intent == null) return reply('$found.');
 

@@ -59,7 +59,10 @@ void main() {
   test('lists matches with a search-only strip', () async {
     final answer = await answerer.answer('show me reliance bills');
 
-    expect(answer.text, 'Found 3 memories.');
+    expect(
+      answer.text,
+      'Found 3 memories matching reliance, utility bills or invoices.',
+    );
     expect(answer.hits.map((h) => h.card.id).toSet(), {'jul', 'aug', 'sep'});
     expect(answer.presentation.searchOnly, isTrue);
     expect(answer.presentation.layout, SourceLayout.strip);
@@ -103,26 +106,34 @@ void main() {
     final answer = await answerer.answer('cheapest bill');
     expect(
       answer.text,
-      'Found 3 memories. The lowest amount is ₹1,690 (Jul 2026).',
+      'Found 3 memories matching utility bills or invoices. The lowest amount is ₹1,690 (Jul 2026).',
     );
     expect(answer.presentation.highlightMemoryId, 'jul');
   });
 
   test('a total uses one amount per memory, preferring the total', () async {
     final answer = await answerer.answer('total spent on bills');
-    expect(answer.text, 'Found 3 memories. The total amount is ₹5,635.');
+    expect(
+      answer.text,
+      'Found 3 memories matching utility bills or invoices. '
+      'The total amount is ₹5,635.',
+    );
     expect(answer.presentation.headline, '₹5,635');
     expect(answer.presentation.highlightMemoryId, isNull);
   });
 
   test('an average', () async {
     final answer = await answerer.answer('average bill');
-    expect(answer.text, 'Found 3 memories. The average amount is ₹1,878.33.');
+    expect(
+      answer.text,
+      'Found 3 memories matching utility bills or invoices. '
+      'The average amount is ₹1,878.33.',
+    );
   });
 
   test('a count', () async {
     final answer = await answerer.answer('how many bills');
-    expect(answer.text, 'Found 3 memories.');
+    expect(answer.text, 'Found 3 memories matching utility bills or invoices.');
     expect(answer.presentation.headline, '3');
   });
 
@@ -130,10 +141,22 @@ void main() {
     final answer = await answerer.answer('latest bill');
     expect(
       answer.text,
-      'Found 3 memories. The latest is Reliance electricity bill for '
+      'Found 3 memories matching utility bills or invoices. The latest is '
+      'Reliance electricity bill for '
       'September from 5 Sep 2026.',
     );
     expect(answer.presentation.highlightMemoryId, 'sep');
+  });
+
+  test('says when the words matched nothing inside the filters', () async {
+    final answer = await answerer.answer('zebra bills');
+
+    expect(
+      answer.text,
+      'Nothing matched those words. Showing the 3 memories that matched '
+      'the filters.',
+    );
+    expect(answer.hits, hasLength(3));
   });
 
   test('says when nothing matched', () async {
@@ -157,7 +180,7 @@ void main() {
 
     expect(
       answer.text,
-      'Found 4 memories. The highest amount is ₹2,103 (Aug 2026). '
+      'Found 4 memories matching utility bills or invoices. The highest amount is ₹2,103 (Aug 2026). '
       '1 amount in another currency was left out.',
     );
   });
@@ -170,7 +193,10 @@ void main() {
       takenAt: DateTime(2026, 9, 2),
     );
     final answer = await answerer.answer('highest chats');
-    expect(answer.text, "Found 1 memory, but it doesn't have an amount.");
+    expect(
+      answer.text,
+      "Found 1 memory matching chats, but it doesn't have an amount.",
+    );
     expect(answer.presentation.headline, isNull);
   });
 }
