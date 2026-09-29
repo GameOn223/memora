@@ -18,6 +18,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
     required this._vectors,
     required this._router,
     this._fallbackReranker = const FusionReranker(),
+    this.structuredLimit = defaultStructuredLimit,
   });
 
   /// How many fused results are reranked.
@@ -25,6 +26,14 @@ class DefaultRetrievalEngine implements RetrievalEngine {
 
   /// How many results each text strategy contributes before fusion.
   static const strategyLimit = 50;
+
+  /// How many memories a filter may match before the engine stops holding
+  /// them all and checks the filters after searching instead.
+  static const defaultStructuredLimit = 5000;
+
+  /// Lower it in tests to exercise the path where a filter matches more
+  /// memories than fit.
+  final int structuredLimit;
 
   final SearchStore _search;
   final VectorStore _vectors;
@@ -45,14 +54,22 @@ class DefaultRetrievalEngine implements RetrievalEngine {
 
     var structuredRanking = const <ScoredId>[];
     Set<String>? candidates;
+    var truncated = false;
     if (query.hasFilters || text == null) {
-      final ids = await _search.structured(query);
+      final ids = await _search.structured(query, limit: structuredLimit);
       used.add(RetrievalStrategy.structured);
       structuredRanking = [for (final id in ids) ScoredId(id, 0)];
       if (query.hasFilters) {
-        candidates = ids.toSet();
-        if (candidates.isEmpty) {
-          return RetrievalResult(hits: const [], strategiesUsed: used);
+        if (ids.length >= structuredLimit) {
+          // More memories match the filters than one query can carry. Search
+          // the whole library and check the filters afterwards instead, so
+          // they stay hard constraints rather than "the newest N of them".
+          truncated = true;
+        } else {
+          candidates = ids.toSet();
+          if (candidates.isEmpty) {
+            return RetrievalResult(hits: const [], strategiesUsed: used);
+          }
         }
       }
     }
@@ -79,7 +96,8 @@ class DefaultRetrievalEngine implements RetrievalEngine {
       }
     }
     final textFoundNothing = rankings.every((r) => r.isEmpty);
-    if (text == null || (textFoundNothing && candidates != null)) {
+    if (text == null ||
+        (textFoundNothing && (candidates != null || truncated))) {
       rankings
         ..clear()
         ..add(structuredRanking);
@@ -90,7 +108,20 @@ class DefaultRetrievalEngine implements RetrievalEngine {
     final depth = text == null
         ? limit
         : (limit > rerankDepth ? limit : rerankDepth);
-    final fused = reciprocalRankFusion(rankings).take(depth).toList();
+    var fused = reciprocalRankFusion(rankings).take(depth).toList();
+    if (truncated && fused.isNotEmpty) {
+      final allowed = (await _search.structured(
+        query.copyWith(within: {for (final f in fused) f.id}),
+        limit: fused.length,
+      )).toSet();
+      fused = [
+        for (final f in fused)
+          if (allowed.contains(f.id)) f,
+      ];
+      for (final f in fused) {
+        (foundBy[f.id] ??= {}).add(RetrievalStrategy.structured);
+      }
+    }
     if (fused.isEmpty) {
       return RetrievalResult(hits: const [], strategiesUsed: used);
     }
