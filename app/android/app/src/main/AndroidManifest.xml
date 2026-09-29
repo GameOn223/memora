@@ -92,10 +92,12 @@
         </service>
 
         <!-- Screenshot capture without a consent dialog. It asks for no
-             events and can't read window content. -->
+             events and can't read window content. The system binds it, so it
+             has to be exported; BIND_ACCESSIBILITY_SERVICE keeps other apps
+             out. -->
         <service
             android:name=".capture.CaptureAccessibilityService"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/accessibility_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
