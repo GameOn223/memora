@@ -18,7 +18,7 @@ val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
 android {
     namespace = "io.github.gameon223.memora"
     compileSdk = 36
-    ndkVersion = "29.0.13599879"
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
