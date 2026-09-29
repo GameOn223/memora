@@ -43,6 +43,8 @@ RETURNING *''',
     }, immediate: true);
   }
 
+  /// Only affects a memory that is still processing. A worker whose lease ran
+  /// out while another worker took the memory over reports into nothing.
   @override
   Future<void> markReady(String id, DateTime now) async {
     _db.execute(
@@ -50,11 +52,12 @@ RETURNING *''',
 UPDATE memories
 SET status = 'ready', processed_at = ?1, updated_at = ?1, lease_until = NULL,
     next_attempt_at = NULL, failure_reason = NULL
-WHERE id = ?2''',
+WHERE id = ?2 AND status = 'processing' ''',
       [toMillis(now), id],
     );
   }
 
+  /// Only affects a memory that is still processing.
   @override
   Future<void> releaseForRetry(
     String id, {
@@ -67,11 +70,13 @@ WHERE id = ?2''',
 UPDATE memories
 SET status = 'captured', lease_until = NULL, next_attempt_at = ?,
     failure_reason = ?, updated_at = ?
-WHERE id = ?''',
+WHERE id = ? AND status = 'processing' ''',
       [toMillis(nextAttemptAt), reason, toMillis(now), id],
     );
   }
 
+  /// Only affects a memory that is still processing, so a worker can't hand
+  /// back an attempt another worker is using.
   @override
   Future<void> releaseWithoutAttempt(String id, DateTime now) async {
     _db.execute(
@@ -79,11 +84,12 @@ WHERE id = ?''',
 UPDATE memories
 SET status = 'captured', lease_until = NULL, attempts = MAX(attempts - 1, 0),
     updated_at = ?
-WHERE id = ?''',
+WHERE id = ? AND status = 'processing' ''',
       [toMillis(now), id],
     );
   }
 
+  /// Only affects a memory that is still processing.
   @override
   Future<void> markFailed(String id, String reason, DateTime now) async {
     _db.execute(
@@ -91,7 +97,7 @@ WHERE id = ?''',
 UPDATE memories
 SET status = 'failed', failure_reason = ?, lease_until = NULL,
     next_attempt_at = NULL, updated_at = ?
-WHERE id = ?''',
+WHERE id = ? AND status = 'processing' ''',
       [reason, toMillis(now), id],
     );
   }

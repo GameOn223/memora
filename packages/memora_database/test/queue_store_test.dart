@@ -204,6 +204,76 @@ void main() {
     });
   });
 
+  group('a worker that lost its lease', () {
+    late String id;
+    final takeover = now.add(const Duration(minutes: 30));
+    final tooLate = now.add(const Duration(minutes: 45));
+
+    setUp(() async {
+      id = await seed(DateTime.utc(2026, 7, 1));
+      await queue.claimNext(now, lease);
+      // The lease runs out, a second worker claims the same memory and
+      // finishes it. The first worker is still alive and reports back.
+      await queue.claimNext(takeover, lease);
+      await queue.markReady(id, takeover);
+    });
+
+    test('cannot mark a finished memory ready again', () async {
+      await queue.markReady(id, tooLate);
+
+      final memory = (await db.memories.getMemory(id))!;
+      expect(memory.status, ProcessingStatus.ready);
+      expect(memory.processedAt, takeover);
+      expect(memory.updatedAt, takeover);
+    });
+
+    test('cannot fail a finished memory', () async {
+      await queue.markFailed(id, 'Timed out', tooLate);
+
+      final memory = (await db.memories.getMemory(id))!;
+      expect(memory.status, ProcessingStatus.ready);
+      expect(memory.failureReason, isNull);
+      expect(memory.updatedAt, takeover);
+    });
+
+    test('cannot put a finished memory back in the queue', () async {
+      await queue.releaseForRetry(
+        id,
+        nextAttemptAt: tooLate.add(const Duration(minutes: 5)),
+        reason: 'Rate limited',
+        now: tooLate,
+      );
+
+      final memory = (await db.memories.getMemory(id))!;
+      expect(memory.status, ProcessingStatus.ready);
+      expect(memory.failureReason, isNull);
+      expect(column(id, 'next_attempt_at'), isNull);
+    });
+
+    test('cannot give back an attempt it never used', () async {
+      final before = (await db.memories.getMemory(id))!.attempts;
+      expect(before, 2);
+
+      await queue.releaseWithoutAttempt(id, tooLate);
+
+      final memory = (await db.memories.getMemory(id))!;
+      expect(memory.status, ProcessingStatus.ready);
+      expect(memory.attempts, before);
+    });
+
+    test('cannot touch a memory that is waiting again', () async {
+      setStatus(db, id, ProcessingStatus.captured, attempts: 0);
+
+      await queue.markFailed(id, 'Timed out', tooLate);
+      await queue.markReady(id, tooLate);
+
+      expect(
+        (await db.memories.getMemory(id))!.status,
+        ProcessingStatus.captured,
+      );
+    });
+  });
+
   group('user actions', () {
     test('retry moves a failed memory back to the queue', () async {
       final id = await seed(DateTime.utc(2026, 7, 1));

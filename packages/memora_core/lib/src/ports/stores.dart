@@ -121,6 +121,12 @@ class QueueItem {
 }
 
 /// Queue bookkeeping. Implemented by `memora_database`.
+///
+/// The four methods a worker calls when it's done with a memory
+/// ([markReady], [releaseForRetry], [releaseWithoutAttempt] and [markFailed])
+/// only apply while that memory is still `processing`. A worker whose lease
+/// expired, and whose memory another worker has taken over since, changes
+/// nothing. The same goes for a memory that no longer exists.
 abstract interface class QueueStore {
   /// Atomically claims the next claimable memory, oldest taken first, and
   /// sets it to `processing` with a lease. Returns null when nothing is due.
@@ -129,7 +135,7 @@ abstract interface class QueueStore {
   /// Marks a processing memory as ready and clears its lease.
   Future<void> markReady(String id, DateTime now);
 
-  /// Returns a memory to `captured` for a later attempt.
+  /// Returns a processing memory to `captured` for a later attempt.
   Future<void> releaseForRetry(
     String id, {
     required DateTime nextAttemptAt,
@@ -137,9 +143,11 @@ abstract interface class QueueStore {
     required DateTime now,
   });
 
-  /// Returns a memory to `captured` and gives back the attempt it used.
+  /// Returns a processing memory to `captured` and gives back the attempt it
+  /// used.
   Future<void> releaseWithoutAttempt(String id, DateTime now);
 
+  /// Marks a processing memory as failed with [reason].
   Future<void> markFailed(String id, String reason, DateTime now);
 
   /// User tapped Retry on a failed memory.
