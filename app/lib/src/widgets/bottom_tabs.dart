@@ -36,6 +36,10 @@ class BottomTabs extends StatelessWidget {
   static double bottomPadding(BuildContext context) =>
       math.max(Space.s6, MediaQuery.paddingOf(context).bottom + Space.s2);
 
+  /// How tall the bar draws, for anything that floats above it.
+  static double barHeight(BuildContext context) =>
+      Space.s8 + 1 + Space.s3 + 48 + bottomPadding(context);
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
