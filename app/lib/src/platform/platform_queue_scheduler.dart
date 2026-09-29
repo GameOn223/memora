@@ -2,7 +2,6 @@ import 'package:memora_core/memora_core.dart';
 
 import '../services/app_services.dart';
 import 'messages.g.dart';
-import 'queue_policy_store.dart';
 
 /// [QueueScheduler] that hands the queue policy to WorkManager through
 /// [SchedulerHostApi].
@@ -20,7 +19,7 @@ class PlatformQueueScheduler implements QueueScheduler {
   /// native job isn't cancelled while they wait.
   static const lookahead = Duration(minutes: 31);
 
-  final QueuePolicySource _policies;
+  final QueuePolicyRepository _policies;
   final QueueStore _queue;
   final CapabilityRouter _router;
   final Clock _clock;

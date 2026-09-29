@@ -5,9 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:memora/src/platform/local_model_files.dart';
-import 'package:memora/src/platform/model_catalog.dart';
 import 'package:memora/src/services/app_services.dart';
 import 'package:memora_core/memora_core.dart';
+import 'package:memora_providers/memora_providers.dart';
 
 void main() {
   group('gitBlobSha1', () {

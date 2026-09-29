@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/platform/messages.g.dart';
 import 'package:memora/src/platform/platform_queue_scheduler.dart';
-import 'package:memora/src/platform/queue_policy_store.dart';
+
 import 'package:memora_core/memora_core.dart';
 
 import 'fakes.dart';
@@ -28,7 +28,7 @@ void main() {
     final queue = _FakeQueueStore();
     final now = DateTime(2026, 9, 15, 12);
     final scheduler = PlatformQueueScheduler(
-      policies: SettingsQueuePolicySource(settings),
+      policies: QueuePolicyRepository(settings),
       queue: queue,
       router: CapabilityRouter(
         registry: registry,
@@ -65,7 +65,7 @@ void main() {
 
   test('policy JSON matches the core settings format', () async {
     final settings = MemorySettings();
-    final source = SettingsQueuePolicySource(settings);
+    final source = QueuePolicyRepository(settings);
 
     expect(await source.load(), const QueuePolicy());
     await source.save(const QueuePolicy(mode: QueueMode.immediate));
