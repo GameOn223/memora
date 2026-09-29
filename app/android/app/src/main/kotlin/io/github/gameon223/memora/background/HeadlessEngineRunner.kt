@@ -83,6 +83,12 @@ object HeadlessEngineRunner {
                 override fun backgroundReady() {
                     ready.complete(Unit)
                 }
+
+                override fun backgroundFailed(message: String) {
+                    ready.completeExceptionally(
+                        BackgroundEngineException("The background entrypoint failed: $message"),
+                    )
+                }
             },
         )
         return engine

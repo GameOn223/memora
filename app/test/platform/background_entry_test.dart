@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/platform/background_entry.dart';
 import 'package:memora/src/platform/messages.g.dart';
@@ -34,6 +36,41 @@ void main() {
 
     expect(await handler.reindexEmbeddings(60000), 12);
     expect(services.pipeline.budgets.last, const Duration(minutes: 1));
+  });
+
+  group('the headless entrypoint stays in the build', () {
+    test('background_main.dart keeps the entry-point pragma', () {
+      final source = File('lib/background_main.dart').readAsStringSync();
+
+      expect(source, contains("@pragma('vm:entry-point')"));
+      expect(source, contains('Future<void> backgroundMain()'));
+    });
+
+    test('main.dart references the library so AOT compiles it', () {
+      final source = File('lib/main.dart').readAsStringSync();
+
+      // Without this, release builds drop the library and WorkManager can't
+      // start the entrypoint. See docs/architecture.md, section 10.
+      expect(
+        source,
+        anyOf(
+          contains("export 'background_main.dart'"),
+          contains("import 'background_main.dart'"),
+        ),
+        reason: 'main.dart must reference lib/background_main.dart',
+      );
+      expect(source, contains('backgroundMain'));
+    });
+
+    test('the Kotlin runner points at the same library and function', () {
+      final runner = File(
+        'android/app/src/main/kotlin/io/github/gameon223/memora/'
+        'background/HeadlessEngineRunner.kt',
+      ).readAsStringSync();
+
+      expect(runner, contains('package:memora/background_main.dart'));
+      expect(runner, contains('"backgroundMain"'));
+    });
   });
 }
 
