@@ -31,6 +31,13 @@ void main() {
       );
     });
 
+    test('keeps marks with the word they belong to', () {
+      // Devanagari vowel signs are combining marks. Splitting on them would
+      // ask the index for fragments it doesn't hold.
+      expect(ftsMatchExpression('बिजली बिल'), '"बिजली"* OR "बिल"*');
+      expect(ftsMatchExpression('café lait'), '"café"* OR "lait"*');
+    });
+
     test('never lets FTS syntax through', () {
       final quotedOnly = RegExp(r'^"[^"\s]+"\*?( OR "[^"\s]+"\*?)*$');
       for (final input in [

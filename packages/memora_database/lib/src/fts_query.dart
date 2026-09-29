@@ -1,4 +1,7 @@
-final _token = RegExp(r'[\p{L}\p{N}]+', unicode: true);
+/// Letters, digits and the marks that sit on them. Marks stay with their word
+/// for the same reason the FTS5 tokenizer keeps them: without that, Devanagari
+/// and other Indic text falls apart at every vowel sign.
+final _token = RegExp(r'[\p{L}\p{N}\p{M}]+', unicode: true);
 
 /// Words that carry no meaning in a search box query.
 const _stopwords = <String>{

@@ -290,7 +290,7 @@ All timestamps are UTC milliseconds since the epoch. Dates that come from image 
 
 **embeddings**: `id`, `memory_id`, `vector` BLOB (little-endian float32, L2-normalized), `model_id`, `model_version`, `dimensions`, `created_at`. Unique on `(memory_id, model_id, model_version)`.
 
-**memories_fts**: FTS5 table with columns `summary`, `extracted_text`, `visual_description`, `keywords`, `entities`, using the `unicode61 remove_diacritics 2` tokenizer. Its `rowid` is `memories.seq`, which an explicit `INTEGER PRIMARY KEY` keeps stable across `VACUUM`. The storage layer updates it inside the same transaction that writes AI output, so the index can't drift from the data.
+**memories_fts**: FTS5 table with columns `summary`, `extracted_text`, `visual_description`, `keywords`, `entities`, using the `unicode61 remove_diacritics 2 categories 'L* N* Co Mc Mn'` tokenizer. `remove_diacritics 2` means Café is found by cafe. The categories add the combining marks that Indic scripts write vowels with, without which बिजली is indexed as the fragments ब, जल and ल. User text is tokenized the same way before it reaches `MATCH`. Changing these settings later needs a migration that rebuilds the index, so they're worth getting right now. The `rowid` is `memories.seq`, which an explicit `INTEGER PRIMARY KEY` keeps stable across `VACUUM`. The storage layer updates it inside the same transaction that writes AI output, so the index can't drift from the data.
 
 **conversations**: `id`, `title`, `created_at`, `updated_at`.
 

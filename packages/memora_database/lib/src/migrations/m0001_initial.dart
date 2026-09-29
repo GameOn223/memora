@@ -93,6 +93,10 @@ CREATE TABLE embeddings (
   UNIQUE (memory_id, model_id, model_version)
 )''',
   'CREATE INDEX embeddings_model ON embeddings (model_id, model_version)',
+  // The tokenizer categories matter for Indic scripts. Without Mc and Mn the
+  // default splits a word at every vowel sign, so बिजली goes into the index
+  // as ब, जल and ल. remove_diacritics 2 still folds Latin accents, so Café is
+  // found by cafe.
   '''
 CREATE VIRTUAL TABLE memories_fts USING fts5(
   summary,
@@ -100,7 +104,7 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
   visual_description,
   keywords,
   entities,
-  tokenize = 'unicode61 remove_diacritics 2'
+  tokenize = "unicode61 remove_diacritics 2 categories 'L* N* Co Mc Mn'"
 )''',
   '''
 CREATE TABLE conversations (
