@@ -32,12 +32,21 @@ class ImportedFile {
 
 @immutable
 class IngestReport {
-  const IngestReport({required this.addedIds, required this.duplicateCount});
+  const IngestReport({
+    required this.addedIds,
+    required this.duplicateCount,
+    this.duplicatePaths = const [],
+  });
 
   final List<String> addedIds;
 
   /// Images skipped because they were already in Memora.
   final int duplicateCount;
+
+  /// The copies those skipped images were made into, relative to the app
+  /// files directory. Nothing points at them, so the caller can delete them.
+  /// The ingestor tries as well.
+  final List<String> duplicatePaths;
 }
 
 /// Turns copied files into memory rows and thumbnails.
