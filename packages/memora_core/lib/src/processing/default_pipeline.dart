@@ -29,8 +29,9 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     this._localeTag = 'en-IN',
   });
 
-  /// Attempts before a transient error fails a memory for good.
-  static const maxAttempts = 3;
+  /// Attempts before a transient error fails a memory for good. Four, so
+  /// the whole 1, 5 and 30 minute ladder gets used.
+  static const maxAttempts = 4;
 
   /// How many memories are embedded per call while reindexing.
   static const reindexBatchSize = 8;

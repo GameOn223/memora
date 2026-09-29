@@ -158,9 +158,10 @@ void main() {
       expect(await pipelineFor(ai).processNext(), isA<QueueEmpty>());
     });
 
-    test('transient errors back off, then fail after three attempts', () async {
+    test('transient errors climb the backoff ladder, then fail', () async {
       final vision = ScriptedVisionService(
         analyze: [
+          const AiTransientException('Timed out'),
           const AiTransientException('Timed out'),
           const AiTransientException('Timed out'),
           const AiTransientException('Rate limited'),
@@ -187,12 +188,19 @@ void main() {
 
       clock.advance(const Duration(minutes: 6));
       outcome = await pipeline.processNext();
+      expect((outcome as Processed).status, ProcessingStatus.captured);
+      row = db.rows['m1']!;
+      expect(row.attempts, 3);
+      expect(row.nextAttemptAt, clock.current.add(const Duration(minutes: 30)));
+
+      clock.advance(const Duration(minutes: 31));
+      outcome = await pipeline.processNext();
       expect((outcome as Processed).status, ProcessingStatus.failed);
       expect(db.rows['m1']!.status, ProcessingStatus.failed);
       expect(db.rows['m1']!.failureReason, 'Rate limited');
 
       final records = (await db.getDetails('m1'))!.processing;
-      expect(records, hasLength(3));
+      expect(records, hasLength(4));
       expect(
         records.every((r) => r.outcome == ProcessingOutcome.failed),
         isTrue,

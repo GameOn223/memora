@@ -18,6 +18,7 @@ Map<String, Object?> _entity(StoredEntity e) => {
 
 void main() {
   const normalizer = FactNormalizer();
+  final takenAt = DateTime(2026, 9, 1);
 
   test('normalizes the documented vision example', () {
     final u = MemoryUnderstanding.fromJson({
@@ -41,7 +42,7 @@ void main() {
       'confidence': 0.86,
     });
 
-    final facts = normalizer.normalize(u);
+    final facts = normalizer.normalize(u, takenAt: takenAt);
 
     expect(facts.entities.map(_entity), [
       {'type': 'company', 'value': 'Reliance', 'normalized': 'reliance'},
@@ -87,7 +88,7 @@ void main() {
       ],
     );
 
-    final facts = normalizer.normalize(u);
+    final facts = normalizer.normalize(u, takenAt: takenAt);
 
     expect(facts.entities.map(_entity), [
       {
@@ -115,7 +116,7 @@ void main() {
       ],
     );
 
-    final facts = normalizer.normalize(u, takenAt: DateTime(2026, 9, 1));
+    final facts = normalizer.normalize(u, takenAt: takenAt);
 
     expect(facts.attributes.map(_attr), [
       {
@@ -140,7 +141,11 @@ void main() {
       ],
     );
 
-    final facts = normalizer.normalize(u, defaultCurrency: 'EUR');
+    final facts = normalizer.normalize(
+      u,
+      takenAt: takenAt,
+      defaultCurrency: 'EUR',
+    );
 
     expect(facts.attributes.map((a) => (a.value, a.currency, a.label)), [
       ('€12.50', 'EUR', 'total'),
@@ -160,7 +165,7 @@ void main() {
       ],
     );
 
-    final facts = normalizer.normalize(u);
+    final facts = normalizer.normalize(u, takenAt: takenAt);
 
     expect(facts.attributes.map((a) => (a.type, a.valueNum)), [
       ('quantity', 3.0),
@@ -177,7 +182,7 @@ void main() {
       keywords: [' Bill ', 'bill', '', for (var i = 0; i < 30; i++) 'k$i'],
     );
 
-    final facts = normalizer.normalize(u);
+    final facts = normalizer.normalize(u, takenAt: takenAt);
 
     expect(facts.keywords.first, 'bill');
     expect(facts.keywords, hasLength(20));

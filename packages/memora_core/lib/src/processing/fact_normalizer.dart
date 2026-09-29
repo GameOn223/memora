@@ -19,12 +19,13 @@ class FactNormalizer {
 
   static const maxKeywords = 20;
 
-  /// Normalizes [u]. [defaultCurrency] fills in amounts without a currency.
-  /// [takenAt] resolves dates written without a year; it defaults to now.
+  /// Normalizes [u]. [defaultCurrency] fills in amounts that came without
+  /// one. [takenAt] resolves dates written without a year, so it is given
+  /// rather than guessed from the current time.
   NormalizedFacts normalize(
     MemoryUnderstanding u, {
+    required DateTime takenAt,
     String defaultCurrency = 'INR',
-    DateTime? takenAt,
   }) {
     return NormalizedFacts(
       entities: _entities(u.entities),
@@ -60,8 +61,13 @@ class FactNormalizer {
     final result = <StoredAttribute>[];
     for (final amount in amounts) {
       final value = amount.value.toDouble();
-      // A zero usually means the model left the value out.
-      if (!value.isFinite || value == 0) continue;
+      if (!value.isFinite) continue;
+      // A bare zero with nothing around it is usually a value the model left
+      // out. A zero that came with a currency or a label, such as a balance
+      // due of nothing, is worth keeping.
+      if (value == 0 && amount.currency == null && amount.type == 'amount') {
+        continue;
+      }
       final currency = normalizeCurrency(amount.currency) ?? defaultCurrency;
       if (!seen.add('${amount.type}|$value|$currency')) continue;
       result.add(
@@ -77,7 +83,7 @@ class FactNormalizer {
     return result;
   }
 
-  List<StoredAttribute> _dates(List<DateMention> dates, DateTime? takenAt) {
+  List<StoredAttribute> _dates(List<DateMention> dates, DateTime takenAt) {
     final seen = <String>{};
     final result = <StoredAttribute>[];
     for (final mention in dates) {
@@ -96,10 +102,10 @@ class FactNormalizer {
     return result;
   }
 
-  DateTime? _parseDate(String value, DateTime? takenAt) {
+  DateTime? _parseDate(String value, DateTime takenAt) {
     final iso = parseIsoDate(value);
     if (iso != null) return iso;
-    final found = findDates(value, reference: takenAt ?? DateTime.now());
+    final found = findDates(value, reference: takenAt);
     return found.length == 1 ? found.single.date : null;
   }
 

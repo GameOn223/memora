@@ -8,11 +8,13 @@ class DateRange {
   const DateRange({this.start, this.end})
     : assert(start != null || end != null, 'A range needs at least one bound');
 
-  /// A whole calendar day in local time.
-  factory DateRange.day(DateTime day) {
-    final start = DateTime(day.year, day.month, day.day);
-    return DateRange(start: start, end: start.add(const Duration(days: 1)));
-  }
+  /// A whole calendar day in local time. Built from calendar fields rather
+  /// than by adding 24 hours, so a day that gains or loses an hour to
+  /// daylight saving still ends at the next midnight.
+  factory DateRange.day(DateTime day) => DateRange(
+    start: DateTime(day.year, day.month, day.day),
+    end: DateTime(day.year, day.month, day.day + 1),
+  );
 
   /// A whole calendar month in local time.
   factory DateRange.month(int year, int month) =>
