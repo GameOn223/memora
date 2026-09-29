@@ -138,23 +138,33 @@ void main() {
     const b = ToolCall(id: 'b', name: 't', arguments: {});
     const c = ToolCall(id: 'c', name: 't', arguments: {});
 
+    const scope = 'openai|gpt-6-sol';
+
     test('finds data by the exact set of call ids', () {
       final cache = TurnReplayCache<String>();
-      cache.remember([a, b], 'turn-1');
-      expect(cache.lookup([b, a]), 'turn-1');
-      expect(cache.lookup([a]), isNull);
-      expect(cache.lookup([a, b, c]), isNull);
-      expect(cache.lookup(const []), isNull);
+      cache.remember(scope, [a, b], 'turn-1');
+      expect(cache.lookup(scope, [b, a]), 'turn-1');
+      expect(cache.lookup(scope, [a]), isNull);
+      expect(cache.lookup(scope, [a, b, c]), isNull);
+      expect(cache.lookup(scope, const []), isNull);
+    });
+
+    test('keeps providers and models apart', () {
+      final cache = TurnReplayCache<String>();
+      cache.remember(scope, [a], 'from openai');
+      expect(cache.lookup('groq|qwen/qwen3.8-27b', [a]), isNull);
+      expect(cache.lookup('openai|gpt-4.1-mini', [a]), isNull);
+      expect(cache.lookup(scope, [a]), 'from openai');
     });
 
     test('forgets the oldest entries past capacity', () {
       final cache = TurnReplayCache<int>(capacity: 2);
-      cache.remember([a], 1);
-      cache.remember([b], 2);
-      cache.remember([c], 3);
-      expect(cache.lookup([a]), isNull);
-      expect(cache.lookup([b]), 2);
-      expect(cache.lookup([c]), 3);
+      cache.remember(scope, [a], 1);
+      cache.remember(scope, [b], 2);
+      cache.remember(scope, [c], 3);
+      expect(cache.lookup(scope, [a]), isNull);
+      expect(cache.lookup(scope, [b]), 2);
+      expect(cache.lookup(scope, [c]), 3);
     });
   });
 
