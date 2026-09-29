@@ -131,23 +131,35 @@ WHERE id = ? AND status IN ('ready', 'failed')''',
   /// Processing items, then waiting items oldest taken first with their
   /// positions, then failed items, then up to [recentLimit] ready items with
   /// the most recently processed first.
+  ///
+  /// The waiting and failed lists are capped at [waitingLimit] each. A first
+  /// import can leave tens of thousands of memories waiting, and the screen
+  /// only shows the head of the queue. `MemoryStore.queueSummary` has the
+  /// totals.
   @override
-  Future<List<QueueItem>> queueItems({int recentLimit = 20}) async {
+  Future<List<QueueItem>> queueItems({
+    int waitingLimit = 200,
+    int recentLimit = 20,
+  }) async {
     List<Memory> select(String sql, [List<Object?> args = const []]) => [
       for (final row in _db.select(sql, args)) memoryFromRow(row),
     ];
 
+    // Only a worker or two can hold memories at once, so this list is short
+    // and always shown in full.
     final processing = select(
       "SELECT * FROM memories WHERE status = 'processing' "
       'ORDER BY taken_at ASC, seq ASC',
     );
     final waiting = select(
       'SELECT * FROM memories WHERE status IN $waitingStatuses '
-      'ORDER BY taken_at ASC, seq ASC',
+      'ORDER BY taken_at ASC, seq ASC LIMIT ?',
+      [waitingLimit],
     );
     final failed = select(
       "SELECT * FROM memories WHERE status = 'failed' "
-      'ORDER BY taken_at ASC, seq ASC',
+      'ORDER BY taken_at ASC, seq ASC LIMIT ?',
+      [waitingLimit],
     );
     final ready = select(
       "SELECT * FROM memories WHERE status = 'ready' "

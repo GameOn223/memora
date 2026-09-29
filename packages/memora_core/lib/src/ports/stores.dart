@@ -157,7 +157,15 @@ abstract interface class QueueStore {
   Future<void> requestReprocess(String id, DateTime now);
 
   /// Waiting, processing and failed items first, then recently finished ones.
-  Future<List<QueueItem>> queueItems({int recentLimit = 20});
+  ///
+  /// [waitingLimit] caps the waiting and failed lists and [recentLimit] the
+  /// finished one. A backlog runs to tens of thousands of memories, so the
+  /// queue screen shows the head of each list and takes its totals from
+  /// [MemoryStore.queueSummary].
+  Future<List<QueueItem>> queueItems({
+    int waitingLimit = 200,
+    int recentLimit = 20,
+  });
 
   /// True if anything is waiting to be claimed.
   Future<bool> hasWork(DateTime now);

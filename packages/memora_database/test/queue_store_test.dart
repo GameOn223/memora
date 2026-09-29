@@ -388,6 +388,44 @@ void main() {
     test('is empty for an empty database', () async {
       expect(await queue.queueItems(), isEmpty);
     });
+
+    test('caps the waiting and failed lists', () async {
+      final waiting = <String>[];
+      for (var day = 1; day <= 5; day++) {
+        waiting.add(await seed(DateTime.utc(2026, 7, day)));
+      }
+      final failed = <String>[];
+      for (var day = 1; day <= 3; day++) {
+        final id = await seed(DateTime.utc(2026, 6, day));
+        setStatus(db, id, ProcessingStatus.failed);
+        failed.add(id);
+      }
+
+      final items = await queue.queueItems(waitingLimit: 2);
+      expect(items.map((i) => i.memory.id), [
+        waiting[0],
+        waiting[1],
+        failed[0],
+        failed[1],
+      ]);
+      expect(items.map((i) => i.position), [1, 2, null, null]);
+
+      expect(await queue.queueItems(waitingLimit: 0), isEmpty);
+      expect((await queue.queueItems()).length, 8);
+
+      // An item a worker holds is always shown, however tight the cap.
+      final active = await seed(DateTime.utc(2026, 8, 1));
+      setStatus(
+        db,
+        active,
+        ProcessingStatus.processing,
+        leaseUntil: now.add(lease),
+      );
+      expect(
+        (await queue.queueItems(waitingLimit: 0)).single.memory.id,
+        active,
+      );
+    });
   });
 
   group('hasWork', () {
