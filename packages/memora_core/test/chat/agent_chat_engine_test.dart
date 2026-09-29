@@ -138,6 +138,48 @@ void main() {
       expect(toolResult.isError, isFalse);
     });
 
+    test('a second search in the same turn becomes the active set', () async {
+      final chat = ScriptedChatService([
+        toolTurn([
+          call('search_by_entity', {'value': 'Reliance'}),
+        ]),
+        toolTurn([
+          call('search_by_attribute', {
+            'type': 'amount',
+            'min': 1800,
+          }, id: 't2'),
+        ]),
+        toolTurn([
+          call('aggregate_results', {'op': 'count'}, id: 't3'),
+        ]),
+        answerTurn('Two of them are over ₹1,800.'),
+      ]);
+
+      final (events, conversation) = await ask(
+        await engineWith(await AiHarness.create(chat: chat)),
+        'how many reliance bills are over 1800?',
+      );
+
+      final message = (events.last as ChatAnswered).message;
+      expect(message.toolTrace.map((t) => t.summary), [
+        '3 candidates',
+        '2 candidates',
+        '2',
+      ]);
+      final active = (await db.latestResultSet(conversation.id))!;
+      expect(active.memoryIds, ['sep', 'aug']);
+
+      final sets = db.resultSetRows
+          .where((s) => s.conversationId == conversation.id)
+          .toList();
+      expect(sets, hasLength(2));
+      expect(
+        sets[1].createdAt.isAfter(sets[0].createdAt),
+        isTrue,
+        reason: 'a shared timestamp would leave the active set ambiguous',
+      );
+    });
+
     test('an aggregate answer is shown as a table', () async {
       final chat = ScriptedChatService([
         toolTurn([

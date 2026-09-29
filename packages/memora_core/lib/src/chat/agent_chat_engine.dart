@@ -203,13 +203,23 @@ class AgentChatEngine implements ChatEngine {
       router: _router,
     );
     final byName = {for (final tool in tools) tool.name: tool};
-    final context = ToolContext(
-      conversationId: conversationId,
-      now: _clock.now(),
-      conversations: _conversations,
-      ids: _ids,
-      messageId: assistantId,
-    );
+    // Each tool call gets its own timestamp, strictly after the one before,
+    // so two searches in the same turn can't tie and leave "the latest
+    // result set" ambiguous.
+    DateTime? stamped;
+    ToolContext nextContext() {
+      final now = _clock.now();
+      stamped = stamped == null || now.isAfter(stamped!)
+          ? now
+          : stamped!.add(const Duration(milliseconds: 1));
+      return ToolContext(
+        conversationId: conversationId,
+        now: stamped!,
+        conversations: _conversations,
+        ids: _ids,
+        messageId: assistantId,
+      );
+    }
 
     final trace = <ToolTraceEntry>[];
     final scores = <String, double>{};
@@ -264,7 +274,7 @@ class AgentChatEngine implements ChatEngine {
           final tool = byName[call.name];
           final result = tool == null
               ? ToolError('There is no tool called "${call.name}".')
-              : await tool.run(call.arguments, context);
+              : await tool.run(call.arguments, nextContext());
           final entry = ToolTraceEntry(
             tool: call.name,
             arguments: call.arguments,
