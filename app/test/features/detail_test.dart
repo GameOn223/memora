@@ -41,11 +41,7 @@ void main() {
       find.textContaining('the date the image was taken', findRichText: true),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(
-      find.text('VISION · NVIDIA / NEMOTRON-VL-3B'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await scrollTo(tester, find.text('VISION · NVIDIA / NEMOTRON-VL-3B'));
     expect(find.text('EMBEDDING · LOCAL / BGE-SMALL-EN-V1.5'), findsOneWidget);
     expect(find.text('USED IN 3 CONVERSATIONS'), findsNothing);
     expect(find.text('Used in 3 conversations'), findsOneWidget);
@@ -69,11 +65,7 @@ void main() {
   testWidgets('reprocess sends the memory back to the queue', (tester) async {
     final services = await pumpApp(tester, initialLocation: '/memory/m6');
 
-    await tester.scrollUntilVisible(
-      find.text('Reprocess'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await scrollTo(tester, find.text('Reprocess'));
     await tester.tap(find.text('Reprocess'));
     await tester.pumpAndSettle();
 

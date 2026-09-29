@@ -83,3 +83,12 @@ Future<DemoAppServices> pumpApp(
   await tester.pumpAndSettle();
   return demo;
 }
+
+/// Scrolls [finder] into view and past anything floating over the bottom of
+/// the screen, so it can be tapped.
+Future<void> scrollTo(WidgetTester tester, Finder finder) async {
+  final scrollable = find.byType(Scrollable).last;
+  await tester.scrollUntilVisible(finder, 300, scrollable: scrollable);
+  await tester.drag(scrollable, const Offset(0, -160));
+  await tester.pumpAndSettle();
+}

@@ -12,6 +12,7 @@ import '../features/queue/queue_screen.dart';
 import '../features/settings/capability_screen.dart';
 import '../features/settings/provider_key_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../theme/memora_colors.dart';
 import 'app_shell.dart';
 
 /// Paths used across the app.
@@ -52,8 +53,15 @@ final _askKey = GlobalKey<NavigatorState>(debugLabel: 'ask');
 final _addKey = GlobalKey<NavigatorState>(debugLabel: 'add');
 final _settingsKey = GlobalKey<NavigatorState>(debugLabel: 'settings');
 
+/// Screens pushed over the shell get their own Material surface, since
+/// they are outside the shell's Scaffold.
+Widget _surface(Widget child) => Builder(
+  builder: (context) =>
+      Scaffold(backgroundColor: context.colors.bg, body: child),
+);
+
 Page<void> _page(GoRouterState state, Widget child) =>
-    MaterialPage(key: state.pageKey, name: state.name, child: child);
+    MaterialPage(key: state.pageKey, name: state.name, child: _surface(child));
 
 Page<void> _flat(GoRouterState state, Widget child) =>
     NoTransitionPage(key: state.pageKey, name: state.name, child: child);
