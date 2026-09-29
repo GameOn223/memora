@@ -18,7 +18,9 @@ val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
 android {
     namespace = "io.github.gameon223.memora"
     compileSdk = 36
-    ndkVersion = "27.0.12077973"
+    // Flutter's tested default for this SDK version. Plugins with native
+    // code ask for the same one, so a build needs a single NDK.
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
