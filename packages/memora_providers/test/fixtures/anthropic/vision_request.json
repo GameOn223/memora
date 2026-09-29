@@ -1,5 +1,5 @@
 {
-  "model": "claude-sonnet-5",
+  "model": "claude-sonnet-5-5",
   "max_tokens": 16000,
   "system": "<analyze_instructions>",
   "messages": [
@@ -14,12 +14,7 @@
       ]
     }
   ],
-  "tools": [
-    {
-      "name": "record_memory",
-      "description": "Record the data extracted from the image.",
-      "input_schema": "<schema>"
-    }
-  ],
-  "tool_choice": { "type": "tool", "name": "record_memory" }
+  "output_config": {
+    "format": { "type": "json_schema", "schema": "<closed_schema>" }
+  }
 }

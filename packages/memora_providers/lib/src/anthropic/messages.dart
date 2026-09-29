@@ -3,17 +3,6 @@ import '../shared/json_read.dart';
 /// Version header value sent with every request.
 const anthropicVersion = '2023-06-01';
 
-/// Models that reject a forced `tool_choice` with a 400. They get
-/// `tool_choice: auto` and an instruction naming the tool instead.
-const _noForcedToolChoice = [
-  'claude-fable-5-1',
-  'claude-mythos-5-1',
-  'claude-mythos-preview',
-];
-
-bool acceptsForcedToolChoice(String modelId) =>
-    !_noForcedToolChoice.any(modelId.startsWith);
-
 /// Builds a `messages` array, merging consecutive turns from the same role
 /// into one message. The API wants every tool result for one assistant turn
 /// in a single user message, ahead of any text.
