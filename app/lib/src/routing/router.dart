@@ -36,6 +36,16 @@ abstract final class Routes {
   static const tabRoots = [home, ask, add, settings];
 }
 
+/// Goes back where the user came from, or home when this screen was the
+/// entry point (a deep link, or a test opening it directly).
+void popOrHome(BuildContext context) {
+  if (context.canPop()) {
+    context.pop();
+  } else {
+    context.go(Routes.home);
+  }
+}
+
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final _homeKey = GlobalKey<NavigatorState>(debugLabel: 'memories');
 final _askKey = GlobalKey<NavigatorState>(debugLabel: 'ask');

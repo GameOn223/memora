@@ -62,7 +62,7 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
             children: [
               ScreenHeader(
                 title: 'Processing queue',
-                onLeading: () => context.pop(),
+                onLeading: () => popOrHome(context),
               ),
               Expanded(
                 child: ListView(

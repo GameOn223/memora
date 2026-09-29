@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../routing/router.dart';
 import '../../state/services.dart';
 import '../../widgets/screen_body.dart';
 import '../../widgets/screen_header.dart';
@@ -21,7 +21,7 @@ class ProviderKeyScreen extends ConsumerWidget {
     return ScreenBody(
       header: ScreenHeader(
         title: descriptor?.displayName ?? 'Provider',
-        onLeading: () => context.pop(),
+        onLeading: () => popOrHome(context),
       ),
       child: const SizedBox.shrink(),
     );

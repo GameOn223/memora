@@ -140,7 +140,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     return ScreenBody(
       header: ScreenHeader(
         title: 'All memories',
-        onLeading: () => context.pop(),
+        onLeading: () => popOrHome(context),
         trailing: [
           Text(
             '$total',

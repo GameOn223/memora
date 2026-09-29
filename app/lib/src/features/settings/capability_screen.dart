@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:memora_core/memora_core.dart';
 
+import '../../routing/router.dart';
 import '../../widgets/memory_labels.dart';
 import '../../widgets/screen_body.dart';
 import '../../widgets/screen_header.dart';
@@ -19,7 +19,7 @@ class CapabilityScreen extends ConsumerWidget {
     return ScreenBody(
       header: ScreenHeader(
         title: sentenceCase(capability.key),
-        onLeading: () => context.pop(),
+        onLeading: () => popOrHome(context),
       ),
       child: const SizedBox.shrink(),
     );
