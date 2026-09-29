@@ -407,6 +407,46 @@ void main() {
       expect(message.presentation!.highlightMemoryId, 'aug');
     });
 
+    test('a question with its own filters searches fresh', () async {
+      db.seed(
+        id: 'groceries',
+        summary: 'Grocery receipt from Nature Basket',
+        category: 'receipt',
+        takenAt: DateTime(2026, 9, 12),
+        attributes: [amount(842)],
+      );
+      final engine = await engineWith(await AiHarness.create());
+
+      final (_, conversation) = await ask(engine, 'reliance bills');
+      final events = await engine
+          .ask(conversation.id, 'how many receipts do i have?')
+          .toList();
+
+      final message = (events.last as ChatAnswered).message;
+      expect(message.content, 'Found 1 memory.');
+      expect(message.references.single.memoryId, 'groceries');
+    });
+
+    test('a question that points back stays on the last results', () async {
+      db.seed(
+        id: 'mac',
+        summary: 'MacBook Air price comparison',
+        category: 'comparison',
+        takenAt: DateTime(2026, 9, 12),
+        attributes: [amount(124900)],
+      );
+      final engine = await engineWith(await AiHarness.create());
+
+      final (_, conversation) = await ask(engine, 'reliance bills');
+      final events = await engine
+          .ask(conversation.id, 'of those, how many are over ₹1,800?')
+          .toList();
+
+      final message = (events.last as ChatAnswered).message;
+      expect(message.content, 'Found 2 memories.');
+      expect(message.references.map((r) => r.memoryId), ['sep', 'aug']);
+    });
+
     test('a focused question only looks at that memory', () async {
       final ai = await AiHarness.create();
       final engine = await engineWith(ai);

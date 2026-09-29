@@ -14,6 +14,7 @@ import 'citations.dart';
 import 'deterministic_answerer.dart';
 import 'presentation_builder.dart';
 import 'query_labels.dart';
+import 'query_parser.dart';
 import 'system_prompt.dart';
 import 'tools/tool.dart';
 import 'tools/tool_registry.dart';
@@ -36,6 +37,7 @@ class AgentChatEngine implements ChatEngine {
     this._maxToolRounds = 6,
     this._localeTag = 'en-IN',
     this._defaultCurrency = 'INR',
+    this._parser = const QueryParser(),
   });
 
   /// How many earlier messages go into the prompt.
@@ -62,11 +64,12 @@ class AgentChatEngine implements ChatEngine {
   final int _maxToolRounds;
   final String _localeTag;
   final String _defaultCurrency;
+  final QueryParser _parser;
 
-  static final _followUp = RegExp(
-    r'^(which|what about|and |only |how many|of those|of them|highest|'
-    r'lowest|cheapest|the last one)|(?<![a-z])(of those|of them|among them)'
-    r'(?![a-z])',
+  static final _pointsBack = RegExp(
+    r'(?<![a-z])(of (?:those|them|these)|among (?:those|them|these)|'
+    r'from (?:those|them|these)|in (?:those|them|these)|those ones?|'
+    r'these ones?|that one|this one|the same(?: ones?)?)(?![a-z])',
   );
 
   @override
@@ -124,9 +127,16 @@ class AgentChatEngine implements ChatEngine {
     }
   }
 
-  /// True for a question that leans on the memories found last time.
-  static bool isFollowUp(String question) =>
-      _followUp.hasMatch(question.trim().toLowerCase());
+  /// True when a question leans on the memories found last time: it either
+  /// points back at them ("of those, which was highest?") or asks for
+  /// nothing new of its own ("which one was highest?").
+  ///
+  /// A question that brings its own words or filters, such as "how many
+  /// receipts do I have?", is a fresh search even right after another one.
+  static bool refersToEarlierResults(String question, ParsedQuery parsed) {
+    if (_pointsBack.hasMatch(question.trim().toLowerCase())) return true;
+    return !parsed.query.hasFilters && parsed.query.text == null;
+  }
 
   Stream<ChatProgress> _searchOnly(
     String conversationId,
@@ -136,7 +146,10 @@ class AgentChatEngine implements ChatEngine {
     Set<String>? within;
     if (focusMemoryId != null) {
       within = {focusMemoryId};
-    } else if (isFollowUp(question)) {
+    } else if (refersToEarlierResults(
+      question,
+      _parser.parse(question, now: _clock.now()),
+    )) {
       final active = await _conversations.latestResultSet(conversationId);
       if (active != null && active.memoryIds.isNotEmpty) {
         within = active.memoryIds.toSet();
@@ -147,6 +160,7 @@ class AgentChatEngine implements ChatEngine {
       retrieval: _retrieval,
       search: _search,
       clock: _clock,
+      parser: _parser,
     ).answer(question, within: within);
     for (final entry in answer.trace) {
       yield ChatToolUsed(entry);
