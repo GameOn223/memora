@@ -62,11 +62,14 @@ void main() {
       expect(openAiDescriptor.requiresApiKey, isTrue);
       expect(openAiDescriptor.apiKeyHint, 'sk-...');
       expect(openAiDescriptor.defaultBaseUrl, 'https://api.openai.com/v1');
-      expect(openAiDescriptor.defaultModel(Capability.vision), 'gpt-5-mini');
-      expect(openAiDescriptor.suggestedModels[Capability.chat], [
-        'gpt-5-mini',
-        'gpt-4.1-mini',
-      ]);
+      expect(
+        openAiDescriptor.defaultModel(Capability.vision),
+        openAiVisionModels.first,
+      );
+      expect(
+        openAiDescriptor.suggestedModels[Capability.chat],
+        openAiChatModels,
+      );
       expect(
         openAiDescriptor.defaultModel(Capability.embeddings),
         'text-embedding-3-small',
@@ -76,11 +79,11 @@ void main() {
       expect(groqDescriptor.capabilities, {Capability.vision, Capability.chat});
       expect(
         groqDescriptor.defaultModel(Capability.vision),
-        'meta-llama/llama-4-scout-17b-16e-instruct',
+        groqVisionModels.first,
       );
       expect(
         groqDescriptor.defaultModel(Capability.chat),
-        'llama-3.3-70b-versatile',
+        groqChatModels.first,
       );
 
       expect(nvidiaDescriptor.capabilities, Capability.values.toSet());

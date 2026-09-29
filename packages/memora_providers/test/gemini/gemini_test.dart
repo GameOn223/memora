@@ -51,17 +51,21 @@ void main() {
       Capability.chat,
       Capability.embeddings,
     });
-    expect(geminiDescriptor.suggestedModels[Capability.vision], [
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-    ]);
-    expect(geminiDescriptor.suggestedModels[Capability.chat], [
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-    ]);
+    expect(
+      geminiDescriptor.suggestedModels[Capability.vision],
+      geminiVisionModels,
+    );
+    expect(
+      geminiDescriptor.suggestedModels[Capability.chat],
+      geminiVisionModels,
+    );
     expect(
       geminiDescriptor.defaultModel(Capability.embeddings),
-      'gemini-embedding-001',
+      geminiEmbeddingModels.first,
+    );
+    expect(
+      geminiRequestedDimensions,
+      containsPair(geminiEmbeddingModels.first, 768),
     );
     expect(client().reranker('x'), isNull);
     expect(client().descriptor, same(geminiDescriptor));

@@ -1,14 +1,16 @@
 import 'package:memora_core/memora_core.dart';
 
+import '../shared/model_facts.dart';
+
 const openAiDescriptor = ProviderDescriptor(
   id: 'openai',
   displayName: 'OpenAI',
   location: ProviderLocation.cloud,
   capabilities: {Capability.vision, Capability.chat, Capability.embeddings},
   suggestedModels: {
-    Capability.vision: ['gpt-5-mini', 'gpt-4.1-mini'],
-    Capability.chat: ['gpt-5-mini', 'gpt-4.1-mini'],
-    Capability.embeddings: ['text-embedding-3-small'],
+    Capability.vision: openAiVisionModels,
+    Capability.chat: openAiChatModels,
+    Capability.embeddings: openAiEmbeddingModels,
   },
   requiresApiKey: true,
   apiKeyHint: 'sk-...',
@@ -22,8 +24,8 @@ const groqDescriptor = ProviderDescriptor(
   location: ProviderLocation.cloud,
   capabilities: {Capability.vision, Capability.chat},
   suggestedModels: {
-    Capability.vision: ['meta-llama/llama-4-scout-17b-16e-instruct'],
-    Capability.chat: ['llama-3.3-70b-versatile'],
+    Capability.vision: groqVisionModels,
+    Capability.chat: groqChatModels,
   },
   requiresApiKey: true,
   apiKeyHint: 'gsk_...',
@@ -42,10 +44,10 @@ const nvidiaDescriptor = ProviderDescriptor(
     Capability.reranking,
   },
   suggestedModels: {
-    Capability.vision: ['meta/llama-3.2-11b-vision-instruct'],
-    Capability.chat: ['meta/llama-3.3-70b-instruct'],
-    Capability.embeddings: ['nvidia/nv-embedqa-e5-v5'],
-    Capability.reranking: ['nvidia/nv-rerankqa-mistral-4b-v3'],
+    Capability.vision: nvidiaVisionModels,
+    Capability.chat: nvidiaChatModels,
+    Capability.embeddings: nvidiaEmbeddingModels,
+    Capability.reranking: nvidiaRerankModels,
   },
   requiresApiKey: true,
   apiKeyHint: 'nvapi-...',
@@ -59,8 +61,8 @@ const openRouterDescriptor = ProviderDescriptor(
   location: ProviderLocation.cloud,
   capabilities: {Capability.vision, Capability.chat},
   suggestedModels: {
-    Capability.vision: ['google/gemini-2.5-flash', 'openai/gpt-5-mini'],
-    Capability.chat: ['google/gemini-2.5-flash', 'openai/gpt-5-mini'],
+    Capability.vision: openRouterModels,
+    Capability.chat: openRouterModels,
   },
   requiresApiKey: true,
   apiKeyHint: 'sk-or-...',
@@ -74,9 +76,9 @@ const ollamaDescriptor = ProviderDescriptor(
   location: ProviderLocation.selfHosted,
   capabilities: {Capability.vision, Capability.chat, Capability.embeddings},
   suggestedModels: {
-    Capability.vision: ['qwen2.5vl', 'llava'],
-    Capability.chat: ['llama3.2'],
-    Capability.embeddings: ['nomic-embed-text'],
+    Capability.vision: ollamaVisionModels,
+    Capability.chat: ollamaChatModels,
+    Capability.embeddings: ollamaEmbeddingModels,
   },
   apiKeyOptional: true,
   defaultBaseUrl: 'http://localhost:11434/v1',
@@ -129,8 +131,10 @@ enum JsonResponseFormat {
 class OpenAiCompatibleProfile {
   const OpenAiCompatibleProfile({
     this.responseFormat = JsonResponseFormat.jsonObject,
+    this.strictJsonSchema = false,
     this.useMaxCompletionTokens = false,
     this.embeddingInputType = false,
+    this.openAiModelRules = false,
     this.visionMaxTokens = 4096,
   });
 
@@ -138,11 +142,18 @@ class OpenAiCompatibleProfile {
     return switch (providerId) {
       'openai' => const OpenAiCompatibleProfile(
         responseFormat: JsonResponseFormat.jsonSchema,
+        strictJsonSchema: true,
         useMaxCompletionTokens: true,
+        openAiModelRules: true,
+        visionMaxTokens: 16000,
+      ),
+      'openrouter' => const OpenAiCompatibleProfile(
+        responseFormat: JsonResponseFormat.jsonSchema,
+        openAiModelRules: true,
         visionMaxTokens: 16000,
       ),
       // LM Studio documents json_schema only.
-      'openrouter' || 'lmstudio' => const OpenAiCompatibleProfile(
+      'lmstudio' => const OpenAiCompatibleProfile(
         responseFormat: JsonResponseFormat.jsonSchema,
       ),
       'nvidia' => const OpenAiCompatibleProfile(embeddingInputType: true),
@@ -152,22 +163,33 @@ class OpenAiCompatibleProfile {
 
   final JsonResponseFormat responseFormat;
 
+  /// OpenAI guarantees the reply matches the schema with `strict: true`, so
+  /// there is nothing to retry.
+  final bool strictJsonSchema;
+
   /// OpenAI replaced `max_tokens` with `max_completion_tokens`.
   final bool useMaxCompletionTokens;
 
   /// NVIDIA retrieval embeddings encode queries and passages differently.
   final bool embeddingInputType;
 
+  /// The server runs OpenAI's own models, so OpenAI's model rules apply:
+  /// current generations reject a non-default temperature and spend output
+  /// tokens on reasoning.
+  final bool openAiModelRules;
+
   /// Output limit for one image analysis.
   final int visionMaxTokens;
 
   String get maxTokensField =>
       useMaxCompletionTokens ? 'max_completion_tokens' : 'max_tokens';
+
+  /// Whether to send `temperature` for [modelId].
+  bool sendsTemperature(String modelId) =>
+      !openAiModelRules || openAiAcceptsTemperature(modelId);
+
+  /// Whether [modelId] spends part of its output budget thinking. Unknown
+  /// OpenAI models are assumed to, so the answer has room.
+  bool reasons(String modelId) =>
+      openAiModelRules && !openAiAcceptsTemperature(modelId);
 }
-
-final _reasoningModel = RegExp(r'^(gpt-5|o[1-9])');
-
-/// OpenAI reasoning models, including when routed through OpenRouter as
-/// `openai/...`. They reject any temperature other than the default.
-bool isOpenAiReasoningModel(String modelId) =>
-    _reasoningModel.hasMatch(modelId.split('/').last.toLowerCase());

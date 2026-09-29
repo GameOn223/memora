@@ -19,7 +19,7 @@
     "json_schema": {
       "name": "memory_understanding",
       "schema": "<closed_schema>",
-      "strict": false
+      "strict": true
     }
   },
   "max_completion_tokens": 16000

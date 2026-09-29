@@ -53,11 +53,9 @@ void main() {
       Capability.chat,
     });
     for (final capability in [Capability.vision, Capability.chat]) {
-      expect(anthropicDescriptor.suggestedModels[capability], [
-        'claude-sonnet-5',
-        'claude-haiku-4-5',
-      ]);
+      expect(anthropicDescriptor.suggestedModels[capability], anthropicModels);
     }
+    expect(anthropicModels.first, startsWith('claude-sonnet-'));
     expect(client().embeddings('x'), isNull);
     expect(client().reranker('x'), isNull);
   });
@@ -427,10 +425,7 @@ void main() {
           'message': 'invalid x-api-key',
         },
       }, status: 401);
-      expect(await client().listModels(Capability.vision), [
-        'claude-sonnet-5',
-        'claude-haiku-4-5',
-      ]);
+      expect(await client().listModels(Capability.vision), anthropicModels);
     });
 
     test('testConnection', () async {

@@ -24,7 +24,7 @@ class OpenAiChatService implements ChatService {
 
   @override
   Future<ChatTurn> complete(ChatRequest request) async {
-    final reasoning = isOpenAiReasoningModel(modelId);
+    final reasoning = _profile.reasons(modelId);
     final json = await _endpoint.post('/chat/completions', {
       'model': modelId,
       'messages': [
@@ -45,7 +45,8 @@ class OpenAiChatService implements ChatService {
               },
             },
         ],
-      if (!reasoning) 'temperature': request.temperature,
+      if (_profile.sendsTemperature(modelId))
+        'temperature': request.temperature,
       _profile.maxTokensField: reasoning
           ? request.maxOutputTokens + reasoningHeadroomTokens
           : request.maxOutputTokens,

@@ -36,3 +36,4 @@ export 'src/openai_compatible/presets.dart';
 export 'src/openai_compatible/vision.dart' show OpenAiVisionService;
 export 'src/registration.dart';
 export 'src/shared/image_payload.dart' show ImagePayload, defaultMaxImageBytes;
+export 'src/shared/model_facts.dart';
