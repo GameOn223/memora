@@ -212,6 +212,31 @@ void main() {
       expect(events.whereType<ChatToolUsed>(), hasLength(2));
     });
 
+    test('the headline is the memory total, not a line item', () async {
+      db.seed(
+        id: 'store',
+        summary: 'Nature Basket receipt',
+        category: 'receipt',
+        takenAt: DateTime(2026, 9, 11),
+        attributes: [
+          amount(100, label: 'subtotal'),
+          amount(42, label: 'tax'),
+          amount(842),
+        ],
+      );
+      final chat = ScriptedChatService([
+        answerTurn('It came to ₹842 [[m:store]].'),
+      ]);
+
+      final (events, _) = await ask(
+        await engineWith(await AiHarness.create(chat: chat)),
+        'how much was the nature basket receipt?',
+      );
+
+      final presentation = (events.last as ChatAnswered).message.presentation!;
+      expect(presentation.headline, '₹842');
+    });
+
     test('drops citations that name no memory', () async {
       final chat = ScriptedChatService([
         answerTurn('Maybe this one [[m:ghost]] or this [[m:aug]].'),
