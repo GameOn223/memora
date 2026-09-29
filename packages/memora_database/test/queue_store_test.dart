@@ -389,6 +389,21 @@ void main() {
       expect(await queue.queueItems(), isEmpty);
     });
 
+    test('reads the recent ready tail from an index', () {
+      // The queue screen runs this again on every change, and a full backlog
+      // is tens of thousands of finished memories.
+      final plan = db.connection
+          .select(
+            "EXPLAIN QUERY PLAN SELECT * FROM memories WHERE status = 'ready' "
+            'ORDER BY processed_at DESC, seq DESC LIMIT 20',
+          )
+          .map((row) => row['detail'] as String)
+          .join(' | ');
+
+      expect(plan, contains('memories_status_processed_at'));
+      expect(plan, isNot(contains('TEMP B-TREE')));
+    });
+
     test('caps the waiting and failed lists', () async {
       final waiting = <String>[];
       for (var day = 1; day <= 5; day++) {

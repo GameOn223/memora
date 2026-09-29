@@ -48,6 +48,9 @@ CREATE TABLE memories (
   last_viewed_at INTEGER
 )''',
   'CREATE INDEX memories_status_taken_at ON memories (status, taken_at)',
+  // The queue screen's tail of recently finished memories.
+  'CREATE INDEX memories_status_processed_at '
+      'ON memories (status, processed_at)',
   'CREATE INDEX memories_taken_at ON memories (taken_at)',
   'CREATE INDEX memories_category ON memories (category)',
   '''

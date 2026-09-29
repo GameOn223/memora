@@ -55,6 +55,7 @@ void main() {
         indexes,
         containsAll(<String>[
           'memories_status_taken_at',
+          'memories_status_processed_at',
           'memories_taken_at',
           'memories_category',
           'entities_memory_id',
