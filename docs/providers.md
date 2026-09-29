@@ -127,6 +127,10 @@ Reasoning models attach data to the turns where they call tools. Anthropic sends
 
 Memora's `AssistantEntry` only carries text and tool calls, so each chat adapter keeps the raw assistant turn in a `TurnReplayCache` keyed by the tool call ids. When the chat engine sends an `AssistantEntry` with the same ids, the adapter sends the original turn instead of rebuilding it. The cache lives in memory, holds the 64 most recent turns and is never written anywhere.
 
+### Transcript windows
+
+Ask sends a window of recent messages, so a request can start partway through an earlier tool loop. The helpers in `shared/transcript.dart` trim that before it reaches a provider. Anthropic and Gemini reject a transcript whose first message isn't from the user, so those adapters start at the first user turn. The OpenAI-compatible adapter drops leading tool results, which would otherwise answer a tool call the window no longer holds. Both helpers leave the list alone when trimming would empty it.
+
 ### On this device (`local/`)
 
 - `OcrVisionService` runs `OcrEngine` on `VisionRequest.absoluteImagePath` and passes the result to the `OcrUnderstandingExtractor` in `LocalRuntime`, which defaults to `RuleBasedExtractor` from core. Without a path it throws a content error. `verify` confirms a value when its digits appear as a number in the OCR text, so `₹2,103` matches `2,103.00` and `₹1,24,900` matches `124900`. It never reports an observed value.
