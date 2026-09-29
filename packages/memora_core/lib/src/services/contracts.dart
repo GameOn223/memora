@@ -78,13 +78,20 @@ class QueueRunReport {
     required this.processed,
     required this.remaining,
     this.block,
+    this.nextAttemptAt,
   });
 
   final int processed;
 
-  /// True when the budget ran out or the policy stopped the run with work left.
+  /// True when memories are still waiting, including ones that are waiting
+  /// out a retry backoff. The scheduler re-enqueues itself when this is set.
   final bool remaining;
   final QueueBlock? block;
+
+  /// The earliest retry this run scheduled, so the scheduler can wait that
+  /// long instead of starting again right away. Null when nothing was
+  /// deferred.
+  final DateTime? nextAttemptAt;
 }
 
 /// Runs understanding for queued memories. See docs/architecture.md, section 5.

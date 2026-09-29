@@ -483,6 +483,49 @@ void main() {
       expect(vision.calls, 2);
     });
 
+    test('memories waiting out a backoff still count as work', () async {
+      await policy.save(const QueuePolicy(mode: QueueMode.immediate));
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(
+          analyze: [const AiTransientException('Timed out')],
+        ),
+      );
+      seedCaptured('a');
+
+      final report = await pipelineFor(ai)
+          .runQueue(budget: const Duration(minutes: 9));
+
+      expect(report.processed, 1);
+      expect(
+        report.remaining,
+        isTrue,
+        reason: 'the retry ladder needs the worker to come back',
+      );
+      expect(
+        report.nextAttemptAt,
+        clock.current.add(const Duration(minutes: 1)),
+      );
+      expect(
+        await db.hasWork(clock.current),
+        isFalse,
+        reason: 'nothing is claimable yet, which is why hasWork is not enough',
+      );
+    });
+
+    test('an empty queue reports no work and no retry', () async {
+      await policy.save(const QueuePolicy(mode: QueueMode.immediate));
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(analyze: [_bill]),
+      );
+      seedCaptured('a');
+
+      final report = await pipelineFor(ai)
+          .runQueue(budget: const Duration(minutes: 9));
+
+      expect(report.remaining, isFalse);
+      expect(report.nextAttemptAt, isNull);
+    });
+
     test('stops and reports a block', () async {
       await policy.save(const QueuePolicy(mode: QueueMode.immediate));
       final ai = await AiHarness.create();

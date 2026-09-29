@@ -47,6 +47,10 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
   final String _defaultCurrency;
   final String _localeTag;
 
+  /// The soonest retry the current [runQueue] scheduled, reported so the
+  /// scheduler can wait rather than starting again immediately.
+  DateTime? _earliestRetry;
+
   /// Wait before retrying after a transient error, by attempts used so far.
   static Duration backoffFor(int attempts) => switch (attempts) {
     <= 1 => const Duration(minutes: 1),
@@ -172,9 +176,13 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     final now = _clock.now();
     var wait = backoffFor(memory.attempts);
     if (retryAfter != null && retryAfter > wait) wait = retryAfter;
+    final due = now.add(wait);
+    if (_earliestRetry == null || due.isBefore(_earliestRetry!)) {
+      _earliestRetry = due;
+    }
     await _queue.releaseForRetry(
       memory.id,
-      nextAttemptAt: now.add(wait),
+      nextAttemptAt: due,
       reason: reason,
       now: now,
     );
@@ -258,6 +266,7 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     final stopwatch = Stopwatch()..start();
     var processed = 0;
     QueueBlock? block;
+    _earliestRetry = null;
 
     while (true) {
       final now = _clock.now();
@@ -277,10 +286,15 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
       }
     }
 
+    // Anything captured or reprocessing still counts as work, including
+    // memories waiting out a backoff. Otherwise the scheduler would hear
+    // "nothing left" and never come back for the retry.
+    final summary = await _memories.queueSummary();
     return QueueRunReport(
       processed: processed,
-      remaining: await _queue.hasWork(_clock.now()),
+      remaining: summary.waiting > 0,
       block: block,
+      nextAttemptAt: _earliestRetry,
     );
   }
 
