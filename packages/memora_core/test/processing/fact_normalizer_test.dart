@@ -153,6 +153,23 @@ void main() {
     ]);
   });
 
+  test('a labelled zero survives but a bare zero does not', () {
+    const u = MemoryUnderstanding(
+      summary: 's',
+      category: 'utility_bill',
+      amounts: [
+        AmountMention(type: 'amount', value: 0),
+        AmountMention(type: 'balance_due', value: 0, currency: 'INR'),
+      ],
+    );
+
+    final facts = normalizer.normalize(u, takenAt: takenAt);
+
+    expect(facts.attributes.map((a) => (a.label, a.value)), [
+      ('balance_due', '₹0'),
+    ]);
+  });
+
   test('quantity and percentage attributes get a numeric value', () {
     const u = MemoryUnderstanding(
       summary: 's',

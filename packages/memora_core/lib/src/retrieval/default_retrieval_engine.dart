@@ -166,7 +166,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
       );
     } on CapabilityUnavailableException {
       return null;
-    } on Exception {
+    } on Object {
       // Semantic search is an extra. Text and filters still answer.
       return null;
     }
@@ -197,15 +197,17 @@ class DefaultRetrievalEngine implements RetrievalEngine {
     List<RerankScore> scores;
     try {
       scores = await reranker.rerank(text, candidates);
-    } on Exception {
+    } on Object {
       scores = await _fallbackReranker.rerank(text, candidates);
     }
 
     final byId = {for (final card in cards) card.id: card};
     final position = {for (var i = 0; i < scores.length; i++) scores[i].id: i};
+    // A reranker that repeats an id must not put the same card in twice.
+    final seenScores = <String>{};
     final ranked = [
       for (final s in scores)
-        if (byId[s.id] != null) (byId[s.id]!, s.score),
+        if (byId[s.id] != null && seenScores.add(s.id)) (byId[s.id]!, s.score),
     ];
     ranked.sort((a, b) {
       final byScore = b.$2.compareTo(a.$2);

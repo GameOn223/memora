@@ -1,7 +1,6 @@
 import 'package:meta/meta.dart';
 
 import '../ai/capabilities.dart';
-import '../ai/errors.dart';
 import '../ai/router.dart';
 import '../ai/settings.dart';
 import '../model/conversation.dart';
@@ -29,6 +28,21 @@ class AnswerVerifier {
 
   static const verifiedNote = 'Verified against the original image';
   static const correctedNote = 'Corrected after checking the original image';
+
+  /// How long a corrected value may be. A figure is short. A sentence is a
+  /// model explaining itself, and that does not belong in a headline.
+  static const maxObservedLength = 40;
+
+  static final _alphanumeric = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+  /// True when what vision read back is short, on one line, and has
+  /// something in it worth showing.
+  static bool looksLikeValue(String observed) =>
+      observed.isNotEmpty &&
+      observed.length <= maxObservedLength &&
+      !observed.contains('\n') &&
+      observed.split(RegExp(r'\s+')).length <= 6 &&
+      _alphanumeric.hasMatch(observed);
 
   final CapabilityRouter _router;
   final MemoryStore _memories;
@@ -76,7 +90,9 @@ class AnswerVerifier {
         );
       }
       final observed = result.observedValue?.trim();
-      if (observed == null || observed.isEmpty || observed == source.value) {
+      if (observed == null ||
+          observed == source.value ||
+          !looksLikeValue(observed)) {
         return VerifiedAnswer(text: text, presentation: presentation);
       }
       return VerifiedAnswer(
@@ -90,11 +106,9 @@ class AnswerVerifier {
           headline: observed,
         ),
       );
-    } on CapabilityUnavailableException {
-      return VerifiedAnswer(text: text, presentation: presentation);
-    } on AiException {
-      return VerifiedAnswer(text: text, presentation: presentation);
-    } on Exception {
+    } on Object {
+      // Verification is a bonus. Anything that goes wrong leaves the answer
+      // exactly as the model wrote it.
       return VerifiedAnswer(text: text, presentation: presentation);
     }
   }

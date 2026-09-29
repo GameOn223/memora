@@ -137,14 +137,16 @@ class ExportMemoryRecord {
 /// Builds the records for "Export all memories". The app writes them into a
 /// zip through the Storage Access Framework. See docs/export-format.md.
 class ExportBuilder {
+  /// [embeddingModels] is required so an export can't quietly leave out its
+  /// embedding metadata. Pass [noEmbeddingModels] when there really is none.
   ExportBuilder({
     required this._memories,
     required this._conversations,
     required this._vectors,
     required this._clock,
+    required this._embeddingModels,
     this._appVersion = '0.1.0',
-    EmbeddingModelsLookup? embeddingModels,
-  }) : _embeddingModels = embeddingModels ?? _noModels;
+  });
 
   /// How many memories are read from the database at a time.
   static const pageSize = 200;
@@ -156,7 +158,8 @@ class ExportBuilder {
   final String _appVersion;
   final EmbeddingModelsLookup _embeddingModels;
 
-  static Future<List<EmbeddingModelInfo>> _noModels() async => const [];
+  /// For an export made with no embedding model configured at all.
+  static Future<List<EmbeddingModelInfo>> noEmbeddingModels() async => const [];
 
   /// The active embedding model, for an export that should describe the
   /// vectors it is leaving behind.

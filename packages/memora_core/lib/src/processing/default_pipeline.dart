@@ -322,6 +322,16 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
       return 0;
     }
     final service = embeddings.service;
+    // A cloud model may only learn its dimensions from its first response.
+    // Ask it something small first, so "which memories have no vector" is
+    // asked about the model the vectors are actually tagged with.
+    if (service.model.dimensions == 0) {
+      try {
+        await service.embed(const ['memora']);
+      } on Object {
+        return 0;
+      }
+    }
     final startedAt = _clock.now();
     final stopwatch = Stopwatch()..start();
     final skipped = <String>{};

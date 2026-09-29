@@ -310,6 +310,21 @@ void main() {
       expect(saved.map((m) => m.role), [MessageRole.user]);
     });
 
+    test('a store failure while saving keeps the question', () async {
+      final chat = ScriptedChatService([answerTurn('Here you go.')]);
+      final engine = await engineWith(await AiHarness.create(chat: chat));
+      final conversation = await engine.startConversation(title: 'Bills');
+      db.failAssistantMessages = true;
+
+      final events = await engine.ask(conversation.id, 'anything?').toList();
+
+      expect(events.single, isA<ChatFailed>());
+      db.failAssistantMessages = false;
+      expect((await db.messages(conversation.id)).map((m) => m.role), [
+        MessageRole.user,
+      ]);
+    });
+
     test('a configuration failure is not retryable', () async {
       final chat = ScriptedChatService([
         const AiConfigurationException('key rejected'),
@@ -374,6 +389,21 @@ void main() {
       expect(message.presentation!.verification, VerificationState.corrected);
       expect(message.presentation!.headline, '₹2,130');
       expect(message.content, contains('₹2,130'));
+    });
+
+    test('a rambling observed value is not spliced in', () async {
+      final message = await answerWithVision([
+        const VerificationResult(
+          confirmed: false,
+          observedValue:
+              'I am not able to tell from this image, but the total near '
+              'the bottom might be ₹2,130 or maybe ₹2,180.',
+        ),
+      ]);
+
+      expect(message.presentation!.verification, VerificationState.none);
+      expect(message.presentation!.headline, '₹2,103');
+      expect(message.content, 'August was the highest at ₹2,103.');
     });
 
     test('a failed check leaves the answer as it was', () async {

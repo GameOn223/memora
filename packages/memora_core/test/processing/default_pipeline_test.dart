@@ -624,18 +624,28 @@ void main() {
       },
     );
 
-    test('reindexing also tags vectors from the response', () async {
+    test('reindexing skips what a lazy model already has', () async {
       final embeddings = _LateDimensionsEmbeddings();
       final ai = await AiHarness.create(embeddings: embeddings);
       for (var i = 0; i < 3; i++) {
         db.seed(id: 'r$i', summary: 'Memory $i', category: 'other');
       }
+      await db.upsert(
+        'r0',
+        Float32List(_LateDimensionsEmbeddings.known.dimensions)..[0] = 1,
+        _LateDimensionsEmbeddings.known,
+        clock.current,
+      );
 
       final count = await pipelineFor(ai)
           .reindexEmbeddings(budget: const Duration(minutes: 5));
 
-      expect(count, 3);
-      expect(embeddings.calls, 1);
+      expect(
+        count,
+        2,
+        reason: 'the model learns its dimensions before the missing query',
+      );
+      expect(embeddings.calls, 2, reason: 'one warm-up, then one batch');
       expect(await db.countFor(_LateDimensionsEmbeddings.known), 3);
       expect(await db.countFor(_LateDimensionsEmbeddings.unknown), 0);
     });

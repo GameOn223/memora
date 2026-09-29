@@ -97,6 +97,10 @@ abstract class FakeMemoraState {
   /// locked by another engine would.
   bool failProcessingRecords = false;
 
+  /// Makes saving an assistant message throw, to test what happens when the
+  /// database gives out at the end of a turn.
+  bool failAssistantMessages = false;
+
   int nextSeq() => ++_seq;
 
   void touch() => version++;

@@ -242,12 +242,13 @@ void main() {
     });
   });
 
-  test('works without an embedding model lookup', () async {
+  test('works when there is no embedding model at all', () async {
     final plain = ExportBuilder(
       memories: db,
       conversations: db,
       vectors: db,
       clock: clock,
+      embeddingModels: ExportBuilder.noEmbeddingModels,
     );
     final records = await plain.memories().toList();
     expect(records, hasLength(2));

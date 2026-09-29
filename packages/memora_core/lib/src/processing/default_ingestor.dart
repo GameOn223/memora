@@ -85,7 +85,8 @@ class DefaultMemoryIngestor implements MemoryIngestor {
       final path = await _images.createThumbnail(imagePath);
       await _memories.setThumbnail(id, path, _clock.now());
       return true;
-    } on Exception {
+    } on Object {
+      // A missing thumbnail shows as a placeholder and is retried later.
       return false;
     }
   }

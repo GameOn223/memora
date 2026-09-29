@@ -242,6 +242,7 @@ class AgentChatEngine implements ChatEngine {
     AggregateOutcome? aggregate;
     var aggregateWasLast = false;
     String? answerText;
+    ChatMessage answered;
 
     try {
       final history = await _conversations.messages(conversationId);
@@ -327,6 +328,61 @@ class AgentChatEngine implements ChatEngine {
           }
         }
       }
+      var cited = <String>[];
+      if (answerText == null || answerText.isEmpty) {
+        final closest = lastHits.take(5).toList();
+        answerText = closest.isEmpty
+            ? 'I could not find an answer in your memories. Try asking in '
+                  'another way.'
+            : 'I could not settle on an answer, but these are the closest '
+                  'matches.';
+        cited = closest;
+      } else {
+        cited = await _existing(parseCitations(answerText));
+      }
+      if (cited.isEmpty && aggregate != null) {
+        cited = await _existing(aggregate.memoryIds);
+      }
+
+      final draft = await PresentationBuilder(_search).build(
+        question: question,
+        citedIds: cited,
+        aggregate: aggregate,
+        aggregateWasLast: aggregateWasLast,
+        sources: sources,
+      );
+      final verified =
+          await AnswerVerifier(
+            router: _router,
+            memories: _memories,
+            images: _images,
+            aiSettings: _aiSettings,
+          ).verify(
+            text: stripCitations(answerText),
+            presentation: draft.presentation,
+            source: draft.source,
+          );
+
+      answered = ChatMessage(
+        id: assistantId,
+        conversationId: conversationId,
+        role: MessageRole.assistant,
+        content: verified.text,
+        createdAt: _clock.now(),
+        references: [
+          for (var i = 0; i < cited.length && i < maxReferences; i++)
+            MessageReference(
+              memoryId: cited[i],
+              position: i,
+              relevance: scores[cited[i]],
+            ),
+        ],
+        toolTrace: trace,
+        presentation: verified.presentation,
+        provider: chat.provider.id,
+        model: chat.modelId,
+      );
+      await _conversations.addMessage(answered);
     } on AiException catch (e) {
       yield ChatFailed(
         _friendlyFailure(e, chat.provider.displayName),
@@ -334,66 +390,13 @@ class AgentChatEngine implements ChatEngine {
       );
       return;
     } on Object {
-      yield const ChatFailed('Something went wrong while answering it.');
+      // Building or saving the answer failed. The question stays saved, so
+      // the user can try again.
+      yield const ChatFailed('Something went wrong while answering that.');
       return;
     }
 
-    var cited = <String>[];
-    if (answerText == null || answerText.isEmpty) {
-      final closest = lastHits.take(5).toList();
-      answerText = closest.isEmpty
-          ? 'I could not find an answer in your memories. Try asking in '
-                'another way.'
-          : 'I could not settle on an answer, but these are the closest '
-                'matches.';
-      cited = closest;
-    } else {
-      cited = await _existing(parseCitations(answerText));
-    }
-    if (cited.isEmpty && aggregate != null) {
-      cited = await _existing(aggregate.memoryIds);
-    }
-
-    final draft = await PresentationBuilder(_search).build(
-      question: question,
-      citedIds: cited,
-      aggregate: aggregate,
-      aggregateWasLast: aggregateWasLast,
-      sources: sources,
-    );
-    final verified =
-        await AnswerVerifier(
-          router: _router,
-          memories: _memories,
-          images: _images,
-          aiSettings: _aiSettings,
-        ).verify(
-          text: stripCitations(answerText),
-          presentation: draft.presentation,
-          source: draft.source,
-        );
-
-    final message = ChatMessage(
-      id: assistantId,
-      conversationId: conversationId,
-      role: MessageRole.assistant,
-      content: verified.text,
-      createdAt: _clock.now(),
-      references: [
-        for (var i = 0; i < cited.length && i < maxReferences; i++)
-          MessageReference(
-            memoryId: cited[i],
-            position: i,
-            relevance: scores[cited[i]],
-          ),
-      ],
-      toolTrace: trace,
-      presentation: verified.presentation,
-      provider: chat.provider.id,
-      model: chat.modelId,
-    );
-    await _conversations.addMessage(message);
-    yield ChatAnswered(message);
+    yield ChatAnswered(answered);
   }
 
   /// Keeps only the ids that still name a memory, in the order given.
