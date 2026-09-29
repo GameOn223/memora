@@ -32,6 +32,9 @@ class MemoraDatabase {
         ..execute('PRAGMA foreign_keys = ON')
         ..execute('PRAGMA busy_timeout = 5000')
         ..execute('PRAGMA synchronous = NORMAL');
+      // Switching to WAL writes to the file, so check the schema version
+      // first. A database from a newer build is left untouched.
+      checkNotNewerThanBuild(db);
       if (path != null) db.execute('PRAGMA journal_mode = WAL');
       runMigrations(db);
     } catch (_) {

@@ -153,6 +153,18 @@ void main() {
         ),
       );
     });
+
+    test('checks the version before writing anything to the file', () {
+      final path = tempDatabasePath();
+      final raw = sqlite3.open(path)..userVersion = 99;
+      raw.close();
+
+      expect(() => MemoraDatabase.open(path), throwsStateError);
+
+      final after = sqlite3.open(path);
+      addTearDown(after.close);
+      expect(after.select('PRAGMA journal_mode').single.columnAt(0), 'delete');
+    });
   });
 
   group('runMigrations', () {
@@ -184,6 +196,33 @@ void main() {
       expect(
         raw.select("SELECT name FROM sqlite_master WHERE name = 'half_done'"),
         isEmpty,
+      );
+    });
+
+    test('skips a migration another connection has already applied', () {
+      // The UI isolate and a background worker can open the same file at the
+      // same moment. Both read user_version before either takes the write
+      // lock, so both believe every migration is still pending.
+      final path = tempDatabasePath();
+      final ui = sqlite3.open(path);
+      final worker = sqlite3.open(path);
+      addTearDown(ui.close);
+      addTearDown(worker.close);
+      for (final db in [ui, worker]) {
+        db.execute('PRAGMA busy_timeout = 5000');
+      }
+
+      final staleVersion = ui.userVersion;
+      expect(staleVersion, 0);
+      runMigrations(worker);
+
+      applyPending(ui, migrations, staleVersion);
+
+      expect(ui.userVersion, migrations.length);
+      expect(
+        ui.select('SELECT COUNT(*) AS n FROM memories').single['n'],
+        0,
+        reason: 'the losing connection must not rebuild the schema',
       );
     });
 
