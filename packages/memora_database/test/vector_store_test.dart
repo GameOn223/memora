@@ -344,6 +344,7 @@ void main() {
       final hits = await fileDb.vectors.search(query, model, limit: 5);
       expect(hits.map((h) => h.id), bruteForceTop(stored, query, 5));
 
+      // A small within set is counted first and stays inline.
       final within = await fileDb.vectors.search(
         query,
         model,
@@ -375,9 +376,32 @@ void main() {
         path: path,
         isolateThreshold: 0,
       );
-      final expected = await inline.search(query, model, limit: 10);
-      final actual = await isolated.search(query, model, limit: 10);
-      expect(actual, expected);
+      expect(
+        await isolated.search(query, model, limit: 10),
+        await inline.search(query, model, limit: 10),
+      );
+      expect(
+        await isolated.search(query, model, within: {'bulk-1', 'bulk-2'}),
+        await inline.search(query, model, within: {'bulk-1', 'bulk-2'}),
+      );
+      expect(
+        await isolated.neighbours('bulk-3', model, limit: 4),
+        await inline.neighbours('bulk-3', model, limit: 4),
+      );
+    });
+
+    test('an in-memory database scans inline whatever its name', () async {
+      // sqlite3 gives every connection its own ':memory:' database, so a scan
+      // in another isolate would open an empty one and find nothing.
+      final db = MemoraDatabase.open(':memory:');
+      addTearDown(db.close);
+      expect(db.path, isNull);
+
+      final stored = await seedRandom(db, 2100);
+      final query = stored['bulk-9']!;
+
+      final hits = await db.vectors.search(query, model, limit: 3);
+      expect(hits.map((h) => h.id), bruteForceTop(stored, query, 3));
     });
   });
 }

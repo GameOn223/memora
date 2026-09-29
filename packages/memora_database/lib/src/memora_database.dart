@@ -19,8 +19,13 @@ class MemoraDatabase {
   /// Opens (or creates) the database file at [path] and runs any pending
   /// migrations. Uses WAL so a background worker can write while the UI
   /// reads.
-  factory MemoraDatabase.open(String path) =>
-      MemoraDatabase._configure(sqlite3.open(path), path);
+  ///
+  /// A [path] that names a temporary database rather than a file, such as
+  /// `:memory:`, is handled like [openInMemory].
+  factory MemoraDatabase.open(String path) => MemoraDatabase._configure(
+    sqlite3.open(path),
+    _isFileDatabase(path) ? path : null,
+  );
 
   /// Opens a private in-memory database with the full schema. Used by tests.
   factory MemoraDatabase.openInMemory() =>
@@ -77,4 +82,15 @@ class MemoraDatabase {
 
   /// Closes the connection. The stores can't be used afterwards.
   void close() => connection.close();
+
+  /// Whether [path] names a file other connections can open.
+  ///
+  /// SQLite reads `:memory:` and an empty name as a database that belongs to
+  /// one connection. Another connection to the same name gets its own empty
+  /// database, so a vector scan can't be handed to an isolate and WAL has
+  /// nothing to do.
+  static bool _isFileDatabase(String path) =>
+      path.isNotEmpty &&
+      path != ':memory:' &&
+      !path.startsWith('file::memory:');
 }
