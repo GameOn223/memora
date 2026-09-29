@@ -419,6 +419,11 @@ WHERE EXISTS (SELECT 1 FROM memories WHERE id = ?)''',
   /// commits, with `total_changes()`, which moves when this connection
   /// writes. The returned counter goes up whenever either one has changed
   /// since the previous call.
+  ///
+  /// `total_changes()` counts rows a rolled-back transaction touched and
+  /// never goes down, so the counter can tick once after a write that was
+  /// undone. Callers use it to decide whether to re-read, and re-reading once
+  /// too often is fine.
   @override
   Future<int> dataVersion() async {
     final row = _db.select('''

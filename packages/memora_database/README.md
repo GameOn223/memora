@@ -39,10 +39,15 @@ A few behaviors worth knowing about:
 
 - Timestamps are stored as UTC milliseconds and read back as UTC `DateTime` values.
 - Search results never include rows whose status is `deleted`.
-- User text never reaches FTS5 directly. `ftsMatchExpression` splits it into letter and digit tokens and quotes each one.
+- User text never reaches FTS5 directly. `ftsMatchExpression` splits it into tokens of letters, digits and the marks that sit on them, then quotes each one. It splits text the same way the index does, so Indic words survive the trip.
+- Entity filter values go through `foldForMatch`, which lowercases, takes accents off Latin letters and collapses whitespace. Whoever writes `entities.normalized_value` has to fold the same way, so keep this in step with core's own `foldForMatch`.
 - Vectors are L2-normalized when stored and the query is normalized too, so search scores are cosine similarity. Only vectors with the exact model id, version and dimensions are compared.
-- With a file database, a vector scan over more than 2,000 rows runs in `Isolate.run` on its own read-only connection. In-memory databases always scan inline.
+- With a file database, a vector scan over more than 2,000 rows runs in `Isolate.run` on its own read-only connection. Databases that live in memory, including one opened as `:memory:`, always scan inline, because another isolate would open a different empty database.
+- A store method that runs several queries wraps them in a read transaction, so a worker committing halfway through can't make a memory show up twice or vanish.
+- `queueItems` returns the head of each list, not the whole backlog. The totals for the queue screen come from `MemoryStore.queueSummary`.
+- `dataVersion` can tick once after a write that rolled back, since `total_changes()` doesn't count back down. It's a hint to re-read, not a promise that something changed.
 - Writes that point at a memory which no longer exists (saving an understanding, adding a processing record, storing a vector or a message reference) quietly do nothing. A worker can finish after the user deleted what it was working on, and that shouldn't crash anything.
+- A worker that finished with a memory (`markReady`, `markFailed`, `releaseForRetry`, `releaseWithoutAttempt`) only changes it while it's still `processing`. A worker whose lease expired can't undo the work of the one that took over.
 
 ## Migrations
 

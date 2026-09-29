@@ -94,6 +94,9 @@ abstract interface class MemoryStore {
   Future<List<Memory>> missingThumbnails({int limit = 50});
 
   /// Changes whenever any connection commits. The UI polls this to refresh.
+  ///
+  /// It can also change once after a write that rolled back, so treat it as a
+  /// hint that something may have changed rather than proof that it did.
   Future<int> dataVersion();
 }
 
