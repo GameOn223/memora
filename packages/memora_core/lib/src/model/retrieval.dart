@@ -205,6 +205,7 @@ class MemoryCard {
     this.category,
     this.thumbnailPath,
     this.facts = const {},
+    this.entities = const [],
   });
 
   final String id;
@@ -216,6 +217,11 @@ class MemoryCard {
 
   /// Key attributes as display strings, for example `{'amount': '₹1,842'}`.
   final Map<String, String> facts;
+
+  /// Entity values seen in the image, such as `['Reliance']`, used for exact
+  /// name matches while reranking. A store that leaves this empty only loses
+  /// that signal.
+  final List<String> entities;
 
   Map<String, Object?> toToolJson() => {
     'id': id,

@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 
 import '../model/retrieval.dart';
 import '../text/amounts.dart';
+import '../text/category_words.dart';
 import '../text/dates.dart';
 
 /// Operations over an attribute in a set of memories.
@@ -116,32 +117,8 @@ class QueryParser {
     'you',
   };
 
-  static const categoryWords = <String, Set<String>>{
-    'bill': {'utility_bill', 'invoice'},
-    'bills': {'utility_bill', 'invoice'},
-    'invoice': {'invoice'},
-    'invoices': {'invoice'},
-    'receipt': {'receipt'},
-    'receipts': {'receipt'},
-    'booking': {'booking', 'ticket'},
-    'bookings': {'booking', 'ticket'},
-    'ticket': {'booking', 'ticket'},
-    'tickets': {'booking', 'ticket'},
-    'flight': {'booking', 'ticket'},
-    'flights': {'booking', 'ticket'},
-    'place': {'place', 'map'},
-    'places': {'place', 'map'},
-    'map': {'place', 'map'},
-    'maps': {'place', 'map'},
-    'chat': {'chat'},
-    'chats': {'chat'},
-    'code': {'code'},
-    'snippet': {'code'},
-    'snippets': {'code'},
-    'product': {'product', 'comparison'},
-    'products': {'product', 'comparison'},
-    'shopping': {'product', 'comparison'},
-  };
+  /// Everyday words that name a category. See [categoryWordMap].
+  static const categoryWords = categoryWordMap;
 
   static RegExp _words(String body) =>
       RegExp('(?<![a-z0-9])(?:$body)(?![a-z0-9])', caseSensitive: false);

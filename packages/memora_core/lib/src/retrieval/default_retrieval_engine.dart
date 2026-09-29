@@ -183,6 +183,9 @@ class DefaultRetrievalEngine implements RetrievalEngine {
           id: card.id,
           text: cardSearchText(card),
           priorScore: prior[card.id] ?? 0,
+          entities: card.entities,
+          category: card.category,
+          takenAt: card.takenAt,
         ),
     ];
     RerankService reranker;
@@ -222,6 +225,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
   static String cardSearchText(MemoryCard card) => [
     card.summary ?? '',
     (card.category ?? '').replaceAll('_', ' '),
+    card.entities.join(', '),
     for (final fact in card.facts.entries)
       '${fact.key.replaceAll('_', ' ')} ${fact.value}',
   ].where((part) => part.isNotEmpty).join('. ');
