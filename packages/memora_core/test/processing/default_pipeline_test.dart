@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:memora_core/memora_core.dart';
 import 'package:test/test.dart';
 
@@ -32,6 +34,39 @@ class _SlowVision implements VisionService {
   @override
   Future<VerificationResult> verify(VerificationRequest request) =>
       throw UnimplementedError();
+}
+
+/// A cloud embedding service that only learns its dimensions from the first
+/// response, as the OpenAI-compatible adapter does for unknown models.
+class _LateDimensionsEmbeddings implements EmbeddingService {
+  static const unknown = EmbeddingModelInfo(
+    provider: 'fake',
+    modelId: 'cloud-embed',
+    version: '1',
+    dimensions: 0,
+  );
+  static const known = EmbeddingModelInfo(
+    provider: 'fake',
+    modelId: 'cloud-embed',
+    version: '1',
+    dimensions: 8,
+  );
+
+  bool answered = false;
+  int calls = 0;
+
+  @override
+  EmbeddingModelInfo get model => answered ? known : unknown;
+
+  @override
+  Future<List<Float32List>> embed(
+    List<String> texts, {
+    EmbeddingPurpose purpose = EmbeddingPurpose.document,
+  }) async {
+    calls++;
+    answered = true;
+    return [for (final _ in texts) Float32List(known.dimensions)..[0] = 1];
+  }
 }
 
 void main() {
@@ -297,6 +332,24 @@ void main() {
       },
     );
 
+    test('tags the vector with the dimensions the response reported', () async {
+      final embeddings = _LateDimensionsEmbeddings();
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(analyze: [_bill]),
+        embeddings: embeddings,
+      );
+      seedCaptured('m1');
+
+      final outcome = await pipelineFor(ai).processNext();
+
+      expect((outcome as Processed).status, ProcessingStatus.ready);
+      expect(await db.countFor(_LateDimensionsEmbeddings.known), 1);
+      expect(await db.countFor(_LateDimensionsEmbeddings.unknown), 0);
+      final record = (await db.getDetails('m1'))!.processing
+          .firstWhere((r) => r.capability == Capability.embeddings);
+      expect(record.outcome, ProcessingOutcome.succeeded);
+    });
+
     test('local-only mode blocks without claiming anything', () async {
       final ai = await AiHarness.create(
         vision: ScriptedVisionService(analyze: [_bill]),
@@ -464,6 +517,22 @@ void main() {
         expect(embeddings.calls.first.first, 'Memory 0\nCategory: other');
       },
     );
+
+    test('reindexing also tags vectors from the response', () async {
+      final embeddings = _LateDimensionsEmbeddings();
+      final ai = await AiHarness.create(embeddings: embeddings);
+      for (var i = 0; i < 3; i++) {
+        db.seed(id: 'r$i', summary: 'Memory $i', category: 'other');
+      }
+
+      final count = await pipelineFor(ai)
+          .reindexEmbeddings(budget: const Duration(minutes: 5));
+
+      expect(count, 3);
+      expect(embeddings.calls, 1);
+      expect(await db.countFor(_LateDimensionsEmbeddings.known), 3);
+      expect(await db.countFor(_LateDimensionsEmbeddings.unknown), 0);
+    });
 
     test('returns zero without an embeddings capability', () async {
       final ai = await AiHarness.create();
