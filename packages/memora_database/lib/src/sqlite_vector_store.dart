@@ -67,7 +67,7 @@ ON CONFLICT (memory_id, model_id, model_version) DO UPDATE SET
     _checkLength(query, model);
     if (limit <= 0 || (within != null && within.isEmpty)) return const [];
     return _scan(
-      _VectorScan(
+      VectorScan(
         query: normalizeVector(query),
         modelId: model.storageId,
         version: model.version,
@@ -93,7 +93,7 @@ ON CONFLICT (memory_id, model_id, model_version) DO UPDATE SET
     );
     if (rows.isEmpty) return const [];
     return _scan(
-      _VectorScan(
+      VectorScan(
         query: decodeVector(rows.first['vector'] as Uint8List),
         modelId: model.storageId,
         version: model.version,
@@ -127,22 +127,19 @@ LIMIT ?''',
     return [for (final row in rows) row['id'] as String];
   }
 
+  /// Counts rows in `embeddings` alone. Foreign keys remove a memory's
+  /// vectors with it, so there's nothing to join for.
   @override
   Future<int> countFor(EmbeddingModelInfo model) async {
-    final row = _db
-        .select(
-          '''
-SELECT COUNT(*) AS n FROM embeddings e
-JOIN memories m ON m.id = e.memory_id
-WHERE e.model_id = ? AND e.model_version = ? AND e.dimensions = ?
-  AND m.status != 'deleted' ''',
-          [model.storageId, model.version, model.dimensions],
-        )
-        .first;
+    final row = _db.select(
+      'SELECT COUNT(*) AS n FROM embeddings '
+      'WHERE model_id = ? AND model_version = ? AND dimensions = ?',
+      [model.storageId, model.version, model.dimensions],
+    ).first;
     return row['n'] as int;
   }
 
-  Future<List<ScoredId>> _scan(_VectorScan scan) async {
+  Future<List<ScoredId>> _scan(VectorScan scan) async {
     final path = _path;
     if (path != null && scan.count(_db) > _isolateThreshold) {
       return _scanInIsolate(path, scan);
@@ -152,7 +149,7 @@ WHERE e.model_id = ? AND e.model_version = ? AND e.dimensions = ?
 
   /// Kept static so the closure sent to the isolate captures only [path] and
   /// [scan], never the connection.
-  static Future<List<ScoredId>> _scanInIsolate(String path, _VectorScan scan) {
+  static Future<List<ScoredId>> _scanInIsolate(String path, VectorScan scan) {
     return Isolate.run(() => scan.runOnFile(path));
   }
 
@@ -169,8 +166,8 @@ WHERE e.model_id = ? AND e.model_version = ? AND e.dimensions = ?
 
 /// One brute-force scan over stored vectors. Holds only plain data so it can
 /// be sent to another isolate.
-class _VectorScan {
-  _VectorScan({
+class VectorScan {
+  VectorScan({
     required this.query,
     required this.modelId,
     required this.version,
@@ -208,17 +205,35 @@ class _VectorScan {
     return (clauses.join(' AND '), args);
   }
 
-  /// How many vectors [run] would read.
+  /// The query behind [count].
+  ///
+  /// This one runs on the calling isolate to choose between an inline scan
+  /// and an isolate, so it stays inside the `embeddings` indexes. It leaves
+  /// out the join to `memories` that [run] uses to skip deleted memories, and
+  /// the dimensions column, which isn't in the index. Both can only make the
+  /// count slightly high, and the worst that costs is an isolate for a scan
+  /// that didn't need one.
+  (String, List<Object?>) countQuery() {
+    final clauses = ['model_id = ?', 'model_version = ?'];
+    final args = <Object?>[modelId, version];
+    if (within case final ids?) {
+      clauses.add('memory_id IN (SELECT value FROM json_each(?))');
+      args.add(jsonEncode(ids));
+    }
+    if (excludeId case final id?) {
+      clauses.add('memory_id != ?');
+      args.add(id);
+    }
+    return (
+      'SELECT COUNT(*) AS n FROM embeddings WHERE ${clauses.join(' AND ')}',
+      args,
+    );
+  }
+
+  /// Roughly how many vectors [run] would read.
   int count(Database db) {
-    final (where, args) = _where();
-    final row = db
-        .select(
-          'SELECT COUNT(*) AS n FROM embeddings e '
-          'JOIN memories m ON m.id = e.memory_id WHERE $where',
-          args,
-        )
-        .first;
-    return row['n'] as int;
+    final (sql, args) = countQuery();
+    return db.select(sql, args).first['n'] as int;
   }
 
   /// Scans on [db] and returns the best [limit] matches, best first. Ties keep

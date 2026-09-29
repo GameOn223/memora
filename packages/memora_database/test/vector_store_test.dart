@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:memora_core/memora_core.dart';
 import 'package:memora_database/memora_database.dart';
 import 'package:memora_database/src/codec.dart';
+import 'package:memora_database/src/sqlite_vector_store.dart';
 import 'package:test/test.dart';
 
 import 'support/fixtures.dart';
@@ -176,6 +177,49 @@ void main() {
 
       expect(await vectors.neighbours(otherVersion, bge), isEmpty);
       expect(await vectors.neighbours('missing', bge), isEmpty);
+    });
+  });
+
+  group('the pre-scan count', () {
+    VectorScan scanFor({Set<String>? within, String? excludeId}) => VectorScan(
+      query: vec([1, 0, 0, 0]),
+      modelId: bge.storageId,
+      version: bge.version,
+      dimensions: bge.dimensions,
+      limit: 10,
+      within: within?.toList(),
+      excludeId: excludeId,
+    );
+
+    String planFor(VectorScan scan) {
+      final (sql, args) = scan.countQuery();
+      return db.connection
+          .select('EXPLAIN QUERY PLAN $sql', args)
+          .map((row) => row['detail'] as String)
+          .join(' | ');
+    }
+
+    test('reads the embeddings index without touching memories', () {
+      expect(planFor(scanFor()), contains('COVERING INDEX embeddings_model'));
+      for (final scan in [
+        scanFor(),
+        scanFor(within: {'a', 'b'}),
+        scanFor(excludeId: 'a'),
+      ]) {
+        expect(planFor(scan), isNot(contains('memories')));
+      }
+    });
+
+    test('still counts the rows a scan would read', () async {
+      final kept = await ready();
+      final other = await ready();
+      await vectors.upsert(kept, vec([1, 0, 0, 0]), bge, now);
+      await vectors.upsert(other, vec([0, 1, 0, 0]), bge, now);
+      await vectors.upsert(other, vec([0, 1, 0, 0]), _version('2'), now);
+
+      expect(scanFor().count(db.connection), 2);
+      expect(scanFor(within: {kept}).count(db.connection), 1);
+      expect(scanFor(excludeId: kept).count(db.connection), 1);
     });
   });
 
