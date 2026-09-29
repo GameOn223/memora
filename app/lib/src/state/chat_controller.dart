@@ -83,6 +83,7 @@ final chatControllerProvider = NotifierProvider<ChatController, ChatViewState>(
 
 class ChatController extends Notifier<ChatViewState> {
   StreamSubscription<ChatProgress>? _subscription;
+  int _askToken = 0;
 
   @override
   ChatViewState build() {
@@ -173,13 +174,15 @@ class ChatController extends Notifier<ChatViewState> {
   Future<void> _ask(String conversationId, String question) async {
     final services = ref.read(appServicesProvider);
     final focus = state.focusMemoryId;
-    await _subscription?.cancel();
+    // Drop the previous turn without waiting for its generator to unwind.
+    final token = ++_askToken;
+    unawaited(_subscription?.cancel());
     final completer = Completer<void>();
     _subscription = services.chat
         .ask(conversationId, question, focusMemoryId: focus)
         .listen(
           (progress) async {
-            if (!ref.mounted) return;
+            if (!ref.mounted || token != _askToken) return;
             switch (progress) {
               case ChatToolUsed(:final entry):
                 state = state.copyWith(
@@ -210,7 +213,7 @@ class ChatController extends Notifier<ChatViewState> {
             }
           },
           onError: (Object error) {
-            if (!ref.mounted) return;
+            if (!ref.mounted || token != _askToken) return;
             state = state.copyWith(
               thinking: false,
               error: 'Something went wrong. Try again.',
