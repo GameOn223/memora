@@ -403,6 +403,31 @@ void main() {
       });
     });
 
+    test('starts the transcript at the first user turn', () async {
+      http.replyFixture('gemini/chat_response_text.json');
+
+      await client()
+          .chat('gemini-2.5-flash')!
+          .complete(
+            const ChatRequest(
+              system: '',
+              entries: [
+                AssistantEntry(text: 'Earlier answer.'),
+                UserEntry('And the cheapest?'),
+              ],
+            ),
+          );
+
+      expect(http.body(0)['contents'], [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': 'And the cheapest?'},
+          ],
+        },
+      ]);
+    });
+
     test('maps finish reasons', () async {
       for (final (reason, expected) in [
         ('STOP', ChatStopReason.endTurn),

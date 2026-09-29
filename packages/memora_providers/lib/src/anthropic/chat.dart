@@ -4,6 +4,7 @@ import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
 import '../shared/limits.dart';
 import '../shared/replay_cache.dart';
+import '../shared/transcript.dart';
 import 'messages.dart';
 
 /// Chat with tool use over `POST /messages`.
@@ -23,7 +24,7 @@ class AnthropicChatService implements ChatService {
   @override
   Future<ChatTurn> complete(ChatRequest request) async {
     final messages = MessageListBuilder();
-    for (final entry in request.entries) {
+    for (final entry in fromFirstUserEntry(request.entries)) {
       switch (entry) {
         case UserEntry(:final text):
           messages.add('user', [

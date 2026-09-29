@@ -4,6 +4,7 @@ import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
 import '../shared/limits.dart';
 import '../shared/replay_cache.dart';
+import '../shared/transcript.dart';
 import 'response.dart';
 import 'schema.dart';
 
@@ -39,7 +40,7 @@ class GeminiChatService implements ChatService {
             {'text': request.system},
           ],
         },
-      'contents': _contents(request.entries),
+      'contents': _contents(fromFirstUserEntry(request.entries)),
       if (request.tools.isNotEmpty)
         'tools': [
           {

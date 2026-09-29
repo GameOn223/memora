@@ -340,6 +340,44 @@ void main() {
       });
     });
 
+    test('starts the transcript at the first user turn', () async {
+      http.replyFixture('anthropic/chat_response_text.json');
+
+      await client()
+          .chat('claude-haiku-4-5')!
+          .complete(
+            const ChatRequest(
+              system: '',
+              entries: [
+                AssistantEntry(
+                  toolCalls: [
+                    ToolCall(
+                      id: 'toolu_old',
+                      name: 'search_memories',
+                      arguments: {},
+                    ),
+                  ],
+                ),
+                ToolResultEntry(
+                  callId: 'toolu_old',
+                  toolName: 'search_memories',
+                  content: '{}',
+                ),
+                UserEntry('And the cheapest?'),
+              ],
+            ),
+          );
+
+      expect(http.body(0)['messages'], [
+        {
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': 'And the cheapest?'},
+          ],
+        },
+      ]);
+    });
+
     test('maps stop reasons', () async {
       for (final (reason, expected) in [
         ('end_turn', ChatStopReason.endTurn),

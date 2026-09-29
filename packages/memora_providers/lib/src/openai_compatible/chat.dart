@@ -6,6 +6,7 @@ import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
 import '../shared/limits.dart';
 import '../shared/replay_cache.dart';
+import '../shared/transcript.dart';
 import 'message_text.dart';
 import 'presets.dart';
 
@@ -29,7 +30,8 @@ class OpenAiChatService implements ChatService {
       'messages': [
         if (request.system.isNotEmpty)
           {'role': 'system', 'content': request.system},
-        for (final entry in request.entries) _message(entry),
+        for (final entry in withoutOrphanToolResults(request.entries))
+          _message(entry),
       ],
       if (request.tools.isNotEmpty)
         'tools': [

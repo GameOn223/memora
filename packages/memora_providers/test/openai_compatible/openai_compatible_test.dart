@@ -495,6 +495,30 @@ void main() {
       expect((messages[4]! as Map)['tool_call_id'], 'call_Yq7p1');
     });
 
+    test('drops tool results whose call fell out of the window', () async {
+      http.replyFixture('openai/chat_response_text.json');
+
+      await clientFor(groqDescriptor)
+          .chat('llama-3.3-70b-versatile')!
+          .complete(
+            const ChatRequest(
+              system: '',
+              entries: [
+                ToolResultEntry(
+                  callId: 'call_old',
+                  toolName: 'search_memories',
+                  content: '{}',
+                ),
+                UserEntry('And the cheapest?'),
+              ],
+            ),
+          );
+
+      expect(http.body(0)['messages'], [
+        {'role': 'user', 'content': 'And the cheapest?'},
+      ]);
+    });
+
     test('maps finish reasons', () async {
       for (final (reason, expected) in [
         ('stop', ChatStopReason.endTurn),
