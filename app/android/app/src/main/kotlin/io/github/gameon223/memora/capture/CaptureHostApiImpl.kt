@@ -14,6 +14,7 @@ import io.github.gameon223.memora.R
 import io.github.gameon223.memora.bridge.ActivityHolder
 import io.github.gameon223.memora.bridge.CaptureHostApi
 import io.github.gameon223.memora.bridge.CaptureStatus
+import io.github.gameon223.memora.bridge.FlutterError
 import io.github.gameon223.memora.bridge.InboxItem
 import io.github.gameon223.memora.bridge.awaitActivityResult
 import java.util.function.Consumer
@@ -35,10 +36,19 @@ class CaptureHostApiImpl(
     override fun openAccessibilitySettings() {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         val host = activity.current
-        if (host != null) {
-            host.startActivity(intent)
-        } else {
-            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            if (host != null) {
+                host.startActivity(intent)
+            } else {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        } catch (error: RuntimeException) {
+            // Some builds have no accessibility settings screen.
+            throw FlutterError(
+                "no_settings",
+                "This device has no accessibility settings screen.",
+                null,
+            )
         }
     }
 
@@ -47,15 +57,20 @@ class CaptureHostApiImpl(
         val host = activity.current ?: context
         val statusBar = host.getSystemService(StatusBarManager::class.java) ?: return false
         return suspendCancellableCoroutine { continuation ->
-            statusBar.requestAddTileService(
-                ComponentName(context, MemoraTileService::class.java),
-                context.getString(R.string.tile_label),
-                Icon.createWithResource(context, R.drawable.ic_tile),
-                context.mainExecutor,
-                Consumer { result ->
-                    if (continuation.isActive) continuation.resume(isTileAdded(result))
-                },
-            )
+            try {
+                statusBar.requestAddTileService(
+                    ComponentName(context, MemoraTileService::class.java),
+                    context.getString(R.string.tile_label),
+                    Icon.createWithResource(context, R.drawable.ic_tile),
+                    context.mainExecutor,
+                    Consumer { result ->
+                        if (continuation.isActive) continuation.resume(isTileAdded(result))
+                    },
+                )
+            } catch (error: RuntimeException) {
+                // Asking twice in a row, or asking from the background.
+                if (continuation.isActive) continuation.resume(false)
+            }
         }
     }
 
@@ -70,6 +85,13 @@ class CaptureHostApiImpl(
     }
 
     override suspend fun drainInbox(): List<InboxItem> = Inbox.drain(context)
+
+    override suspend fun confirmInbox(ids: List<String>) {
+        if (ids.isEmpty()) return
+        Inbox.confirm(context, ids)
+        // The same update whether the UI or a worker did the filing.
+        Notifications.captureFiled(context)
+    }
 
     private fun isAccessibilityEnabled(): Boolean {
         if (CaptureAccessibilityService.instance != null) return true

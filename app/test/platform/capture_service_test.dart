@@ -83,6 +83,34 @@ void main() {
     expect(setup.notificationsAllowed, isFalse);
   });
 
+  test('confirms only what reached the database', () async {
+    final host = _FakeCaptureHost([
+      _inbox('originals/1.png', 'tile', id: 'a'),
+      _inbox('originals/2.png', 'tile', id: 'b'),
+    ]);
+    final service = PlatformCaptureService(
+      ingestor: FakeIngestor(duplicatesPerBatch: 1),
+      scheduler: FakeScheduler(),
+      host: host,
+    );
+
+    // Duplicates count as filed: their memory already exists.
+    expect(await service.ingestInbox(), 1);
+    expect(host.confirmed, ['a', 'b']);
+  });
+
+  test('a failed ingest confirms nothing, so the capture comes back', () async {
+    final host = _FakeCaptureHost([_inbox('originals/1.png', 'tile', id: 'a')]);
+    final service = PlatformCaptureService(
+      ingestor: FakeIngestor(fail: true),
+      scheduler: FakeScheduler(),
+      host: host,
+    );
+
+    await expectLater(service.ingestInbox(), throwsA(isA<StateError>()));
+    expect(host.confirmed, isEmpty);
+  });
+
   test('unknown inbox sources count as tile captures', () {
     expect(memorySourceFromInbox('share'), MemorySource.share);
     expect(memorySourceFromInbox('tile'), MemorySource.tile);
@@ -90,7 +118,8 @@ void main() {
   });
 }
 
-InboxItem _inbox(String path, String source) => InboxItem(
+InboxItem _inbox(String path, String source, {String? id}) => InboxItem(
+  id: id ?? path,
   relativePath: path,
   source: source,
   capturedAtMillis: 42,
@@ -106,6 +135,7 @@ class _FakeCaptureHost extends CaptureHostApi {
 
   final List<InboxItem> items;
   var drains = 0;
+  final confirmed = <String>[];
 
   @override
   Future<CaptureStatus> status() async => CaptureStatus(
@@ -123,4 +153,7 @@ class _FakeCaptureHost extends CaptureHostApi {
     items.clear();
     return result;
   }
+
+  @override
+  Future<void> confirmInbox(List<String> ids) async => confirmed.addAll(ids);
 }

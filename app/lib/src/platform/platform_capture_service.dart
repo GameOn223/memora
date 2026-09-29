@@ -50,16 +50,27 @@ class PlatformCaptureService implements CaptureService {
   Future<int> _ingest() async {
     final items = await _host.drainInbox();
     if (items.isEmpty) return 0;
-    final bySource = <MemorySource, List<ImportedFile>>{};
+    final bySource = <MemorySource, List<InboxItem>>{};
     for (final item in items) {
       bySource
           .putIfAbsent(memorySourceFromInbox(item.source), () => [])
-          .add(importedFileFromInbox(item));
+          .add(item);
     }
     var added = 0;
-    for (final entry in bySource.entries) {
-      final report = await _ingestor.ingest(entry.value, entry.key);
-      added += report.addedIds.length;
+    // Only what is now in the database is acknowledged. Anything left
+    // unconfirmed is offered again by the next drain, and the second pass
+    // is dropped as a duplicate of the same image.
+    final filed = <String>[];
+    try {
+      for (final entry in bySource.entries) {
+        final report = await _ingestor.ingest([
+          for (final item in entry.value) importedFileFromInbox(item),
+        ], entry.key);
+        added += report.addedIds.length;
+        filed.addAll([for (final item in entry.value) item.id]);
+      }
+    } finally {
+      if (filed.isNotEmpty) await _host.confirmInbox(filed);
     }
     if (added > 0) await _scheduler.refresh();
     return added;

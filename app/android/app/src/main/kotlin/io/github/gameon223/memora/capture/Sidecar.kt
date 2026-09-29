@@ -11,11 +11,14 @@ data class CaptureSidecar(
     val source: String,
     val capturedAtMillis: Long,
     val fileName: String,
+    /** Copy handed to Dart by the last drain, kept for diagnostics. */
+    val pendingPath: String? = null,
 ) {
     fun toJson(): String = JSONObject()
         .put(KEY_SOURCE, source)
         .put(KEY_CAPTURED_AT, capturedAtMillis)
         .put(KEY_FILE_NAME, fileName)
+        .apply { if (pendingPath != null) put(KEY_PENDING_PATH, pendingPath) }
         .toString()
 
     companion object {
@@ -25,6 +28,7 @@ data class CaptureSidecar(
         private const val KEY_SOURCE = "source"
         private const val KEY_CAPTURED_AT = "captured_at_millis"
         private const val KEY_FILE_NAME = "file_name"
+        private const val KEY_PENDING_PATH = "pending_path"
 
         /**
          * Reads a sidecar. Missing fields fall back to [fallbackFileName] and
@@ -40,6 +44,7 @@ data class CaptureSidecar(
                 source = if (source == SOURCE_SHARE) SOURCE_SHARE else SOURCE_TILE,
                 capturedAtMillis = obj.optLong(KEY_CAPTURED_AT, 0L).coerceAtLeast(0L),
                 fileName = fileName,
+                pendingPath = obj.optString(KEY_PENDING_PATH).ifBlank { null },
             )
         } catch (error: JSONException) {
             null

@@ -22,9 +22,10 @@ class IngestWorker(
     override suspend fun getForegroundInfo(): ForegroundInfo =
         foregroundInfo(applicationContext, Notifications.ID_INGEST, R.string.ingesting)
 
+    // Dart confirms each filed capture, and that call updates the
+    // notification, so nothing is claimed as filed before its row exists.
     override suspend fun doWork(): Result = try {
         HeadlessEngineRunner.run(applicationContext, CALL_TIMEOUT_MILLIS) { api -> api.ingestInbox() }
-        Notifications.captureFiled(applicationContext)
         Result.success()
     } catch (error: CancellationException) {
         throw error
