@@ -110,8 +110,9 @@ class OpenAiCompatibleClient implements ProviderClient {
     final List<String> picked;
     switch (capability) {
       case Capability.embeddings:
-        final embedding = all.where(isEmbedding).toList();
-        picked = embedding.isEmpty ? all : embedding;
+        // A server that lists no embedding model probably has none, and
+        // offering its chat models here would only produce 400s.
+        picked = all.where(isEmbedding).toList();
       case Capability.vision when hasModalities:
         picked = withImages;
       case Capability.vision || Capability.chat:

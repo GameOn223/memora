@@ -541,6 +541,24 @@ void main() {
       expect(request.containsKey('outputDimensionality'), isFalse);
     });
 
+    test('resolveModel probes once for an unknown model', () async {
+      http.reply({
+        'embeddings': [
+          {
+            'values': [0, 3, 4],
+          },
+        ],
+      });
+      final service =
+          client().embeddings('gemini-embedding-next')!
+              as GeminiEmbeddingService;
+      expect(service.model.dimensions, 0);
+
+      expect((await service.resolveModel()).dimensions, 3);
+      expect(service.model.dimensions, 3);
+      expect(http.requests, hasLength(1));
+    });
+
     test('a count mismatch is an error', () async {
       http.reply({'embeddings': <Object?>[]});
       await expectLater(
