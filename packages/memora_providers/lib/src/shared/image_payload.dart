@@ -19,6 +19,7 @@ class ImagePayload {
     String mimeType, {
     required String providerId,
     int maxBytes = defaultMaxImageBytes,
+    int? maxEncodedBytes,
     Set<String>? supportedMimeTypes,
   }) {
     var mime = mimeType.trim().toLowerCase();
@@ -42,8 +43,13 @@ class ImagePayload {
         providerId: providerId,
       );
     }
-    if (bytes.length > maxBytes) {
-      final mb = (maxBytes / (1024 * 1024)).toStringAsFixed(0);
+    // Providers that cap the whole request count base64, which is 4 bytes
+    // per 3 bytes of file.
+    final effectiveMax = maxEncodedBytes == null
+        ? maxBytes
+        : _min(maxBytes, (maxEncodedBytes ~/ 4) * 3);
+    if (bytes.length > effectiveMax) {
+      final mb = (effectiveMax / (1024 * 1024)).toStringAsFixed(1);
       throw AiContentException(
         'The image is larger than the $mb MB this provider accepts',
         providerId: providerId,
@@ -59,3 +65,5 @@ class ImagePayload {
 
   String get dataUri => 'data:$mimeType;base64,$base64Data';
 }
+
+int _min(int a, int b) => a < b ? a : b;

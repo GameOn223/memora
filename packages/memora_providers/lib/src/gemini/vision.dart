@@ -9,6 +9,10 @@ import '../shared/verification.dart';
 import 'response.dart';
 import 'schema.dart';
 
+/// Gemini caps a `generateContent` request at 20 MB, counted after base64,
+/// so the file itself has to be smaller than that.
+const geminiMaxRequestBytes = 20 * 1024 * 1024;
+
 /// Image types Gemini accepts inline.
 const geminiImageMimeTypes = {
   'image/png',
@@ -52,6 +56,7 @@ class GeminiVisionService implements VisionService {
     bytes,
     mimeType,
     providerId: _endpoint.providerId,
+    maxEncodedBytes: geminiMaxRequestBytes,
     supportedMimeTypes: geminiImageMimeTypes,
   );
 

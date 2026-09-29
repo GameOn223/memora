@@ -18,8 +18,11 @@ final _png = Uint8List.fromList([
   0x0A,
 ]);
 
-VisionRequest _visionRequest({String mimeType = 'image/png'}) => VisionRequest(
-  imageBytes: _png,
+VisionRequest _visionRequest({
+  Uint8List? bytes,
+  String mimeType = 'image/png',
+}) => VisionRequest(
+  imageBytes: bytes ?? _png,
   mimeType: mimeType,
   takenAt: DateTime(2026, 9, 1),
 );
@@ -198,6 +201,17 @@ void main() {
         client().vision('gemini-2.5-flash')!.analyze(_visionRequest()),
         throwsA(isA<AiContentException>()),
       );
+    });
+
+    test('a 16 MB photo is refused before base64 blows the request', () async {
+      // 16 MB of file is over 21 MB encoded, past Gemini's 20 MB request cap.
+      await expectLater(
+        client()
+            .vision('gemini-3.5-flash')!
+            .analyze(_visionRequest(bytes: Uint8List(16 * 1024 * 1024))),
+        throwsA(isA<AiContentException>()),
+      );
+      expect(http.requests, isEmpty);
     });
 
     test('HEIC is accepted, PDF is not', () async {
