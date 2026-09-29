@@ -3,6 +3,38 @@ import 'package:test/test.dart';
 
 import '../fakes/fake_stores.dart';
 
+/// A store that fails the way a locked or corrupt database would.
+class _BrokenSearch implements SearchStore {
+  @override
+  Future<List<AttributeValue>> attributeValues(
+    List<String> ids,
+    String type,
+  ) async => throw StateError('database is locked');
+
+  @override
+  Future<List<MemoryCard>> cards(List<String> ids) async =>
+      throw StateError('database is locked');
+
+  @override
+  Future<List<ScoredId>> fullText(
+    String text, {
+    Set<String>? within,
+    int limit = 50,
+  }) async => throw StateError('database is locked');
+
+  @override
+  Future<List<ScoredId>> sharingEntities(
+    String memoryId, {
+    int limit = 20,
+  }) async => throw StateError('database is locked');
+
+  @override
+  Future<List<String>> structured(
+    RetrievalQuery query, {
+    int limit = 500,
+  }) async => throw StateError('database is locked');
+}
+
 void main() {
   late FakeMemora db;
   late AiHarness ai;
@@ -406,5 +438,50 @@ void main() {
         contains('in this conversation'),
       );
     });
+  });
+
+  test('a failing store is a tool error, not a dead turn', () async {
+    final broken = _BrokenSearch();
+    final retrieval = DefaultRetrievalEngine(
+      search: broken,
+      vectors: db,
+      router: ai.router,
+    );
+    final failing = {
+      for (final tool in ToolRegistry.build(
+        retrieval: retrieval,
+        search: broken,
+        vectors: db,
+        memories: db,
+        router: ai.router,
+      ))
+        tool.name: tool,
+    };
+    await ok('search_by_entity', {'value': 'Reliance'});
+
+    for (final call in [
+      ('search_memories', {'text': 'bill'}),
+      (
+        'search_metadata',
+        {
+          'categories': ['utility_bill'],
+        },
+      ),
+      ('search_by_entity', {'value': 'Reliance'}),
+      ('get_related_memories', {'id': 'aug'}),
+      ('filter_results', {'amount_min': 1}),
+      ('aggregate_results', {'op': 'max'}),
+    ]) {
+      final result = await failing[call.$1]!.run(call.$2, context);
+      expect(
+        result,
+        isA<ToolError>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains(call.$1), contains('database is locked')),
+        ),
+        reason: call.$1,
+      );
+    }
   });
 }

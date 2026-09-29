@@ -264,14 +264,22 @@ abstract class MemoraTool {
     parameters: parameters,
   );
 
-  /// Runs the tool. Bad arguments come back as [ToolError], never as an
-  /// exception that would end the turn.
+  /// Runs the tool. Bad arguments and anything that goes wrong underneath
+  /// come back as a [ToolError] the model can act on, never as an exception
+  /// that would end the turn. See docs/architecture.md, section 8.3.
   Future<ToolResult> run(Map<String, Object?> args, ToolContext context) async {
     try {
       return await execute(ToolArgs(args), context);
     } on ToolArgumentException catch (e) {
       return ToolError(e.message);
+    } on Object catch (e) {
+      return ToolError('$name could not run: ${_short(e)}');
     }
+  }
+
+  static String _short(Object error) {
+    final text = error.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+    return text.length > 160 ? '${text.substring(0, 160)}…' : text;
   }
 
   @protected
