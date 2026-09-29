@@ -300,6 +300,18 @@ void main() {
       ]);
     });
 
+    test('a second service does not reload the model', () async {
+      markDownloaded();
+      final client = LocalProviderClient(local());
+
+      // The router builds a new service for every call.
+      await client.embeddings('bge-small-en-v1.5')!.embed(['bill']);
+      await client.embeddings('bge-small-en-v1.5')!.embed(['receipt']);
+
+      expect(runtime.loads, hasLength(1));
+      expect(runtime.batches, hasLength(2));
+    });
+
     test('reloads when the runtime lost the model', () async {
       markDownloaded();
       final service = LocalProviderClient(local())

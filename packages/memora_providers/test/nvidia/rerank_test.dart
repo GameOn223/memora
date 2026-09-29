@@ -44,8 +44,9 @@ void main() {
       'https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-3_2-nv-rerankqa-1b-v2/reranking',
     );
     expect(
-      nvidiaRerankUrl('nvidia/rerank-qa-mistral-4b').toString(),
-      'https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking',
+      nvidiaRerankUrl('nvidia/nv-rerankqa-mistral-4b-v3').toString(),
+      'https://ai.api.nvidia.com/v1/retrieval/nvidia/'
+      'nv-rerankqa-mistral-4b-v3/reranking',
     );
   });
 
