@@ -64,12 +64,41 @@ void checkNotNewerThanBuild(Database db, [List<Migration> all = migrations]) {
 /// the write lock with `BEGIN IMMEDIATE` and reads the version again inside
 /// that transaction, so the connection that loses the race skips work the
 /// winner already did instead of failing on a table that now exists.
+///
+/// Migrations run with foreign keys off, because a migration that rebuilds a
+/// table drops the old one, and with foreign keys on that cascades and empties
+/// every table that referenced it. `PRAGMA foreign_keys` is ignored inside a
+/// transaction, so the runner turns it off before taking the write lock and
+/// back on when it's done. Each migration then has to leave the references
+/// intact: `PRAGMA foreign_key_check` runs inside the same transaction and a
+/// violation rolls the migration back.
 void applyPending(Database db, List<Migration> all, int from) {
-  for (final migration in all.skip(from)) {
-    db.transaction(() {
-      if (db.userVersion >= migration.version) return;
-      migration.up(db);
-      db.userVersion = migration.version;
-    }, immediate: true);
+  final pending = all.skip(from).toList();
+  if (pending.isEmpty) return;
+
+  final hadForeignKeys =
+      db.select('PRAGMA foreign_keys').first.columnAt(0) == 1;
+  if (hadForeignKeys) db.execute('PRAGMA foreign_keys = OFF');
+  try {
+    for (final migration in pending) {
+      db.transaction(() {
+        if (db.userVersion >= migration.version) return;
+        migration.up(db);
+        _checkReferences(db, migration);
+        db.userVersion = migration.version;
+      }, immediate: true);
+    }
+  } finally {
+    if (hadForeignKeys) db.execute('PRAGMA foreign_keys = ON');
   }
+}
+
+void _checkReferences(Database db, Migration migration) {
+  final violations = db.select('PRAGMA foreign_key_check');
+  if (violations.isEmpty) return;
+  final first = violations.first;
+  throw StateError(
+    'Migration ${migration.runtimeType} left ${violations.length} rows with a '
+    'broken foreign key, starting in ${first.columnAt(0)}',
+  );
 }

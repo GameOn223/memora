@@ -46,7 +46,11 @@ A few behaviors worth knowing about:
 
 ## Migrations
 
-The schema version is kept in `PRAGMA user_version`. `runMigrations` in `lib/src/migrations/migration.dart` reads it and applies every newer migration, each one in its own transaction that also bumps `user_version`. If a migration throws, its transaction rolls back and the database stays at the previous version. A database whose version is higher than the newest migration this build knows about is refused with a `StateError`, so an older app never writes to a newer schema.
+The schema version is kept in `PRAGMA user_version`. `runMigrations` in `lib/src/migrations/migration.dart` reads it and applies every newer migration, each one in its own transaction that also bumps `user_version`. If a migration throws, its transaction rolls back and the database stays at the previous version. A database whose version is higher than the newest migration this build knows about is refused with a `StateError` before anything is written to the file, including the switch to WAL, so an older app leaves a newer database exactly as it found it.
+
+Two connections can open the same file at once, which happens whenever the UI starts while a background worker is running. Each migration takes the write lock with `BEGIN IMMEDIATE` and reads `user_version` again inside that transaction, so the connection that loses the race skips what the winner already applied instead of failing on a table that now exists.
+
+Migrations run with foreign keys off. The runner sets `PRAGMA foreign_keys = OFF` before it takes the write lock, since the pragma is ignored inside a transaction, and turns it back on when the run finishes either way. That matters because a migration that rebuilds a table drops the old one, and with foreign keys on, that drop cascades into everything that referenced it: entities, attributes, keywords, embeddings and message references all disappear. In exchange, a migration has to leave the references intact. `PRAGMA foreign_key_check` runs inside the same transaction, and anything dangling throws a `StateError` that rolls the migration back.
 
 To change the schema:
 
@@ -72,7 +76,7 @@ test('m0002 keeps existing memories', () {
 });
 ```
 
-`PRAGMA foreign_keys` can't be changed inside a transaction. If a migration has to rebuild a table, follow SQLite's [table rebuild steps](https://www.sqlite.org/lang_altertable.html#otheralter) and run `PRAGMA foreign_key_check` before the migration returns.
+To rebuild a table, follow SQLite's [table rebuild steps](https://www.sqlite.org/lang_altertable.html#otheralter): create the new table under a temporary name, copy the rows over, drop the old table, then rename the new one. Don't touch `PRAGMA foreign_keys` yourself. The runner has already turned it off in the one place where that works, and it checks the references for you before the migration commits.
 
 ## Running the tests
 

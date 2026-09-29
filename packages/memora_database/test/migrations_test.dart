@@ -226,6 +226,46 @@ void main() {
       );
     });
 
+    test('keeps derived rows when a migration rebuilds a table', () async {
+      final db = openTestDatabase();
+      final id = await seedMemory(db);
+      await db.memories.saveUnderstanding(
+        id,
+        understanding(),
+        facts(
+          entities: [entity('company', 'Reliance')],
+          keywords: ['electricity'],
+        ),
+        DateTime.utc(2026, 9, 15),
+      );
+
+      runMigrations(db.connection, [...migrations, _RebuildMemories()]);
+
+      expect(db.schemaVersion, 2);
+      expect(scalar(db, 'SELECT COUNT(*) FROM memories'), 1);
+      expect(scalar(db, 'SELECT COUNT(*) FROM entities'), 1);
+      expect(scalar(db, 'SELECT COUNT(*) FROM keywords'), 1);
+      expect(scalar(db, 'PRAGMA foreign_keys'), 1);
+    });
+
+    test('rejects a migration that leaves a reference dangling', () {
+      final db = openTestDatabase();
+
+      expect(
+        () => runMigrations(db.connection, [...migrations, _DanglingRow()]),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('foreign key'),
+          ),
+        ),
+      );
+      expect(db.schemaVersion, 1);
+      expect(scalar(db, 'SELECT COUNT(*) FROM entities'), 0);
+      expect(scalar(db, 'PRAGMA foreign_keys'), 1);
+    });
+
     test('rejects migrations that are not numbered in order', () {
       expect(
         () =>
@@ -248,6 +288,40 @@ class _CountingMigration extends Migration {
   void up(Database db) {
     runs++;
     db.execute('CREATE TABLE t$version (x INTEGER)');
+  }
+}
+
+/// The table rebuild from the README: with foreign keys on, dropping the old
+/// table cascades and empties everything that referenced it.
+class _RebuildMemories extends Migration {
+  @override
+  int get version => 2;
+
+  @override
+  void up(Database db) {
+    db
+      ..execute(
+        'CREATE TABLE memories_new '
+        '(seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE)',
+      )
+      ..execute(
+        'INSERT INTO memories_new (seq, id) SELECT seq, id FROM memories',
+      )
+      ..execute('DROP TABLE memories')
+      ..execute('ALTER TABLE memories_new RENAME TO memories');
+  }
+}
+
+class _DanglingRow extends Migration {
+  @override
+  int get version => 2;
+
+  @override
+  void up(Database db) {
+    db.execute(
+      'INSERT INTO entities (memory_id, type, value, normalized_value) '
+      "VALUES ('ghost', 'company', 'Reliance', 'reliance')",
+    );
   }
 }
 
