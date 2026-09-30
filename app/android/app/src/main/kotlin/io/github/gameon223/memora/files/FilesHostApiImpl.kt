@@ -1,6 +1,7 @@
 package io.github.gameon223.memora.files
 
 import android.content.Context
+import android.provider.DocumentsContract
 import androidx.activity.result.contract.ActivityResultContracts
 import io.github.gameon223.memora.bridge.ActivityHolder
 import io.github.gameon223.memora.bridge.FilesHostApi
@@ -36,10 +37,20 @@ class FilesHostApiImpl(
         ) ?: return false
 
         withContext(Dispatchers.IO) {
-            val output = context.contentResolver.openOutputStream(target, "w")
-                ?: throw FlutterError("write_failed", "Couldn't open the chosen location.", null)
-            output.use { out ->
-                source.inputStream().use { input -> input.copyTo(out, BUFFER_BYTES) }
+            try {
+                val output = context.contentResolver.openOutputStream(target, "w")
+                    ?: throw FlutterError("write_failed", "Couldn't open the chosen location.", null)
+                output.use { out ->
+                    source.inputStream().use { input -> input.copyTo(out, BUFFER_BYTES) }
+                }
+            } catch (error: Exception) {
+                // Leave no half-written export behind for the user to find.
+                try {
+                    DocumentsContract.deleteDocument(context.contentResolver, target)
+                } catch (ignored: Exception) {
+                    // The provider may not allow deleting; nothing else to do.
+                }
+                throw error
             }
         }
         return true

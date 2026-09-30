@@ -14,6 +14,7 @@ import io.github.gameon223.memora.bridge.OcrLineMessage
 import io.github.gameon223.memora.files.SafePaths
 import java.io.File
 import java.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,9 @@ class MlKitOcr private constructor(private val context: Context) : OcrHostApi {
         }
         val text = try {
             recognizer.process(image).await()
+        } catch (error: CancellationException) {
+            // A stopped worker isn't a model failure.
+            throw error
         } catch (error: Exception) {
             throw FlutterError("ocr_failed", "Text recognition failed on this device.", null)
         }

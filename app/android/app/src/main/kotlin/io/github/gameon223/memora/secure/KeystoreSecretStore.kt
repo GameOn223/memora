@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import io.github.gameon223.memora.bridge.FlutterError
 import io.github.gameon223.memora.bridge.SecretHostApi
 import java.security.GeneralSecurityException
 import java.security.KeyStore
@@ -28,15 +29,24 @@ class KeystoreSecretStore private constructor(context: Context) : SecretHostApi 
             // The Keystore key was replaced, for example after a device
             // restore. The user has to enter the key again.
             null
+        } catch (ignored: RuntimeException) {
+            // A broken or busy Keystore throws ProviderException and friends.
+            null
         }
     }
 
     override fun write(key: String, value: String) {
-        val sealed = AesGcm.seal(
-            secretKey(),
-            value.toByteArray(Charsets.UTF_8),
-            key.toByteArray(Charsets.UTF_8),
-        )
+        val sealed = try {
+            AesGcm.seal(
+                secretKey(),
+                value.toByteArray(Charsets.UTF_8),
+                key.toByteArray(Charsets.UTF_8),
+            )
+        } catch (error: GeneralSecurityException) {
+            throw FlutterError("keystore_failed", "This device wouldn't store the key.", null)
+        } catch (error: RuntimeException) {
+            throw FlutterError("keystore_failed", "This device wouldn't store the key.", null)
+        }
         prefs.edit().putString(key, SecretCodec.encode(sealed)).apply()
     }
 

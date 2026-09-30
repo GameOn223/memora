@@ -120,7 +120,12 @@ class GalleryHostApiImpl(
         } catch (error: SecurityException) {
             throw FlutterError("permission_denied", "Memora can't read this image.", null)
         }
-        val fitted = Thumbnails.scaleToFit(bitmap, edge)
+        val fitted = try {
+            Thumbnails.scaleToFit(bitmap, edge)
+        } catch (error: RuntimeException) {
+            bitmap.recycle()
+            throw FlutterError("thumbnail_failed", "Couldn't scale this image.", null)
+        }
         try {
             ByteArrayOutputStream().use { out ->
                 fitted.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
@@ -213,7 +218,9 @@ class GalleryHostApiImpl(
     private fun pickerLimit(requested: Int): Int {
         val wanted = requested.coerceAtLeast(1)
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // The limit only exists from Android 13. Older devices reach the
+            // picker through a backport with its own, smaller cap.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 min(wanted, MediaStore.getPickImagesMaxLimit())
             } else {
                 min(wanted, FALLBACK_PICKER_LIMIT)

@@ -4,6 +4,7 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtException
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.TensorInfo
 import io.github.gameon223.memora.bridge.EmbeddingHostApi
 import io.github.gameon223.memora.bridge.FlutterError
 import io.github.gameon223.memora.bridge.TokenBatch
@@ -27,6 +28,8 @@ object OnnxEmbedder : EmbeddingHostApi {
 
     private val mutex = Mutex()
     private var environment: OrtEnvironment? = null
+
+    @Volatile
     private var session: OrtSession? = null
     private var loadedPath: String? = null
 
@@ -52,6 +55,7 @@ object OnnxEmbedder : EmbeddingHostApi {
         }
     }
 
+    /** A hint for the UI. The run path reads the session under the mutex. */
     override fun isLoaded(): Boolean = session != null
 
     override suspend fun run(batch: TokenBatch): DoubleArray = withContext(Dispatchers.Default) {
@@ -62,8 +66,11 @@ object OnnxEmbedder : EmbeddingHostApi {
                 throw FlutterError("not_loaded", "Load the embedding model first.", null)
             }
             val sequenceLength = batch.sequenceLength.toInt()
-            if (sequenceLength <= 0 || batch.inputIds.isEmpty() ||
-                batch.inputIds.size % sequenceLength != 0
+            if (sequenceLength <= 0 ||
+                batch.inputIds.isEmpty() ||
+                batch.inputIds.size % sequenceLength != 0 ||
+                batch.attentionMask.size != batch.inputIds.size ||
+                batch.tokenTypeIds.size != batch.inputIds.size
             ) {
                 throw FlutterError("invalid_batch", "The token batch has the wrong shape.", null)
             }
@@ -81,11 +88,20 @@ object OnnxEmbedder : EmbeddingHostApi {
                 current.run(inputs).use { results ->
                     val output = results.get(0) as? OnnxTensor
                         ?: throw FlutterError("model_failed", "Unexpected model output.", null)
+                    val info = output.info as? TensorInfo
+                        ?: throw FlutterError("model_failed", "Unexpected model output.", null)
+                    // Vectors are stored with a model id, so a model that
+                    // returns something other than token states has to fail
+                    // instead of producing guesswork.
+                    val dimensions = try {
+                        Pooling.dimensionsFrom(info.shape, rows, sequenceLength)
+                    } catch (error: IllegalArgumentException) {
+                        throw FlutterError("unexpected_output", error.message, null)
+                    }
                     val buffer = output.floatBuffer
                         ?: throw FlutterError("model_failed", "Unexpected model output.", null)
                     val values = FloatArray(buffer.remaining())
                     buffer.get(values)
-                    val dimensions = values.size / (rows * sequenceLength)
                     Pooling.clsNormalized(values, rows, sequenceLength, dimensions)
                 }
             } catch (error: OrtException) {
@@ -96,7 +112,7 @@ object OnnxEmbedder : EmbeddingHostApi {
         }
     }
 
-    /** Frees the session, for example after the model file is removed. */
+    /** Frees the session when memory is tight or the model file is removed. */
     suspend fun unload() {
         mutex.withLock { closeLocked() }
     }

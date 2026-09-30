@@ -3,9 +3,11 @@ package io.github.gameon223.memora
 import android.app.Application
 import android.content.Context
 import io.flutter.embedding.engine.FlutterEngineGroup
+import io.github.gameon223.memora.inference.OnnxEmbedder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class MemoraApplication : Application() {
     /**
@@ -22,6 +24,15 @@ class MemoraApplication : Application() {
         super.onCreate()
         // WorkManager uses its default initializer from the merged manifest.
         Notifications.createChannels(this)
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // The embedding session holds tens of megabytes. It loads again from
+        // the model file the next time something needs a vector.
+        if (level >= TRIM_MEMORY_BACKGROUND) {
+            appScope.launch { OnnxEmbedder.unload() }
+        }
     }
 
     companion object {
