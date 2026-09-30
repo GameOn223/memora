@@ -18,6 +18,31 @@ void main() {
     expect(batch.tokenTypeIds, [0, 0, 0, 0, 0, 0]);
   });
 
+  test('packs a single row without padding', () {
+    final batch = tokenBatchFrom([
+      _encoded([101, 7, 8, 102]),
+    ]);
+
+    expect(batch.sequenceLength, 4);
+    expect(batch.inputIds, [101, 7, 8, 102]);
+    expect(batch.attentionMask, [1, 1, 1, 1]);
+  });
+
+  test('pads every row to the longest one', () {
+    final batch = tokenBatchFrom([
+      _encoded([101, 102]),
+      _encoded([101, 5, 6, 7, 102]),
+      _encoded([101, 9, 102]),
+    ]);
+
+    expect(batch.sequenceLength, 5);
+    expect(batch.inputIds.length, 15);
+    expect(batch.inputIds.sublist(0, 5), [101, 102, 0, 0, 0]);
+    expect(batch.attentionMask.sublist(0, 5), [1, 1, 0, 0, 0]);
+    expect(batch.inputIds.sublist(10, 15), [101, 9, 102, 0, 0]);
+    expect(batch.tokenTypeIds.every((value) => value == 0), isTrue);
+  });
+
   test('splits doubles into float vectors', () {
     final vectors = splitVectors(Float64List.fromList([1, 0, 0, 0, 1, 0]), 2);
     expect(vectors, hasLength(2));

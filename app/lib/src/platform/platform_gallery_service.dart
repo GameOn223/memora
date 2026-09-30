@@ -72,6 +72,10 @@ class PlatformGalleryService implements GalleryService {
         final report = await _ingestor.ingest(files, MemorySource.gallery);
         added += report.addedIds.length;
         duplicates += report.duplicateCount;
+        // Copies of images Memora already has. Nothing points at them.
+        if (report.duplicatePaths.isNotEmpty) {
+          await _images?.delete(report.duplicatePaths);
+        }
       } catch (_) {
         // The rows were not written, so the copies would be orphans.
         await _images?.delete([for (final f in files) f.imagePath]);

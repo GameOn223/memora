@@ -11,11 +11,13 @@ class PlatformCaptureService implements CaptureService {
   PlatformCaptureService({
     required this._ingestor,
     required this._scheduler,
+    this._images,
     CaptureHostApi? host,
   }) : _host = host ?? CaptureHostApi();
 
   final MemoryIngestor _ingestor;
   final QueueScheduler _scheduler;
+  final ImageFiles? _images;
   final CaptureHostApi _host;
 
   Future<int>? _ingesting;
@@ -68,6 +70,11 @@ class PlatformCaptureService implements CaptureService {
         ], entry.key);
         added += report.addedIds.length;
         filed.addAll([for (final item in entry.value) item.id]);
+        // A replayed capture is copied again, and the copy is what the
+        // store skipped. Nothing points at it, so it goes.
+        if (report.duplicatePaths.isNotEmpty) {
+          await _images?.delete(report.duplicatePaths);
+        }
       }
     } finally {
       if (filed.isNotEmpty) await _host.confirmInbox(filed);

@@ -86,3 +86,53 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
 }
+
+/**
+ * Memora reports nothing about its users. ML Kit brings Google's datatransport
+ * library, whose upload backend is removed in the manifest, and a dependency
+ * bump could quietly bring it back. Every APK is checked for it.
+ */
+abstract class VerifyNoTelemetryTask : DefaultTask() {
+    @get:InputFile
+    abstract val mergedManifest: RegularFileProperty
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val manifest = mergedManifest.get().asFile.readText()
+        // The discovery service is how the transport runtime finds a backend
+        // to upload through. Without it, events are dropped. The scheduler
+        // components it leaves behind have nowhere to send anything.
+        val offenders = listOf(
+            "com.google.android.datatransport.runtime.backends.TransportBackendDiscovery",
+            "CctBackendFactory",
+            "com.google.android.datatransport.cct",
+        ).filter { manifest.contains(it) }
+        if (offenders.isNotEmpty()) {
+            throw GradleException(
+                "The merged manifest declares a telemetry upload backend: " +
+                    offenders.joinToString() +
+                    ". A dependency brought Google's datatransport components back. " +
+                    "Remove them with tools:node=\"remove\" in app/src/main/AndroidManifest.xml.",
+            )
+        }
+        report.get().asFile.writeText("No telemetry backends in the merged manifest.\n")
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val suffix = variant.name.replaceFirstChar { it.uppercase() }
+        val verify = tasks.register<VerifyNoTelemetryTask>("verify${suffix}NoTelemetry") {
+            mergedManifest.set(
+                variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST),
+            )
+            report.set(layout.buildDirectory.file("reports/telemetry/$suffix.txt"))
+        }
+        // The assemble task doesn't exist yet while variants are created,
+        // so match it lazily.
+        tasks.matching { it.name == "assemble$suffix" }.configureEach { dependsOn(verify) }
+    }
+}

@@ -33,6 +33,7 @@ void main() {
         conversations: _FakeConversationStore(),
         vectors: _FakeVectorStore(),
         clock: FixedClock(_exportedAt),
+        embeddingModels: () async => const [],
         appVersion: '0.1.0',
       ),
       images: _LocalImageFiles('${temp.path}/files'),

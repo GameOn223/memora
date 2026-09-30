@@ -45,11 +45,13 @@ void main() {
     expect(scheduler.refreshes, 1);
   });
 
-  test('nothing added means no reschedule', () async {
+  test('nothing added means no reschedule, and the copy goes', () async {
     final scheduler = FakeScheduler();
+    final images = FakeImageFiles();
     final service = PlatformGalleryService(
       ingestor: FakeIngestor(duplicatesPerBatch: 1),
       scheduler: scheduler,
+      images: images,
       host: _FakeGalleryHost(),
     );
 
@@ -58,6 +60,8 @@ void main() {
     expect(result.added, 0);
     expect(result.duplicates, 1);
     expect(scheduler.refreshes, 0);
+    // A copy of an image Memora already had is an orphan.
+    expect(images.deleted, ['originals/a.png']);
   });
 
   test('deletes copies when filing fails', () async {

@@ -56,6 +56,9 @@ class PlatformLocalModelFiles implements LocalModelFiles {
     http.Client? client,
   }) : _client = client ?? http.Client();
 
+  /// How long [remove] waits for a running download to notice.
+  static const cancelTimeout = Duration(seconds: 10);
+
   /// Absolute path of `files/models`.
   final String modelsDir;
   final List<LocalModelSpec> catalog;
@@ -117,7 +120,9 @@ class PlatformLocalModelFiles implements LocalModelFiles {
     final job = _jobs[modelId];
     if (job != null) {
       job.cancelled = true;
-      await job.done.future;
+      // A stalled socket shouldn't block the settings screen forever. The
+      // download writes to a `.part` file, which the delete below removes.
+      await job.done.future.timeout(cancelTimeout, onTimeout: () {});
     }
     final dir = Directory(_modelDir(model));
     if (await dir.exists()) await dir.delete(recursive: true);
@@ -146,7 +151,8 @@ class PlatformLocalModelFiles implements LocalModelFiles {
         finishedBytes += file.size;
         job.report(finishedBytes / total, _notify);
       }
-      job.controller.add(1);
+      // report() already emits exactly 1 when the last file lands.
+      if (job.progress < 1) job.controller.add(1);
     } on _Cancelled {
       // remove() asked for this; it deletes the directory next.
     } catch (error, stack) {

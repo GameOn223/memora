@@ -28,6 +28,9 @@ class FakeIngestor implements MemoryIngestor {
     return IngestReport(
       addedIds: [for (var i = 0; i < added; i++) 'id$i'],
       duplicateCount: duplicatesPerBatch,
+      // The store skips the last files of a batch, the way a duplicate
+      // sha256 would.
+      duplicatePaths: [for (final file in files.skip(added)) file.imagePath],
     );
   }
 

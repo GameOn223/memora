@@ -88,15 +88,19 @@ void main() {
       _inbox('originals/1.png', 'tile', id: 'a'),
       _inbox('originals/2.png', 'tile', id: 'b'),
     ]);
+    final images = FakeImageFiles();
     final service = PlatformCaptureService(
       ingestor: FakeIngestor(duplicatesPerBatch: 1),
       scheduler: FakeScheduler(),
+      images: images,
       host: host,
     );
 
     // Duplicates count as filed: their memory already exists.
     expect(await service.ingestInbox(), 1);
     expect(host.confirmed, ['a', 'b']);
+    // A replayed capture is copied again, and that copy has no row.
+    expect(images.deleted, ['originals/2.png']);
   });
 
   test('a failed ingest confirms nothing, so the capture comes back', () async {
