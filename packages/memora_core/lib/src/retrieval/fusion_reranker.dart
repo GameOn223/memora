@@ -25,7 +25,14 @@ class FusionReranker implements RerankService {
   static const categoryBonus = 0.2;
 
   /// The most the newest candidate can gain over the oldest.
-  static const recencyBonus = 0.01;
+  ///
+  /// Recency breaks ties and nothing more, so this has to stay under the gap
+  /// reciprocal rank fusion leaves between neighbouring positions. With k =
+  /// 60 that gap is 1/61 - 1/62, about 2.6e-4 at the top and about 1.2e-4 at
+  /// the bottom of the reranked window. A bonus as large as the gap reorders
+  /// results that differ only in rank, which put the one semantic match
+  /// behind three memories that matched nothing.
+  static const recencyBonus = 0.00001;
 
   static final _words = RegExp(r'[\p{L}\p{M}\p{N}]+', unicode: true);
 
