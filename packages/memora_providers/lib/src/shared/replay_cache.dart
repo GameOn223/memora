@@ -1,0 +1,41 @@
+import 'dart:collection';
+
+import 'package:memora_core/memora_core.dart';
+
+/// Remembers provider-specific data from an assistant turn that asked for
+/// tools, so the next request in the same tool loop can send it back as the
+/// provider produced it.
+///
+/// Reasoning models attach signed thinking blocks, thought signatures or
+/// reasoning details to tool calls and reject a follow-up that drops them.
+/// Memora's transcript only carries text and tool calls, so adapters keep
+/// the rest here, keyed by the provider, the model and the call ids.
+///
+/// Entries live in memory only and the oldest are dropped past [capacity].
+/// A miss is not an error: the adapter rebuilds the turn from the transcript
+/// instead, which is what happens after a restart or once a conversation
+/// grows past the capacity. See docs/providers.md for what that costs.
+class TurnReplayCache<T extends Object> {
+  TurnReplayCache({this.capacity = 64});
+
+  final int capacity;
+  final LinkedHashMap<String, T> _entries = LinkedHashMap();
+
+  /// [scope] separates the providers and models that share this cache, since
+  /// one adapter serves several and their data is never interchangeable.
+  void remember(String scope, List<ToolCall> calls, T data) {
+    if (calls.isEmpty) return;
+    final key = _key(scope, calls);
+    _entries.remove(key);
+    _entries[key] = data;
+    while (_entries.length > capacity) {
+      _entries.remove(_entries.keys.first);
+    }
+  }
+
+  T? lookup(String scope, List<ToolCall> calls) =>
+      calls.isEmpty ? null : _entries[_key(scope, calls)];
+
+  static String _key(String scope, List<ToolCall> calls) =>
+      '$scope\u0000${(calls.map((c) => c.id).toList()..sort()).join(' ')}';
+}

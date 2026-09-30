@@ -1,0 +1,17 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          { "text": "Your highest bill was ₹2,103 " },
+          { "text": "in July [[m:m1]]." }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": { "promptTokenCount": 600, "candidatesTokenCount": 18, "totalTokenCount": 618 },
+  "modelVersion": "gemini-2.5-flash"
+}

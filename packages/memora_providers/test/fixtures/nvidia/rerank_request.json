@@ -1,0 +1,10 @@
+{
+  "model": "nvidia/nv-rerankqa-mistral-4b-v3",
+  "query": { "text": "highest electricity bill" },
+  "passages": [
+    { "text": "Reliance electricity bill ₹1,842" },
+    { "text": "Swiggy order receipt" },
+    { "text": "Reliance electricity bill ₹2,103" }
+  ],
+  "truncate": "END"
+}

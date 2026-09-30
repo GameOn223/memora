@@ -1,0 +1,26 @@
+{
+  "model": "gpt-4.1-mini",
+  "messages": [
+    { "role": "system", "content": "<analyze_instructions>" },
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Extract the memory data for this image." },
+        {
+          "type": "image_url",
+          "image_url": { "url": "data:image/png;base64,iVBORw0KGgo=" }
+        }
+      ]
+    }
+  ],
+  "temperature": 0.1,
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "memory_understanding",
+      "schema": "<closed_schema>",
+      "strict": true
+    }
+  },
+  "max_completion_tokens": 16000
+}

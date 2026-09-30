@@ -1,0 +1,17 @@
+{
+  "systemInstruction": { "parts": [{ "text": "<analyze_instructions>" }] },
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Extract the memory data for this image." },
+        { "inline_data": { "mime_type": "image/png", "data": "iVBORw0KGgo=" } }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "temperature": 0.1,
+    "responseMimeType": "application/json",
+    "responseSchema": "<schema>"
+  }
+}
