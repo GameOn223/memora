@@ -113,5 +113,14 @@ class ScheduleMathTest {
             13 * hour,
             ScheduleMath.followUpDelayMillis(processed = 0, remaining = true, scheduledDelayMillis = 13 * hour),
         )
+        // With progress inside the window, the next run follows at once.
+        assertEquals(
+            0L,
+            ScheduleMath.followUpDelayMillis(processed = 1, remaining = true, scheduledDelayMillis = 0),
+        )
+        // Nothing left, even with the window still open.
+        assertNull(
+            ScheduleMath.followUpDelayMillis(processed = 0, remaining = false, scheduledDelayMillis = 0),
+        )
     }
 }

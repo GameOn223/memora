@@ -11,8 +11,12 @@ import io.github.gameon223.memora.R
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Runs the processing queue on a headless engine for up to nine minutes,
- * then schedules the next run if work is left.
+ * Runs the processing queue on a headless engine, then schedules the next
+ * run if work is left.
+ *
+ * The budget plus the grace has to fit inside WorkManager's ten minute
+ * ceiling, with room for the engine to start, so being stopped mid-image
+ * stays the exception.
  */
 class ProcessingWorker(
     context: Context,
@@ -26,18 +30,22 @@ class ProcessingWorker(
         val processNow = inputData.getBoolean(KEY_PROCESS_NOW, false)
         val usesNetwork = inputData.getBoolean(KEY_USES_NETWORK, false)
         promoteToForeground(this, applicationContext, Notifications.ID_PROCESSING, R.string.processing)
+        val scheduler = ProcessingScheduler.get(applicationContext)
 
         val result = try {
             HeadlessEngineRunner.run(applicationContext, BUDGET_MILLIS + CALL_GRACE_MILLIS) { api ->
                 api.runQueue(BUDGET_MILLIS, processNow)
             }
         } catch (error: CancellationException) {
+            // Stopped rather than finished. A policy change made while this
+            // ran was not scheduled, and WorkManager keeps no follow-up for
+            // a stopped worker, so ask for one now.
+            scheduler.reapplyAfterStop()
             throw error
         } catch (error: Exception) {
-            return if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.failure()
+            return afterFailure(scheduler, processNow)
         }
 
-        val scheduler = ProcessingScheduler.get(applicationContext)
         if (processNow) {
             scheduler.afterProcessNowRun(result.processed, result.remaining, usesNetwork)
         } else {
@@ -46,16 +54,28 @@ class ProcessingWorker(
         return Result.success()
     }
 
+    /**
+     * A retry ignores the initial delay, so an overnight run that failed
+     * could come back at noon. Failures are rescheduled through the stored
+     * policy instead, which re-derives the window and the idle backoff.
+     */
+    private fun afterFailure(scheduler: ProcessingScheduler, processNow: Boolean): Result {
+        if (processNow && runAttemptCount < MAX_ATTEMPTS) return Result.retry()
+        scheduler.afterScheduledRun(processed = 0, remaining = true)
+        return Result.success()
+    }
+
     companion object {
         const val KEY_PROCESS_NOW = "process_now"
         const val KEY_USES_NETWORK = "uses_network"
 
-        /** Matches the 9 minute budget in docs/architecture.md 5.4. */
-        const val BUDGET_MILLIS = 9 * 60 * 1000L
-
-        /** Time for the item in progress to finish after the budget runs out. */
-        private const val CALL_GRACE_MILLIS = 4 * 60 * 1000L
-        private const val MAX_ATTEMPTS = 5
+        /**
+         * Seven minutes of work, a minute for the image in progress to
+         * finish, and the rest of WorkManager's ten for the engine.
+         */
+        const val BUDGET_MILLIS = 7 * 60 * 1000L
+        private const val CALL_GRACE_MILLIS = 60 * 1000L
+        private const val MAX_ATTEMPTS = 3
     }
 }
 

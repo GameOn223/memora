@@ -58,15 +58,45 @@ class ProcessingScheduler private constructor(context: Context) : SchedulerHostA
         val policy = storedPolicy() ?: return
         val base = delayFor(policy)
         val delay = ScheduleMath.followUpDelayMillis(processed, remaining, base) ?: return
-        schedule(policy.copy(hasWork = true), fromWorker = true, delayMillis = delay)
+        serial.execute {
+            schedule(policy.copy(hasWork = true), fromWorker = true, delayMillis = delay)
+        }
     }
 
     /** Called by [ProcessingWorker] after a "Process now" run. */
     fun afterProcessNowRun(processed: Long, remaining: Boolean, usesNetwork: Boolean) {
-        if (remaining && processed > 0) enqueueProcessNow(usesNetwork, fromWorker = true)
+        if (remaining && processed > 0) {
+            serial.execute { enqueueProcessNow(usesNetwork, fromWorker = true) }
+        }
     }
 
-    private fun schedule(policy: SchedulePolicy, fromWorker: Boolean, delayMillis: Long? = null) {
+    /**
+     * Called when a worker is stopped rather than finishing. A policy change
+     * that arrived while it ran was not scheduled (see [schedule]), so the
+     * stored policy is applied again here. Existing work wins, so this never
+     * undoes the request that replaced the stopped one.
+     */
+    fun reapplyAfterStop() {
+        val policy = storedPolicy() ?: return
+        serial.execute {
+            schedule(
+                policy.copy(hasWork = true),
+                fromWorker = true,
+                existing = ExistingWorkPolicy.KEEP,
+            )
+        }
+    }
+
+    private fun schedule(
+        policy: SchedulePolicy,
+        fromWorker: Boolean,
+        delayMillis: Long? = null,
+        existing: ExistingWorkPolicy? = null,
+    ) {
+        // A worker that starts between this check and the enqueue below is
+        // left alone on purpose: the Dart loop re-reads the policy before
+        // every image, and the worker re-applies the stored policy when it
+        // ends or is stopped.
         if (!fromWorker && isRunning(UNIQUE_PROCESSING)) return
         if (policy.paused || !policy.hasWork) {
             if (!fromWorker) {
@@ -91,7 +121,8 @@ class ProcessingScheduler private constructor(context: Context) : SchedulerHostA
             .build()
         workManager.enqueueUniqueWork(
             UNIQUE_PROCESSING,
-            if (fromWorker) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE,
+            existing
+                ?: if (fromWorker) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE,
             request,
         )
     }
@@ -136,26 +167,23 @@ class ProcessingScheduler private constructor(context: Context) : SchedulerHostA
     }
 
     private fun store(policy: SchedulePolicy) {
-        prefs.edit()
-            .putBoolean(KEY_STORED, true)
-            .putBoolean(KEY_IMMEDIATE, policy.immediate)
-            .putBoolean(KEY_PAUSED, policy.paused)
-            .putLong(KEY_WINDOW_START, policy.windowStartMinutes)
-            .putLong(KEY_WINDOW_END, policy.windowEndMinutes)
-            .putBoolean(KEY_USES_NETWORK, policy.requiresUnmeteredNetwork)
-            .putBoolean(KEY_HAS_WORK, policy.hasWork)
-            .apply()
+        val editor = prefs.edit().putBoolean(KEY_STORED, true)
+        for ((key, value) in SchedulePolicyCodec.toMap(policy)) {
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Long -> editor.putLong(key, value)
+                else -> Unit
+            }
+        }
+        editor.apply()
     }
 
+    /** What the app last asked for, or null when it never has. */
     fun storedPolicy(): SchedulePolicy? {
         if (!prefs.getBoolean(KEY_STORED, false)) return null
-        return SchedulePolicy(
-            immediate = prefs.getBoolean(KEY_IMMEDIATE, false),
-            paused = prefs.getBoolean(KEY_PAUSED, false),
-            windowStartMinutes = prefs.getLong(KEY_WINDOW_START, DEFAULT_WINDOW_START),
-            windowEndMinutes = prefs.getLong(KEY_WINDOW_END, DEFAULT_WINDOW_END),
-            requiresUnmeteredNetwork = prefs.getBoolean(KEY_USES_NETWORK, false),
-            hasWork = prefs.getBoolean(KEY_HAS_WORK, false),
+        val stored = prefs.all
+        return SchedulePolicyCodec.fromMap(
+            SchedulePolicyCodec.keys.associateWith { stored[it] },
         )
     }
 
@@ -172,14 +200,6 @@ class ProcessingScheduler private constructor(context: Context) : SchedulerHostA
 
         private const val PREFS_NAME = "memora_schedule"
         private const val KEY_STORED = "stored"
-        private const val KEY_IMMEDIATE = "immediate"
-        private const val KEY_PAUSED = "paused"
-        private const val KEY_WINDOW_START = "window_start_minutes"
-        private const val KEY_WINDOW_END = "window_end_minutes"
-        private const val KEY_USES_NETWORK = "uses_network"
-        private const val KEY_HAS_WORK = "has_work"
-        private const val DEFAULT_WINDOW_START = 60L
-        private const val DEFAULT_WINDOW_END = 420L
 
         @Volatile
         private var instance: ProcessingScheduler? = null
