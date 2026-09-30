@@ -74,8 +74,9 @@ class AggregateOutcome {
   }
 }
 
-/// Labels that mark the amount to use when a memory has several.
-const _preferredLabels = [
+/// Labels that mark the amount to use when a memory has several, so a
+/// receipt's subtotal or tax never stands in for what it cost.
+const preferredAmountLabels = [
   'total',
   'grand_total',
   'amount_due',
@@ -84,6 +85,20 @@ const _preferredLabels = [
   'net_payable',
   'balance_due',
 ];
+
+/// The one value a memory contributes: the one labeled as a total when there
+/// is one, otherwise the first. Null when [values] is empty.
+AttributeValue? preferredValue(Iterable<AttributeValue> values) {
+  AttributeValue? best;
+  for (final value in values) {
+    if (best == null ||
+        (!preferredAmountLabels.contains(best.attribute.label) &&
+            preferredAmountLabels.contains(value.attribute.label))) {
+      best = value;
+    }
+  }
+  return best;
+}
 
 /// Computes aggregates over memories using stored attribute values.
 ///
@@ -132,16 +147,13 @@ class Aggregator {
     }
 
     final type = attribute ?? 'amount';
-    final perMemory = <String, AttributeValue>{};
+    final byMemory = <String, List<AttributeValue>>{};
     for (final value in await _search.attributeValues(unique, type)) {
-      final current = perMemory[value.memoryId];
-      if (current == null ||
-          (!_preferredLabels.contains(current.attribute.label) &&
-              _preferredLabels.contains(value.attribute.label))) {
-        perMemory[value.memoryId] = value;
-      }
+      (byMemory[value.memoryId] ??= []).add(value);
     }
-    final values = [for (final id in unique) ?perMemory[id]];
+    final values = [
+      for (final id in unique) ?preferredValue(byMemory[id] ?? const []),
+    ];
     if (values.isEmpty) {
       return AggregateOutcome(
         op: op,

@@ -158,9 +158,10 @@ void main() {
       expect(await pipelineFor(ai).processNext(), isA<QueueEmpty>());
     });
 
-    test('transient errors back off, then fail after three attempts', () async {
+    test('transient errors climb the backoff ladder, then fail', () async {
       final vision = ScriptedVisionService(
         analyze: [
+          const AiTransientException('Timed out'),
           const AiTransientException('Timed out'),
           const AiTransientException('Timed out'),
           const AiTransientException('Rate limited'),
@@ -187,12 +188,19 @@ void main() {
 
       clock.advance(const Duration(minutes: 6));
       outcome = await pipeline.processNext();
+      expect((outcome as Processed).status, ProcessingStatus.captured);
+      row = db.rows['m1']!;
+      expect(row.attempts, 3);
+      expect(row.nextAttemptAt, clock.current.add(const Duration(minutes: 30)));
+
+      clock.advance(const Duration(minutes: 31));
+      outcome = await pipeline.processNext();
       expect((outcome as Processed).status, ProcessingStatus.failed);
       expect(db.rows['m1']!.status, ProcessingStatus.failed);
       expect(db.rows['m1']!.failureReason, 'Rate limited');
 
       final records = (await db.getDetails('m1'))!.processing;
-      expect(records, hasLength(3));
+      expect(records, hasLength(4));
       expect(
         records.every((r) => r.outcome == ProcessingOutcome.failed),
         isTrue,
@@ -259,7 +267,7 @@ void main() {
       },
     );
 
-    test('content and format errors fail right away', () async {
+    test('content errors fail right away, unreadable output retries', () async {
       final ai = await AiHarness.create(
         vision: ScriptedVisionService(
           analyze: [
@@ -277,11 +285,66 @@ void main() {
         ProcessingStatus.failed,
       );
       expect(db.rows['m1']!.failureReason, 'The provider refused this image');
+
       expect(
         (await pipeline.processNext() as Processed).status,
-        ProcessingStatus.failed,
+        ProcessingStatus.captured,
+        reason: 'broken structured output is usually a one-off',
       );
-      expect(db.rows['m2']!.status, ProcessingStatus.failed);
+      expect(db.rows['m2']!.nextAttemptAt, isNotNull);
+      expect(
+        db.rows['m2']!.failureReason,
+        'The provider returned data Memora could not read.',
+      );
+    });
+
+    test('two engines at once never claim the same memory', () async {
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(analyze: [_bill, _bill]),
+      );
+      seedCaptured('m1', takenAt: DateTime(2026, 9, 1));
+      seedCaptured('m2', takenAt: DateTime(2026, 9, 2));
+
+      final outcomes = await Future.wait([
+        pipelineFor(ai).processNext(),
+        pipelineFor(ai).processNext(),
+      ]);
+
+      expect(outcomes.whereType<Processed>().map((p) => p.memoryId).toSet(), {
+        'm1',
+        'm2',
+      }, reason: 'the claim is atomic, so each engine gets its own row');
+      expect(db.rows.values.map((r) => r.attempts), everyElement(1));
+      expect(
+        db.rows.values.map((r) => r.status),
+        everyElement(ProcessingStatus.ready),
+      );
+    });
+
+    test('a failing processing record never strands a memory', () async {
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(
+          analyze: [const AiTransientException('Timed out'), _bill],
+        ),
+      );
+      final pipeline = pipelineFor(ai);
+      seedCaptured('m1', takenAt: DateTime(2026, 9, 1));
+      seedCaptured('m2', takenAt: DateTime(2026, 9, 2));
+      db.failProcessingRecords = true;
+
+      expect(
+        (await pipeline.processNext() as Processed).status,
+        ProcessingStatus.captured,
+      );
+      expect(db.rows['m1']!.status, ProcessingStatus.captured);
+      expect(db.rows['m1']!.nextAttemptAt, isNotNull);
+
+      expect(
+        (await pipeline.processNext() as Processed).status,
+        ProcessingStatus.ready,
+      );
+      expect(db.rows['m2']!.status, ProcessingStatus.ready);
+      expect((await db.getDetails('m2'))!.processing, isEmpty);
     });
 
     test('an unreadable image file fails the memory', () async {
@@ -483,6 +546,49 @@ void main() {
       expect(vision.calls, 2);
     });
 
+    test('memories waiting out a backoff still count as work', () async {
+      await policy.save(const QueuePolicy(mode: QueueMode.immediate));
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(
+          analyze: [const AiTransientException('Timed out')],
+        ),
+      );
+      seedCaptured('a');
+
+      final report = await pipelineFor(ai)
+          .runQueue(budget: const Duration(minutes: 9));
+
+      expect(report.processed, 1);
+      expect(
+        report.remaining,
+        isTrue,
+        reason: 'the retry ladder needs the worker to come back',
+      );
+      expect(
+        report.nextAttemptAt,
+        clock.current.add(const Duration(minutes: 1)),
+      );
+      expect(
+        await db.hasWork(clock.current),
+        isFalse,
+        reason: 'nothing is claimable yet, which is why hasWork is not enough',
+      );
+    });
+
+    test('an empty queue reports no work and no retry', () async {
+      await policy.save(const QueuePolicy(mode: QueueMode.immediate));
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(analyze: [_bill]),
+      );
+      seedCaptured('a');
+
+      final report = await pipelineFor(ai)
+          .runQueue(budget: const Duration(minutes: 9));
+
+      expect(report.remaining, isFalse);
+      expect(report.nextAttemptAt, isNull);
+    });
+
     test('stops and reports a block', () async {
       await policy.save(const QueuePolicy(mode: QueueMode.immediate));
       final ai = await AiHarness.create();
@@ -518,18 +624,28 @@ void main() {
       },
     );
 
-    test('reindexing also tags vectors from the response', () async {
+    test('reindexing skips what a lazy model already has', () async {
       final embeddings = _LateDimensionsEmbeddings();
       final ai = await AiHarness.create(embeddings: embeddings);
       for (var i = 0; i < 3; i++) {
         db.seed(id: 'r$i', summary: 'Memory $i', category: 'other');
       }
+      await db.upsert(
+        'r0',
+        Float32List(_LateDimensionsEmbeddings.known.dimensions)..[0] = 1,
+        _LateDimensionsEmbeddings.known,
+        clock.current,
+      );
 
       final count = await pipelineFor(ai)
           .reindexEmbeddings(budget: const Duration(minutes: 5));
 
-      expect(count, 3);
-      expect(embeddings.calls, 1);
+      expect(
+        count,
+        2,
+        reason: 'the model learns its dimensions before the missing query',
+      );
+      expect(embeddings.calls, 2, reason: 'one warm-up, then one batch');
       expect(await db.countFor(_LateDimensionsEmbeddings.known), 3);
       expect(await db.countFor(_LateDimensionsEmbeddings.unknown), 0);
     });

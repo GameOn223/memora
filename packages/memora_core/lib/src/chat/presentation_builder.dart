@@ -89,9 +89,12 @@ class PresentationBuilder {
     if (headline == null &&
         citedIds.length == 1 &&
         _valueQuestion.hasMatch(asked)) {
-      final values = await _search.attributeValues(citedIds, 'amount');
-      if (values.isNotEmpty) {
-        final value = values.first;
+      // The memory's main amount, so a receipt's subtotal never becomes the
+      // figure the answer leads with or the one checked against the image.
+      final value = preferredValue(
+        await _search.attributeValues(citedIds, 'amount'),
+      );
+      if (value != null) {
         headline = value.attribute.value;
         attribute = 'amount';
         source = HeadlineSource(

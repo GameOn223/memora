@@ -39,6 +39,9 @@ mixin FakeConversationStore on FakeMemoraState implements ConversationStore {
 
   @override
   Future<void> addMessage(ChatMessage message) async {
+    if (failAssistantMessages && message.role == MessageRole.assistant) {
+      throw StateError('database is locked');
+    }
     final conversation = conversationRows[message.conversationId];
     if (conversation == null) {
       throw StateError('No conversation ${message.conversationId}');

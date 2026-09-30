@@ -3,6 +3,7 @@ library;
 
 import '../model/retrieval.dart';
 import '../text/dates.dart';
+import '../text/money_format.dart';
 
 /// `1 memory` or `3 memories`.
 String memoriesCount(int count) => count == 1 ? '1 memory' : '$count memories';
@@ -59,6 +60,67 @@ Map<String, Object?> queryArguments(RetrievalQuery query) {
     }
   }
   return args;
+}
+
+/// The query in the words a person would use, such as
+/// `reliance, utility bills or invoices, over ₹2,000`. Null when the query
+/// asks for nothing in particular. A `within` restriction is left out, since
+/// "the memories we were looking at" is not worth reading back.
+String? describeForHumans(RetrievalQuery query) {
+  final parts = <String>[
+    if (query.hasText) query.text!.trim(),
+    for (final entity in query.entities) entity.value,
+    if (query.categories.isNotEmpty) _categories(query.categories),
+    for (final attribute in query.attributes) ?_attribute(attribute),
+    if (query.takenBetween case final range?) _dates(range),
+  ];
+  return parts.isEmpty ? null : parts.join(', ');
+}
+
+/// Categories in the order they were asked for, so the one the question
+/// meant first reads first.
+String _categories(Set<String> categories) =>
+    [for (final name in categories) '${name.replaceAll('_', ' ')}s']
+        .join(' or ');
+
+String? _attribute(AttributeFilter filter) {
+  final label = filter.type == 'amount' ? '' : '${_words(filter.type)} ';
+  String value(double v) => filter.type == 'amount' || filter.currency != null
+      ? formatMoney(v, filter.currency)
+      : formatNumber(v);
+  if (filter.min != null && filter.max != null) {
+    return '${label}between ${value(filter.min!)} and ${value(filter.max!)}';
+  }
+  if (filter.min != null) return '${label}over ${value(filter.min!)}';
+  if (filter.max != null) return '${label}under ${value(filter.max!)}';
+  if (filter.equals != null) return '$label${filter.equals}';
+  if (filter.dateRange case final range?) return '$label${_dates(range)}';
+  if (filter.currency != null) return 'in ${filter.currency}';
+  return null;
+}
+
+String _words(String type) => type.replaceAll('_', ' ');
+
+String _dates(DateRange range) {
+  final start = range.start;
+  final end = range.end;
+  if (start == null) return 'before ${displayDate(_lastDay(end!))}';
+  if (end == null) return 'since ${displayDate(start)}';
+  final last = _lastDay(end);
+  if (start == last) return 'on ${displayDate(start)}';
+  if (start.day == 1 &&
+      start.month == 1 &&
+      last.month == 12 &&
+      last.day == 31) {
+    return 'in ${start.year}';
+  }
+  if (start.day == 1 &&
+      last.month == start.month &&
+      last.year == start.year &&
+      last.day >= 28) {
+    return 'in ${displayMonth(start)}';
+  }
+  return 'from ${displayDate(start)} to ${displayDate(last)}';
 }
 
 /// A one-line description of a query for a result set, such as

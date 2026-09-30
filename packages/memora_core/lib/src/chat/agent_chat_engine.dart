@@ -14,6 +14,7 @@ import 'citations.dart';
 import 'deterministic_answerer.dart';
 import 'presentation_builder.dart';
 import 'query_labels.dart';
+import 'query_parser.dart';
 import 'system_prompt.dart';
 import 'tools/tool.dart';
 import 'tools/tool_registry.dart';
@@ -36,6 +37,7 @@ class AgentChatEngine implements ChatEngine {
     this._maxToolRounds = 6,
     this._localeTag = 'en-IN',
     this._defaultCurrency = 'INR',
+    this._parser = const QueryParser(),
   });
 
   /// How many earlier messages go into the prompt.
@@ -62,11 +64,12 @@ class AgentChatEngine implements ChatEngine {
   final int _maxToolRounds;
   final String _localeTag;
   final String _defaultCurrency;
+  final QueryParser _parser;
 
-  static final _followUp = RegExp(
-    r'^(which|what about|and |only |how many|of those|of them|highest|'
-    r'lowest|cheapest|the last one)|(?<![a-z])(of those|of them|among them)'
-    r'(?![a-z])',
+  static final _pointsBack = RegExp(
+    r'(?<![a-z])(of (?:those|them|these)|among (?:those|them|these)|'
+    r'from (?:those|them|these)|in (?:those|them|these)|those ones?|'
+    r'these ones?|that one|this one|the same(?: ones?)?)(?![a-z])',
   );
 
   @override
@@ -124,9 +127,16 @@ class AgentChatEngine implements ChatEngine {
     }
   }
 
-  /// True for a question that leans on the memories found last time.
-  static bool isFollowUp(String question) =>
-      _followUp.hasMatch(question.trim().toLowerCase());
+  /// True when a question leans on the memories found last time: it either
+  /// points back at them ("of those, which was highest?") or asks for
+  /// nothing new of its own ("which one was highest?").
+  ///
+  /// A question that brings its own words or filters, such as "how many
+  /// receipts do I have?", is a fresh search even right after another one.
+  static bool refersToEarlierResults(String question, ParsedQuery parsed) {
+    if (_pointsBack.hasMatch(question.trim().toLowerCase())) return true;
+    return !parsed.query.hasFilters && parsed.query.text == null;
+  }
 
   Stream<ChatProgress> _searchOnly(
     String conversationId,
@@ -136,7 +146,10 @@ class AgentChatEngine implements ChatEngine {
     Set<String>? within;
     if (focusMemoryId != null) {
       within = {focusMemoryId};
-    } else if (isFollowUp(question)) {
+    } else if (refersToEarlierResults(
+      question,
+      _parser.parse(question, now: _clock.now()),
+    )) {
       final active = await _conversations.latestResultSet(conversationId);
       if (active != null && active.memoryIds.isNotEmpty) {
         within = active.memoryIds.toSet();
@@ -147,6 +160,7 @@ class AgentChatEngine implements ChatEngine {
       retrieval: _retrieval,
       search: _search,
       clock: _clock,
+      parser: _parser,
     ).answer(question, within: within);
     for (final entry in answer.trace) {
       yield ChatToolUsed(entry);
@@ -203,13 +217,23 @@ class AgentChatEngine implements ChatEngine {
       router: _router,
     );
     final byName = {for (final tool in tools) tool.name: tool};
-    final context = ToolContext(
-      conversationId: conversationId,
-      now: _clock.now(),
-      conversations: _conversations,
-      ids: _ids,
-      messageId: assistantId,
-    );
+    // Each tool call gets its own timestamp, strictly after the one before,
+    // so two searches in the same turn can't tie and leave "the latest
+    // result set" ambiguous.
+    DateTime? stamped;
+    ToolContext nextContext() {
+      final now = _clock.now();
+      stamped = stamped == null || now.isAfter(stamped!)
+          ? now
+          : stamped!.add(const Duration(milliseconds: 1));
+      return ToolContext(
+        conversationId: conversationId,
+        now: stamped!,
+        conversations: _conversations,
+        ids: _ids,
+        messageId: assistantId,
+      );
+    }
 
     final trace = <ToolTraceEntry>[];
     final scores = <String, double>{};
@@ -218,6 +242,7 @@ class AgentChatEngine implements ChatEngine {
     AggregateOutcome? aggregate;
     var aggregateWasLast = false;
     String? answerText;
+    ChatMessage answered;
 
     try {
       final history = await _conversations.messages(conversationId);
@@ -264,7 +289,7 @@ class AgentChatEngine implements ChatEngine {
           final tool = byName[call.name];
           final result = tool == null
               ? ToolError('There is no tool called "${call.name}".')
-              : await tool.run(call.arguments, context);
+              : await tool.run(call.arguments, nextContext());
           final entry = ToolTraceEntry(
             tool: call.name,
             arguments: call.arguments,
@@ -303,6 +328,61 @@ class AgentChatEngine implements ChatEngine {
           }
         }
       }
+      var cited = <String>[];
+      if (answerText == null || answerText.isEmpty) {
+        final closest = lastHits.take(5).toList();
+        answerText = closest.isEmpty
+            ? 'I could not find an answer in your memories. Try asking in '
+                  'another way.'
+            : 'I could not settle on an answer, but these are the closest '
+                  'matches.';
+        cited = closest;
+      } else {
+        cited = await _existing(parseCitations(answerText));
+      }
+      if (cited.isEmpty && aggregate != null) {
+        cited = await _existing(aggregate.memoryIds);
+      }
+
+      final draft = await PresentationBuilder(_search).build(
+        question: question,
+        citedIds: cited,
+        aggregate: aggregate,
+        aggregateWasLast: aggregateWasLast,
+        sources: sources,
+      );
+      final verified =
+          await AnswerVerifier(
+            router: _router,
+            memories: _memories,
+            images: _images,
+            aiSettings: _aiSettings,
+          ).verify(
+            text: stripCitations(answerText),
+            presentation: draft.presentation,
+            source: draft.source,
+          );
+
+      answered = ChatMessage(
+        id: assistantId,
+        conversationId: conversationId,
+        role: MessageRole.assistant,
+        content: verified.text,
+        createdAt: _clock.now(),
+        references: [
+          for (var i = 0; i < cited.length && i < maxReferences; i++)
+            MessageReference(
+              memoryId: cited[i],
+              position: i,
+              relevance: scores[cited[i]],
+            ),
+        ],
+        toolTrace: trace,
+        presentation: verified.presentation,
+        provider: chat.provider.id,
+        model: chat.modelId,
+      );
+      await _conversations.addMessage(answered);
     } on AiException catch (e) {
       yield ChatFailed(
         _friendlyFailure(e, chat.provider.displayName),
@@ -310,66 +390,13 @@ class AgentChatEngine implements ChatEngine {
       );
       return;
     } on Object {
-      yield const ChatFailed('Something went wrong while answering it.');
+      // Building or saving the answer failed. The question stays saved, so
+      // the user can try again.
+      yield const ChatFailed('Something went wrong while answering that.');
       return;
     }
 
-    var cited = <String>[];
-    if (answerText == null || answerText.isEmpty) {
-      final closest = lastHits.take(5).toList();
-      answerText = closest.isEmpty
-          ? 'I could not find an answer in your memories. Try asking in '
-                'another way.'
-          : 'I could not settle on an answer, but these are the closest '
-                'matches.';
-      cited = closest;
-    } else {
-      cited = await _existing(parseCitations(answerText));
-    }
-    if (cited.isEmpty && aggregate != null) {
-      cited = await _existing(aggregate.memoryIds);
-    }
-
-    final draft = await PresentationBuilder(_search).build(
-      question: question,
-      citedIds: cited,
-      aggregate: aggregate,
-      aggregateWasLast: aggregateWasLast,
-      sources: sources,
-    );
-    final verified =
-        await AnswerVerifier(
-          router: _router,
-          memories: _memories,
-          images: _images,
-          aiSettings: _aiSettings,
-        ).verify(
-          text: stripCitations(answerText),
-          presentation: draft.presentation,
-          source: draft.source,
-        );
-
-    final message = ChatMessage(
-      id: assistantId,
-      conversationId: conversationId,
-      role: MessageRole.assistant,
-      content: verified.text,
-      createdAt: _clock.now(),
-      references: [
-        for (var i = 0; i < cited.length && i < maxReferences; i++)
-          MessageReference(
-            memoryId: cited[i],
-            position: i,
-            relevance: scores[cited[i]],
-          ),
-      ],
-      toolTrace: trace,
-      presentation: verified.presentation,
-      provider: chat.provider.id,
-      model: chat.modelId,
-    );
-    await _conversations.addMessage(message);
-    yield ChatAnswered(message);
+    yield ChatAnswered(answered);
   }
 
   /// Keeps only the ids that still name a memory, in the order given.

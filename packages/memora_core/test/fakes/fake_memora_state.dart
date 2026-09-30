@@ -93,6 +93,14 @@ abstract class FakeMemoraState {
   int _seq = 0;
   int version = 0;
 
+  /// Makes [MemoryStore.addProcessingRecord] throw, the way a database
+  /// locked by another engine would.
+  bool failProcessingRecords = false;
+
+  /// Makes saving an assistant message throw, to test what happens when the
+  /// database gives out at the end of a turn.
+  bool failAssistantMessages = false;
+
   int nextSeq() => ++_seq;
 
   void touch() => version++;

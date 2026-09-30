@@ -138,6 +138,48 @@ void main() {
       expect(toolResult.isError, isFalse);
     });
 
+    test('a second search in the same turn becomes the active set', () async {
+      final chat = ScriptedChatService([
+        toolTurn([
+          call('search_by_entity', {'value': 'Reliance'}),
+        ]),
+        toolTurn([
+          call('search_by_attribute', {
+            'type': 'amount',
+            'min': 1800,
+          }, id: 't2'),
+        ]),
+        toolTurn([
+          call('aggregate_results', {'op': 'count'}, id: 't3'),
+        ]),
+        answerTurn('Two of them are over ₹1,800.'),
+      ]);
+
+      final (events, conversation) = await ask(
+        await engineWith(await AiHarness.create(chat: chat)),
+        'how many reliance bills are over 1800?',
+      );
+
+      final message = (events.last as ChatAnswered).message;
+      expect(message.toolTrace.map((t) => t.summary), [
+        '3 candidates',
+        '2 candidates',
+        '2',
+      ]);
+      final active = (await db.latestResultSet(conversation.id))!;
+      expect(active.memoryIds, ['sep', 'aug']);
+
+      final sets = db.resultSetRows
+          .where((s) => s.conversationId == conversation.id)
+          .toList();
+      expect(sets, hasLength(2));
+      expect(
+        sets[1].createdAt.isAfter(sets[0].createdAt),
+        isTrue,
+        reason: 'a shared timestamp would leave the active set ambiguous',
+      );
+    });
+
     test('an aggregate answer is shown as a table', () async {
       final chat = ScriptedChatService([
         toolTurn([
@@ -168,6 +210,31 @@ void main() {
         '₹2,103',
       ]);
       expect(events.whereType<ChatToolUsed>(), hasLength(2));
+    });
+
+    test('the headline is the memory total, not a line item', () async {
+      db.seed(
+        id: 'store',
+        summary: 'Nature Basket receipt',
+        category: 'receipt',
+        takenAt: DateTime(2026, 9, 11),
+        attributes: [
+          amount(100, label: 'subtotal'),
+          amount(42, label: 'tax'),
+          amount(842),
+        ],
+      );
+      final chat = ScriptedChatService([
+        answerTurn('It came to ₹842 [[m:store]].'),
+      ]);
+
+      final (events, _) = await ask(
+        await engineWith(await AiHarness.create(chat: chat)),
+        'how much was the nature basket receipt?',
+      );
+
+      final presentation = (events.last as ChatAnswered).message.presentation!;
+      expect(presentation.headline, '₹842');
     });
 
     test('drops citations that name no memory', () async {
@@ -243,6 +310,21 @@ void main() {
       expect(saved.map((m) => m.role), [MessageRole.user]);
     });
 
+    test('a store failure while saving keeps the question', () async {
+      final chat = ScriptedChatService([answerTurn('Here you go.')]);
+      final engine = await engineWith(await AiHarness.create(chat: chat));
+      final conversation = await engine.startConversation(title: 'Bills');
+      db.failAssistantMessages = true;
+
+      final events = await engine.ask(conversation.id, 'anything?').toList();
+
+      expect(events.single, isA<ChatFailed>());
+      db.failAssistantMessages = false;
+      expect((await db.messages(conversation.id)).map((m) => m.role), [
+        MessageRole.user,
+      ]);
+    });
+
     test('a configuration failure is not retryable', () async {
       final chat = ScriptedChatService([
         const AiConfigurationException('key rejected'),
@@ -309,6 +391,21 @@ void main() {
       expect(message.content, contains('₹2,130'));
     });
 
+    test('a rambling observed value is not spliced in', () async {
+      final message = await answerWithVision([
+        const VerificationResult(
+          confirmed: false,
+          observedValue:
+              'I am not able to tell from this image, but the total near '
+              'the bottom might be ₹2,130 or maybe ₹2,180.',
+        ),
+      ]);
+
+      expect(message.presentation!.verification, VerificationState.none);
+      expect(message.presentation!.headline, '₹2,103');
+      expect(message.content, 'August was the highest at ₹2,103.');
+    });
+
     test('a failed check leaves the answer as it was', () async {
       final message = await answerWithVision([
         const AiTransientException('vision down'),
@@ -336,7 +433,10 @@ void main() {
       final (events, conversation) = await ask(engine, 'reliance bills');
 
       final message = (events.last as ChatAnswered).message;
-      expect(message.content, 'Found 3 memories.');
+      expect(
+        message.content,
+        'Found 3 memories matching reliance, utility bills or invoices.',
+      );
       expect(message.presentation!.searchOnly, isTrue);
       expect(message.provider, isNull);
       expect(message.references.map((r) => r.memoryId).toSet(), {
@@ -363,6 +463,46 @@ void main() {
         'Found 3 memories. The highest amount is ₹2,103 (Aug 2026).',
       );
       expect(message.presentation!.highlightMemoryId, 'aug');
+    });
+
+    test('a question with its own filters searches fresh', () async {
+      db.seed(
+        id: 'groceries',
+        summary: 'Grocery receipt from Nature Basket',
+        category: 'receipt',
+        takenAt: DateTime(2026, 9, 12),
+        attributes: [amount(842)],
+      );
+      final engine = await engineWith(await AiHarness.create());
+
+      final (_, conversation) = await ask(engine, 'reliance bills');
+      final events = await engine
+          .ask(conversation.id, 'how many receipts do i have?')
+          .toList();
+
+      final message = (events.last as ChatAnswered).message;
+      expect(message.content, 'Found 1 memory matching receipts.');
+      expect(message.references.single.memoryId, 'groceries');
+    });
+
+    test('a question that points back stays on the last results', () async {
+      db.seed(
+        id: 'mac',
+        summary: 'MacBook Air price comparison',
+        category: 'comparison',
+        takenAt: DateTime(2026, 9, 12),
+        attributes: [amount(124900)],
+      );
+      final engine = await engineWith(await AiHarness.create());
+
+      final (_, conversation) = await ask(engine, 'reliance bills');
+      final events = await engine
+          .ask(conversation.id, 'of those, how many are over ₹1,800?')
+          .toList();
+
+      final message = (events.last as ChatAnswered).message;
+      expect(message.content, 'Found 2 memories matching over ₹1,800.');
+      expect(message.references.map((r) => r.memoryId), ['sep', 'aug']);
     });
 
     test('a focused question only looks at that memory', () async {

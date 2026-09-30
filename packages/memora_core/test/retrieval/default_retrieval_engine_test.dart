@@ -200,6 +200,28 @@ void main() {
 
     expect(ids(result), ['sep', 'aug', 'jul']);
     expect(foundBy(result, 'jul'), {RetrievalStrategy.structured});
+    expect(
+      result.textMatched,
+      isFalse,
+      reason: 'the answer has to admit the words matched nothing',
+    );
+  });
+
+  test('a search whose words matched says so', () async {
+    final (retrieval, _) = await engine();
+
+    final matched = await retrieval.search(
+      const RetrievalQuery(categories: {'utility_bill'}, text: 'august'),
+    );
+    final empty = await retrieval.search(const RetrievalQuery(text: 'zebra'));
+
+    expect(matched.textMatched, isTrue);
+    expect(empty.hits, isEmpty);
+    expect(
+      empty.textMatched,
+      isTrue,
+      reason: 'with no filters there is nothing to fall back to',
+    );
   });
 
   test('respects the limit', () async {
@@ -245,5 +267,73 @@ void main() {
 
     expect(ids(result), ['flight', 'sep']);
     expect(result.strategiesUsed, {RetrievalStrategy.structured});
+  });
+
+  group('filters that match more memories than fit', () {
+    setUp(() {
+      // 600 receipts, and the one we want is the oldest of them, so it falls
+      // outside any "newest N" window.
+      for (var i = 0; i < 600; i++) {
+        db.seed(
+          id: 'r$i',
+          summary: i == 0
+              ? 'Kerosene lantern receipt'
+              : 'Grocery receipt number $i',
+          category: 'receipt',
+          takenAt: DateTime(2026, 1, 1).add(Duration(hours: i)),
+        );
+      }
+    });
+
+    test('stay hard constraints above the old 500 default', () async {
+      final ai = await AiHarness.create();
+      final retrieval = DefaultRetrievalEngine(
+        search: db,
+        vectors: db,
+        router: ai.router,
+      );
+
+      final result = await retrieval.search(
+        const RetrievalQuery(categories: {'receipt'}, text: 'kerosene'),
+      );
+
+      expect(ids(result), ['r0']);
+    });
+
+    test('are checked again after searching when they overflow', () async {
+      final ai = await AiHarness.create();
+      final retrieval = DefaultRetrievalEngine(
+        search: db,
+        vectors: db,
+        router: ai.router,
+        structuredLimit: 50,
+      );
+
+      final matching = await retrieval.search(
+        const RetrievalQuery(categories: {'receipt'}, text: 'kerosene'),
+      );
+      expect(ids(matching), ['r0']);
+      expect(foundBy(matching, 'r0'), contains(RetrievalStrategy.structured));
+
+      // The same words in a memory of another category must still be filtered
+      // out.
+      db.seed(
+        id: 'note',
+        summary: 'Kerosene lantern note',
+        category: 'document',
+        takenAt: DateTime(2026, 6, 1),
+      );
+      final filtered = await retrieval.search(
+        const RetrievalQuery(categories: {'receipt'}, text: 'kerosene'),
+      );
+      expect(ids(filtered), ['r0']);
+
+      // A query whose words match nothing still falls back to the filtered
+      // list rather than returning nothing.
+      final fallback = await retrieval.search(
+        const RetrievalQuery(categories: {'receipt'}, text: 'zebra', limit: 3),
+      );
+      expect(fallback.hits, hasLength(3));
+    });
   });
 }

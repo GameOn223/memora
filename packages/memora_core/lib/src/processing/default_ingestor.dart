@@ -41,11 +41,13 @@ class DefaultMemoryIngestor implements MemoryIngestor {
     ];
     final outcome = await _memories.insertCaptured(rows, _clock.now());
 
-    if (outcome.duplicates.isNotEmpty) {
+    final duplicatePaths = [for (final d in outcome.duplicates) d.imagePath];
+    if (duplicatePaths.isNotEmpty) {
       try {
-        await _images.delete([for (final d in outcome.duplicates) d.imagePath]);
-      } on Exception {
-        // Leftover copies only waste space; the import itself succeeded.
+        await _images.delete(duplicatePaths);
+      } on Object {
+        // Leftover copies only waste space, and the caller gets the paths
+        // back to clean up. The import itself succeeded.
       }
     }
 
@@ -57,7 +59,8 @@ class DefaultMemoryIngestor implements MemoryIngestor {
 
     return IngestReport(
       addedIds: outcome.insertedIds,
-      duplicateCount: outcome.duplicates.length,
+      duplicateCount: duplicatePaths.length,
+      duplicatePaths: duplicatePaths,
     );
   }
 
@@ -82,7 +85,8 @@ class DefaultMemoryIngestor implements MemoryIngestor {
       final path = await _images.createThumbnail(imagePath);
       await _memories.setThumbnail(id, path, _clock.now());
       return true;
-    } on Exception {
+    } on Object {
+      // A missing thumbnail shows as a placeholder and is retried later.
       return false;
     }
   }
