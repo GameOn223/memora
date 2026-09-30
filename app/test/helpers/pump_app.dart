@@ -49,6 +49,7 @@ Future<DemoAppServices> pumpApp(
   String? initialLocation,
   Brightness platformBrightness = Brightness.dark,
   List<Override> overrides = const [],
+  Widget Function(Widget app)? wrap,
 }) async {
   final demo = services ?? demoServices();
   tester.view
@@ -77,7 +78,9 @@ Future<DemoAppServices> pumpApp(
         ...overrides,
       ],
       retry: (_, _) => null,
-      child: MemoraApp(initialLocation: initialLocation),
+      child: wrap == null
+          ? MemoraApp(initialLocation: initialLocation)
+          : wrap(MemoraApp(initialLocation: initialLocation)),
     ),
   );
   await tester.pumpAndSettle();

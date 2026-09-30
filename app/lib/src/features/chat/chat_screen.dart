@@ -404,7 +404,14 @@ class _Composer extends StatelessWidget {
                       onSubmitted: (_) => onSend(),
                       cursorColor: c.accent,
                       style: MemoraText.style(13.5, color: c.text),
-                      decoration: InputDecoration.collapsed(
+                      decoration: InputDecoration(
+                        isDense: true,
+                        isCollapsed: true,
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
                         hintText: 'Ask something about your memories…',
                         hintStyle: MemoraText.style(13.5, color: c.dim),
                       ),

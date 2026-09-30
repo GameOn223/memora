@@ -43,9 +43,6 @@ class MemoryTile extends StatelessWidget {
       _ => 2.0,
     };
     final hasImage = memory.thumbnailPath != null;
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final cacheWidth = (MediaQuery.sizeOf(context).width / columns * dpr)
-        .round();
 
     return TapArea(
       onTap: onTap,
@@ -61,7 +58,7 @@ class MemoryTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            MemoryImageView(path: memory.thumbnailPath, cacheWidth: cacheWidth),
+            MemoryImageView(path: memory.thumbnailPath),
             if (columns == 2) ...[
               if (!hasImage && memory.category != null)
                 Positioned(

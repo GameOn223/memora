@@ -413,7 +413,6 @@ class _GalleryCell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
-    final gallery = ref.watch(appServicesProvider).gallery;
     return TapArea(
       onTap: onTap,
       semanticLabel: 'Image from ${dayLabel(image.takenAt, image.takenAt)}',
@@ -431,10 +430,7 @@ class _GalleryCell extends ConsumerWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            BytesImageView(
-              cacheKey: image.uri,
-              load: () => gallery.thumbnail(image.uri),
-            ),
+            DeviceImageView(uri: image.uri),
             if (selected)
               DecoratedBox(
                 decoration: const BoxDecoration(
@@ -454,7 +450,9 @@ class _GalleryCell extends ConsumerWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: selected ? c.accent : null,
+                  // A little scrim keeps the empty circle readable on top
+                  // of a bright screenshot.
+                  color: selected ? c.accent : c.scrim.withValues(alpha: 0.45),
                   border: Border.all(color: selected ? c.accent : c.muted),
                 ),
                 child: selected

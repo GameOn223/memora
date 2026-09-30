@@ -244,20 +244,35 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            MemoryImageView(
-                              path: memory.thumbnailPath,
-                              cacheWidth: 360,
-                            ),
+                            MemoryImageView(path: memory.thumbnailPath),
                             if (memory.category != null)
                               Positioned(
-                                left: 5,
-                                right: 5,
-                                bottom: 5,
-                                child: CapsLabel(
-                                  humanizeKey(memory.category!),
-                                  size: 7.5,
-                                  spacing: 0.8,
-                                  color: c.muted,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    5,
+                                    Space.s4,
+                                    5,
+                                    5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.topCenter,
+                                      colors: [
+                                        c.scrim,
+                                        c.scrim.withValues(alpha: 0),
+                                      ],
+                                    ),
+                                  ),
+                                  child: CapsLabel(
+                                    humanizeKey(memory.category!),
+                                    size: 7.5,
+                                    spacing: 0.8,
+                                    color: c.muted,
+                                  ),
                                 ),
                               ),
                           ],

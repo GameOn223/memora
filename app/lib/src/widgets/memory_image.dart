@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:memora_core/memora_core.dart';
 
+import '../services/app_services.dart';
 import '../state/services.dart';
 import 'striped_placeholder.dart';
 
@@ -27,22 +27,10 @@ class MemoraFileImage extends ImageProvider<MemoraFileImage> {
     ImageDecoderCallback decode,
   ) {
     return MultiFrameImageStreamCompleter(
-      codec: _load(key, decode),
+      codec: decodeBytes(key.files.readBytes(key.path), decode),
       scale: 1,
       debugLabel: key.path,
     );
-  }
-
-  Future<ui.Codec> _load(
-    MemoraFileImage key,
-    ImageDecoderCallback decode,
-  ) async {
-    final Uint8List bytes = await key.files.readBytes(key.path);
-    if (bytes.isEmpty) {
-      throw StateError('Image at ${key.path} is empty');
-    }
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    return decode(buffer);
   }
 
   @override
@@ -58,6 +46,53 @@ class MemoraFileImage extends ImageProvider<MemoraFileImage> {
   String toString() => 'MemoraFileImage($path)';
 }
 
+/// Loads a thumbnail for one device gallery image, cached by its uri.
+@immutable
+class DeviceThumbnailImage extends ImageProvider<DeviceThumbnailImage> {
+  const DeviceThumbnailImage(this.gallery, this.uri);
+
+  final GalleryService gallery;
+  final String uri;
+
+  @override
+  Future<DeviceThumbnailImage> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture(this);
+
+  @override
+  ImageStreamCompleter loadImage(
+    DeviceThumbnailImage key,
+    ImageDecoderCallback decode,
+  ) {
+    return MultiFrameImageStreamCompleter(
+      codec: decodeBytes(key.gallery.thumbnail(key.uri), decode),
+      scale: 1,
+      debugLabel: key.uri,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is DeviceThumbnailImage &&
+      identical(other.gallery, gallery) &&
+      other.uri == uri;
+
+  @override
+  int get hashCode => Object.hash(identityHashCode(gallery), uri);
+
+  @override
+  String toString() => 'DeviceThumbnailImage($uri)';
+}
+
+/// Turns loaded bytes into a codec, failing loudly on an empty file.
+Future<ui.Codec> decodeBytes(
+  Future<Uint8List> bytes,
+  ImageDecoderCallback decode,
+) async {
+  final data = await bytes;
+  if (data.isEmpty) throw StateError('The image is empty');
+  return decode(await ui.ImmutableBuffer.fromUint8List(data));
+}
+
 /// Shows a stored image, or diagonal stripes until it has loaded or when
 /// there is no image yet.
 class MemoryImageView extends ConsumerWidget {
@@ -67,7 +102,6 @@ class MemoryImageView extends ConsumerWidget {
     this.fit = BoxFit.cover,
     this.alignment = Alignment.topCenter,
     this.stripe = 6,
-    this.cacheWidth,
   });
 
   /// Relative path in app storage. Null shows the placeholder.
@@ -76,89 +110,56 @@ class MemoryImageView extends ConsumerWidget {
   final Alignment alignment;
   final double stripe;
 
-  /// Decode at this width in physical pixels to save memory in grids.
-  final int? cacheWidth;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final placeholder = StripedPlaceholder(stripe: stripe);
     final p = path;
-    if (p == null) return placeholder;
-    final files = ref.watch(appServicesProvider).images;
-    ImageProvider provider = MemoraFileImage(files, p);
-    if (cacheWidth != null) {
-      provider = ResizeImage(
-        provider,
-        width: cacheWidth,
-        policy: ResizeImagePolicy.fit,
-      );
-    }
-    return Image(
-      image: provider,
+    if (p == null) return StripedPlaceholder(stripe: stripe);
+    return ImageOrStripes(
+      image: MemoraFileImage(ref.watch(appServicesProvider).images, p),
       fit: fit,
       alignment: alignment,
-      width: double.infinity,
-      height: double.infinity,
-      gaplessPlayback: true,
-      excludeFromSemantics: true,
-      frameBuilder: (context, child, frame, sync) {
-        if (frame == null && !sync) return placeholder;
-        return child;
-      },
-      errorBuilder: (context, error, stack) => placeholder,
+      stripe: stripe,
     );
   }
 }
 
-/// Shows raw image bytes loaded on demand, such as gallery thumbnails.
-class BytesImageView extends StatefulWidget {
-  const BytesImageView({super.key, required this.load, this.cacheKey});
+/// Shows a gallery image on the Add screen.
+class DeviceImageView extends ConsumerWidget {
+  const DeviceImageView({super.key, required this.uri});
 
-  final Future<Uint8List> Function() load;
-
-  /// Changes when a different image should be loaded.
-  final Object? cacheKey;
+  final String uri;
 
   @override
-  State<BytesImageView> createState() => _BytesImageViewState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ImageOrStripes(
+      image: DeviceThumbnailImage(ref.watch(appServicesProvider).gallery, uri),
+    );
+  }
 }
 
-class _BytesImageViewState extends State<BytesImageView> {
-  Uint8List? _bytes;
+/// An image that falls back to the striped placeholder while it loads and
+/// when it cannot be read.
+class ImageOrStripes extends StatelessWidget {
+  const ImageOrStripes({
+    super.key,
+    required this.image,
+    this.fit = BoxFit.cover,
+    this.alignment = Alignment.topCenter,
+    this.stripe = 6,
+  });
 
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_fetch());
-  }
-
-  @override
-  void didUpdateWidget(BytesImageView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.cacheKey != widget.cacheKey) {
-      _bytes = null;
-      unawaited(_fetch());
-    }
-  }
-
-  Future<void> _fetch() async {
-    try {
-      final bytes = await widget.load();
-      if (mounted && bytes.isNotEmpty) setState(() => _bytes = bytes);
-    } on Object {
-      // Keep the placeholder.
-    }
-  }
+  final ImageProvider image;
+  final BoxFit fit;
+  final Alignment alignment;
+  final double stripe;
 
   @override
   Widget build(BuildContext context) {
-    const placeholder = StripedPlaceholder();
-    final bytes = _bytes;
-    if (bytes == null) return placeholder;
-    return Image.memory(
-      bytes,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
+    final placeholder = StripedPlaceholder(stripe: stripe);
+    return Image(
+      image: image,
+      fit: fit,
+      alignment: alignment,
       width: double.infinity,
       height: double.infinity,
       gaplessPlayback: true,

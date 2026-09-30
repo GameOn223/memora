@@ -16,8 +16,8 @@ void main() {
     expect(find.text('Add from gallery'), findsOneWidget);
     expect(find.text('Select images to add'), findsOneWidget);
 
-    await tester.tap(find.byType(BytesImageView).first);
-    await tester.tap(find.byType(BytesImageView).at(1));
+    await tester.tap(find.byType(DeviceImageView).first);
+    await tester.tap(find.byType(DeviceImageView).at(1));
     await tester.pumpAndSettle();
 
     expect(find.text('Add 2 images'), findsOneWidget);

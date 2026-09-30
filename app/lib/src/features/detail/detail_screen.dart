@@ -174,11 +174,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            MemoryImageView(
-                              path: memory.imagePath,
-                              stripe: 7,
-                              cacheWidth: 1080,
-                            ),
+                            MemoryImageView(path: memory.imagePath, stripe: 7),
                             Positioned(
                               left: 0,
                               right: 0,
@@ -186,7 +182,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                               child: Container(
                                 padding: const EdgeInsets.fromLTRB(
                                   Space.s4,
-                                  Space.s6,
+                                  Space.s8,
                                   Space.s4,
                                   Space.s4,
                                 ),
@@ -196,8 +192,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                     end: Alignment.topCenter,
                                     colors: [
                                       c.scrim,
+                                      c.scrim,
                                       c.scrim.withValues(alpha: 0),
                                     ],
+                                    stops: const [0, 0.5, 1],
                                   ),
                                 ),
                                 child: CapsLabel(

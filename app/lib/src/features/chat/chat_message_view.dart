@@ -293,7 +293,6 @@ class _SourceStrip extends StatelessWidget {
                       ),
                       child: MemoryImageView(
                         path: details.memory.thumbnailPath,
-                        cacheWidth: 240,
                       ),
                     ),
                   ),

@@ -51,7 +51,13 @@ class SettingsRow extends StatelessWidget {
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: Space.s1),
-                  CapsLabel(subtitle!, size: 10, spacing: 0.7),
+                  CapsLabel(
+                    subtitle!,
+                    size: 10,
+                    spacing: 0.7,
+                    height: 1.4,
+                    maxLines: 2,
+                  ),
                 ],
               ],
             ),

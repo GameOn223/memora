@@ -464,10 +464,7 @@ class _QueueRow extends StatelessWidget {
               height: 38,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(Radii.sm),
-                child: MemoryImageView(
-                  path: memory.thumbnailPath,
-                  cacheWidth: 120,
-                ),
+                child: MemoryImageView(path: memory.thumbnailPath),
               ),
             ),
             const SizedBox(width: Space.s4),

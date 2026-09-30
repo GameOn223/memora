@@ -74,7 +74,9 @@ GoRouter buildRouter({String initialLocation = Routes.home}) {
       GoRoute(
         path: Routes.onboarding,
         name: 'onboarding',
-        pageBuilder: (context, state) => _flat(state, const OnboardingScreen()),
+        // Outside the shell, so it brings its own Material surface.
+        pageBuilder: (context, state) =>
+            _flat(state, _surface(const OnboardingScreen())),
       ),
       GoRoute(
         path: '/memory/:id',
