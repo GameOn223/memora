@@ -8,11 +8,13 @@ class DateRange {
   const DateRange({this.start, this.end})
     : assert(start != null || end != null, 'A range needs at least one bound');
 
-  /// A whole calendar day in local time.
-  factory DateRange.day(DateTime day) {
-    final start = DateTime(day.year, day.month, day.day);
-    return DateRange(start: start, end: start.add(const Duration(days: 1)));
-  }
+  /// A whole calendar day in local time. Built from calendar fields rather
+  /// than by adding 24 hours, so a day that gains or loses an hour to
+  /// daylight saving still ends at the next midnight.
+  factory DateRange.day(DateTime day) => DateRange(
+    start: DateTime(day.year, day.month, day.day),
+    end: DateTime(day.year, day.month, day.day + 1),
+  );
 
   /// A whole calendar month in local time.
   factory DateRange.month(int year, int month) =>
@@ -205,6 +207,7 @@ class MemoryCard {
     this.category,
     this.thumbnailPath,
     this.facts = const {},
+    this.entities = const [],
   });
 
   final String id;
@@ -216,6 +219,11 @@ class MemoryCard {
 
   /// Key attributes as display strings, for example `{'amount': '₹1,842'}`.
   final Map<String, String> facts;
+
+  /// Entity values seen in the image, such as `['Reliance']`, used for exact
+  /// name matches while reranking. A store that leaves this empty only loses
+  /// that signal.
+  final List<String> entities;
 
   Map<String, Object?> toToolJson() => {
     'id': id,
