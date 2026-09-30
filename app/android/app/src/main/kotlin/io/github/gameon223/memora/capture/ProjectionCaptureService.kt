@@ -122,9 +122,10 @@ class ProjectionCaptureService : Service() {
                     Bitmap.createBitmap(full, 0, 0, image.width, image.height).also { full.recycle() }
                 }
             }
-        } catch (error: IllegalStateException) {
-            null
-        } catch (error: IllegalArgumentException) {
+        } catch (error: RuntimeException) {
+            // copyPixelsFromBuffer throws a bare RuntimeException when the
+            // buffer is short, and this runs on a handler thread where that
+            // would take the process down.
             null
         }
         stopEverything()

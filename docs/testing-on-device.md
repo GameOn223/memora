@@ -29,10 +29,12 @@ Record the device model and Android version with your results. Where behavior di
 - [ ] Settings, capture section: "Add tile" puts the Memora tile in the shade on Android 13 or newer. On older versions, add it by hand from the shade editor.
 - [ ] Tap the tile with accessibility capture off: Android asks for screen capture consent. Accept. A "Saved to Memora" notification appears, then "Filed in Memora", and the screenshot shows up in Memories.
 - [ ] Tap the tile and cancel the consent dialog: a "Capture cancelled" notification appears and nothing is saved.
-- [ ] Turn on "Memora capture" in Accessibility settings, then tap the tile: the shade closes, no dialog appears, and the screenshot is saved.
+- [ ] "Memora capture" appears in Accessibility settings at all. Turn it on, then tap the tile: the shade closes, no dialog appears, and the screenshot is saved.
 - [ ] Check the accessibility entry's description in system settings. It explains that the service only takes a screenshot when you tap the tile.
+- [ ] Tap the tile twice in a row with accessibility capture on. The second tap runs into the system's one-per-second limit and falls back to the consent dialog instead of failing quietly.
 - [ ] Tap the tile while Memora is closed. The capture still lands in Memories the next time you open the app, or sooner through the background worker.
-- [ ] Turn notifications off for Memora, then capture. The image is still saved, and no notification appears.
+- [ ] Turn notifications off for Memora, then capture. The image is still saved and a toast says so, so a capture is never silent.
+- [ ] Kill the app (`adb shell am force-stop io.github.gameon223.memora`) right after a capture, before it is filed. The next launch files it, and the image appears once, not twice.
 
 ## Share to Memora
 

@@ -30,10 +30,18 @@ class CaptureTrampolineActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
 
-        val service = CaptureAccessibilityService.instance
+        // This activity paints nothing, so a screenshot taken while it is on
+        // top still shows what was on screen when the tile was tapped.
+        val service = CaptureAccessibilityService.screenshotService()
         if (service != null) {
-            service.captureAfter(SHADE_CLOSE_DELAY_MILLIS)
-            finish()
+            service.captureAfter(SHADE_CLOSE_DELAY_MILLIS) { captured ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    // A refused or rate limited screenshot still gets saved,
+                    // through the path that asks for consent.
+                    if (captured) finish() else requestProjection()
+                }
+            }
             return
         }
         requestProjection()

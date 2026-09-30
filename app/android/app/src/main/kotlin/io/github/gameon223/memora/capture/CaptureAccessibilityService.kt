@@ -46,40 +46,49 @@ class CaptureAccessibilityService : AccessibilityService() {
         // Nothing to interrupt: the service only reacts to the tile.
     }
 
-    /** Waits for the shade to close, then captures the screen. */
-    fun captureAfter(delayMillis: Long) {
-        handler.postDelayed({ capture() }, delayMillis)
-    }
-
-    private fun capture() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            Notifications.captureFailed(this, getString(R.string.capture_failed_generic))
+    /**
+     * Waits for the shade to close, then captures the screen. [onResult] is
+     * false when this path can't deliver a screenshot, for example when the
+     * system is still rate limiting the previous one, so the caller can fall
+     * back to MediaProjection.
+     */
+    fun captureAfter(delayMillis: Long, onResult: (Boolean) -> Unit) {
+        if (!canScreenshot) {
+            onResult(false)
             return
         }
-        takeScreenshot(
-            Display.DEFAULT_DISPLAY,
-            mainExecutor,
-            object : AccessibilityService.TakeScreenshotCallback {
-                override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                    val bitmap = toSoftwareBitmap(screenshot)
-                    if (bitmap == null) {
-                        Notifications.captureFailed(
-                            this@CaptureAccessibilityService,
-                            getString(R.string.capture_failed_generic),
-                        )
-                        return
-                    }
-                    save(bitmap)
-                }
+        handler.postDelayed({ capture(onResult) }, delayMillis)
+    }
 
-                override fun onFailure(errorCode: Int) {
-                    Notifications.captureFailed(
-                        this@CaptureAccessibilityService,
-                        getString(R.string.capture_failed_generic),
-                    )
-                }
-            },
-        )
+    private fun capture(onResult: (Boolean) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            onResult(false)
+            return
+        }
+        try {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                        val bitmap = toSoftwareBitmap(screenshot)
+                        if (bitmap == null) {
+                            onResult(false)
+                            return
+                        }
+                        onResult(true)
+                        save(bitmap)
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        // Usually the one-per-second limit after a double tap.
+                        onResult(false)
+                    }
+                },
+            )
+        } catch (error: RuntimeException) {
+            onResult(false)
+        }
     }
 
     private fun toSoftwareBitmap(screenshot: AccessibilityService.ScreenshotResult): Bitmap? = try {
@@ -119,5 +128,12 @@ class CaptureAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: CaptureAccessibilityService? = null
             private set
+
+        /** Screenshots through accessibility need Android 11. */
+        val canScreenshot: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+        /** The service that can take a screenshot right now, if any. */
+        fun screenshotService(): CaptureAccessibilityService? =
+            if (canScreenshot) instance else null
     }
 }
