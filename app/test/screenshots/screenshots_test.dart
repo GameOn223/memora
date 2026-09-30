@@ -116,9 +116,9 @@ void main() {
     await shoot(tester, '09-browser');
   });
 
-  testWidgets('home at eight columns', (tester) async {
+  testWidgets('home at four columns', (tester) async {
     final services = demoServices();
-    await services.preferences.setGridColumns(8);
+    await services.preferences.setGridColumns(4);
     await open(tester, Routes.home, services: services);
     await shoot(tester, '10-home-dense');
   });
