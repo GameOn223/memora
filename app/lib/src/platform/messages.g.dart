@@ -490,6 +490,7 @@ class CaptureStatus {
 /// A capture or share waiting in `files/inbox/`.
 class InboxItem {
   InboxItem({
+    required this.id,
     required this.relativePath,
     required this.source,
     required this.capturedAtMillis,
@@ -499,6 +500,10 @@ class InboxItem {
     required this.height,
     required this.byteSize,
   });
+
+  /// Inbox id, passed back to [CaptureHostApi.confirmInbox] once the memory
+  /// row exists.
+  String id;
 
   String relativePath;
 
@@ -519,6 +524,7 @@ class InboxItem {
 
   List<Object?> _toList() {
     return <Object?>[
+      id,
       relativePath,
       source,
       capturedAtMillis,
@@ -537,14 +543,15 @@ class InboxItem {
   static InboxItem decode(Object result) {
     result as List<Object?>;
     return InboxItem(
-      relativePath: result[0]! as String,
-      source: result[1]! as String,
-      capturedAtMillis: result[2]! as int,
-      sha256: result[3]! as String,
-      mimeType: result[4]! as String,
-      width: result[5]! as int,
-      height: result[6]! as int,
-      byteSize: result[7]! as int,
+      id: result[0]! as String,
+      relativePath: result[1]! as String,
+      source: result[2]! as String,
+      capturedAtMillis: result[3]! as int,
+      sha256: result[4]! as String,
+      mimeType: result[5]! as String,
+      width: result[6]! as int,
+      height: result[7]! as int,
+      byteSize: result[8]! as int,
     );
   }
 
@@ -557,7 +564,8 @@ class InboxItem {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(relativePath, other.relativePath) &&
+    return _deepEquals(id, other.id) &&
+        _deepEquals(relativePath, other.relativePath) &&
         _deepEquals(source, other.source) &&
         _deepEquals(capturedAtMillis, other.capturedAtMillis) &&
         _deepEquals(sha256, other.sha256) &&
@@ -573,7 +581,7 @@ class InboxItem {
 
   @override
   String toString() {
-    return 'InboxItem(relativePath: $relativePath, source: $source, capturedAtMillis: $capturedAtMillis, sha256: $sha256, mimeType: $mimeType, width: $width, height: $height, byteSize: $byteSize)';
+    return 'InboxItem(id: $id, relativePath: $relativePath, source: $source, capturedAtMillis: $capturedAtMillis, sha256: $sha256, mimeType: $mimeType, width: $width, height: $height, byteSize: $byteSize)';
   }
 }
 
@@ -1232,8 +1240,9 @@ class CaptureHostApi {
     return pigeonVar_replyValue! as bool;
   }
 
-  /// Moves inbox files into `originals/` and returns their facts. Items
-  /// returned here are removed from the inbox.
+  /// Moves inbox files into `originals/` and returns their facts. Items stay
+  /// in the inbox until [confirmInbox] acknowledges them, so a capture
+  /// survives a worker that is stopped halfway.
   Future<List<InboxItem>> drainInbox() async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.memora.CaptureHostApi.drainInbox$pigeonVar_messageChannelSuffix';
@@ -1251,6 +1260,28 @@ class CaptureHostApi {
       isNullValid: false,
     );
     return (pigeonVar_replyValue! as List<Object?>).cast<InboxItem>();
+  }
+
+  /// Drops inbox entries whose memories now exist. Anything left unconfirmed
+  /// is offered again by the next [drainInbox].
+  Future<void> confirmInbox(List<String> ids) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.CaptureHostApi.confirmInbox$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[ids],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 }
 
@@ -1457,6 +1488,28 @@ class BackgroundHostApi {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// The entrypoint could not build its services. Ends the worker right away
+  /// instead of waiting for the readiness timeout.
+  Future<void> backgroundFailed(String message) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.BackgroundHostApi.backgroundFailed$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[message],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(

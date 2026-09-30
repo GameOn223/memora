@@ -147,6 +147,7 @@ class CaptureStatus {
 /// A capture or share waiting in `files/inbox/`.
 class InboxItem {
   InboxItem({
+    required this.id,
     required this.relativePath,
     required this.source,
     required this.capturedAtMillis,
@@ -157,6 +158,9 @@ class InboxItem {
     required this.byteSize,
   });
 
+  /// Inbox id, passed back to [CaptureHostApi.confirmInbox] once the memory
+  /// row exists.
+  String id;
   String relativePath;
 
   /// `tile` or `share`.
@@ -182,10 +186,16 @@ abstract class CaptureHostApi {
   @async
   bool requestNotificationPermission();
 
-  /// Moves inbox files into `originals/` and returns their facts. Items
-  /// returned here are removed from the inbox.
+  /// Moves inbox files into `originals/` and returns their facts. Items stay
+  /// in the inbox until [confirmInbox] acknowledges them, so a capture
+  /// survives a worker that is stopped halfway.
   @async
   List<InboxItem> drainInbox();
+
+  /// Drops inbox entries whose memories now exist. Anything left unconfirmed
+  /// is offered again by the next [drainInbox].
+  @async
+  void confirmInbox(List<String> ids);
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +258,10 @@ abstract class BackgroundFlutterApi {
 @HostApi()
 abstract class BackgroundHostApi {
   void backgroundReady();
+
+  /// The entrypoint could not build its services. Ends the worker right away
+  /// instead of waiting for the readiness timeout.
+  void backgroundFailed(String message);
 }
 
 // ---------------------------------------------------------------------------
