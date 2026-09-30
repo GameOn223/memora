@@ -15,7 +15,13 @@ import 'src/services/app_services.dart';
 Future<void> backgroundMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await runBackground(createBackgroundServices);
+    await runBackground(
+      createBackgroundServices,
+      // The engine is destroyed once the worker's call returns, and that
+      // leaves the database connection and the HTTP client open. Close them
+      // while there is still an isolate to close them from.
+      onFinished: disposeMemoraServices,
+    );
   } catch (error, stack) {
     // Fail the worker now instead of letting it wait out the readiness
     // timeout, and leave something in the log to act on.
