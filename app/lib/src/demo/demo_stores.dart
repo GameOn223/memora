@@ -465,7 +465,10 @@ class DemoQueueStore implements QueueStore {
   }
 
   @override
-  Future<List<QueueItem>> queueItems({int recentLimit = 20}) async {
+  Future<List<QueueItem>> queueItems({
+    int recentLimit = 20,
+    int waitingLimit = 200,
+  }) async {
     final all = db.memories.values;
     final processing =
         all.where((m) => m.status == ProcessingStatus.processing).toList()
@@ -483,9 +486,10 @@ class DemoQueueStore implements QueueStore {
           ..sort((a, b) => b.processedAt!.compareTo(a.processedAt!));
     return [
       for (final m in processing) QueueItem(memory: m, position: null),
-      for (final (i, m) in _waiting.indexed)
+      for (final (i, m) in _waiting.take(waitingLimit).indexed)
         QueueItem(memory: m, position: i + 1),
-      for (final m in failed) QueueItem(memory: m, position: null),
+      for (final m in failed.take(waitingLimit))
+        QueueItem(memory: m, position: null),
       for (final m in done.take(recentLimit))
         QueueItem(memory: m, position: null),
     ];
