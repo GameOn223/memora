@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No event types and no window content: this service exists only so the
+     Memora tile can take a screenshot when you tap it. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_description"
+    android:summary="@string/accessibility_summary"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="0"
+    android:canRetrieveWindowContent="false"
+    android:canTakeScreenshot="true"
+    android:isAccessibilityTool="false" />

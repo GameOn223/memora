@@ -1,0 +1,36 @@
+name: memora
+description: Memora, an open-source visual memory for Android.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+
+dependencies:
+  archive: ^4.3.0
+  crypto: ^3.0.7
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  go_router: ^18.0.1
+  http: ^1.6.0
+  memora_core:
+    path: ../packages/memora_core
+  memora_database:
+    path: ../packages/memora_database
+  memora_providers:
+    path: ../packages/memora_providers
+  path_provider: ^2.1.6
+  phosphor_flutter: ^2.1.0
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  pigeon: ^29.0.1
+
+flutter:
+  uses-material-design: true

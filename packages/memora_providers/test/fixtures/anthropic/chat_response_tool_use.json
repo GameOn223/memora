@@ -1,0 +1,29 @@
+{
+  "id": "msg_01Tq7mXc4",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5",
+  "content": [
+    {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "EqQBCkYIBxgCKkAsig0123456789"
+    },
+    { "type": "text", "text": "I'll find the highest amount." },
+    {
+      "type": "tool_use",
+      "id": "toolu_01Xk2m9aggr",
+      "name": "aggregate_results",
+      "input": { "attribute": "amount", "op": "max" }
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_01Yq7p1getm",
+      "name": "get_memory",
+      "input": { "id": "m1" }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 830, "output_tokens": 96 }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "msg_01Tx9nYd5",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-4-5",
+  "content": [
+    { "type": "text", "text": "Your priciest Swiggy order was ₹702 " },
+    { "type": "text", "text": "from Meghana Foods [[m:m7]]." }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 1200, "output_tokens": 22 }
+}

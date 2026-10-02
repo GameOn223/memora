@@ -1,0 +1,7 @@
+{
+  "rankings": [
+    { "index": 2, "logit": 4.74609375 },
+    { "index": 0, "logit": 3.1640625 },
+    { "index": 1, "logit": -9.3984375 }
+  ]
+}

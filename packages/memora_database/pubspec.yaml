@@ -1,0 +1,17 @@
+name: memora_database
+description: SQLite storage for Memora with FTS5 search, vector search and versioned migrations.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+dependencies:
+  memora_core:
+    path: ../memora_core
+  path: ^1.9.1
+  sqlite3: ^3.6.0
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.31.1

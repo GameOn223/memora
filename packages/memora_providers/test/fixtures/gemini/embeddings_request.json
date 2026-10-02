@@ -1,0 +1,16 @@
+{
+  "requests": [
+    {
+      "model": "models/gemini-embedding-001",
+      "content": { "parts": [{ "text": "Airtel bill" }] },
+      "taskType": "RETRIEVAL_DOCUMENT",
+      "outputDimensionality": 768
+    },
+    {
+      "model": "models/gemini-embedding-001",
+      "content": { "parts": [{ "text": "IndiGo boarding pass" }] },
+      "taskType": "RETRIEVAL_DOCUMENT",
+      "outputDimensionality": 768
+    }
+  ]
+}

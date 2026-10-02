@@ -212,16 +212,21 @@ UPDATE memories
 SET status = 'processing', lease_until = :now + 600000, attempts = attempts + 1
 WHERE id = (
   SELECT id FROM memories
-  WHERE status IN ('captured', 'reprocessing')
+  WHERE (
+      status IN ('captured', 'reprocessing')
+      OR (status = 'processing' AND (lease_until IS NULL OR lease_until < :now))
+    )
     AND (lease_until IS NULL OR lease_until < :now)
     AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
-  ORDER BY taken_at ASC
+  ORDER BY taken_at ASC, seq ASC
   LIMIT 1
 )
 RETURNING id;
 ```
 
-Order is oldest taken first, as shown on the queue screen. A lease that expires (the worker was killed) makes the row claimable again.
+Order is oldest taken first, as shown on the queue screen. A `processing` row whose lease has expired is claimable again, which is how a memory recovers when the worker holding it was killed. Nothing else can pick up a row while its lease is live.
+
+The calls that finish an item (`markReady`, `markFailed`, `releaseForRetry`, `releaseWithoutAttempt`) only apply while the memory is still `processing`. A worker that lost its lease and finished late can't undo the work of the worker that took over.
 
 ### 5.3 Pipeline steps
 
@@ -239,7 +244,7 @@ Errors are classified by the provider layer:
 
 | Error kind | Example | What happens |
 |------------|---------|--------------|
-| Transient | timeout, 429, 5xx | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After 3 attempts, `FAILED`. |
+| Transient | timeout, 429, 5xx | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After the fourth attempt, `FAILED`. |
 | Configuration | 401, 403, missing key, model not found | Row goes back to `CAPTURED` with no attempt used. The whole queue pauses with a message like "Check your NVIDIA key". |
 | Content | provider refused the image, unreadable file | `FAILED` right away with the reason. |
 
@@ -290,7 +295,7 @@ All timestamps are UTC milliseconds since the epoch. Dates that come from image 
 
 **embeddings**: `id`, `memory_id`, `vector` BLOB (little-endian float32, L2-normalized), `model_id`, `model_version`, `dimensions`, `created_at`. Unique on `(memory_id, model_id, model_version)`.
 
-**memories_fts**: FTS5 table with columns `summary`, `extracted_text`, `visual_description`, `keywords`, `entities`, using the `unicode61 remove_diacritics 2` tokenizer. Its `rowid` is `memories.seq`, which an explicit `INTEGER PRIMARY KEY` keeps stable across `VACUUM`. The storage layer updates it inside the same transaction that writes AI output, so the index can't drift from the data.
+**memories_fts**: FTS5 table with columns `summary`, `extracted_text`, `visual_description`, `keywords`, `entities`, using the `unicode61 remove_diacritics 2 categories 'L* N* Co Mc Mn'` tokenizer. `remove_diacritics 2` means Café is found by cafe. The categories add the combining marks that Indic scripts write vowels with, without which बिजली is indexed as the fragments ब, जल and ल. User text is tokenized the same way before it reaches `MATCH`. Changing these settings later needs a migration that rebuilds the index, so they're worth getting right now. The `rowid` is `memories.seq`, which an explicit `INTEGER PRIMARY KEY` keeps stable across `VACUUM`. The storage layer updates it inside the same transaction that writes AI output, so the index can't drift from the data.
 
 **conversations**: `id`, `title`, `created_at`, `updated_at`.
 
@@ -467,11 +472,11 @@ The chat agent sees these tools. Each one has a JSON schema, validates its argum
 | `search_semantic` | Vector search only. |
 | `search_by_date` | Memories taken in a date range. |
 | `search_by_entity` | Memories mentioning an entity. |
-| `search_by_attribute` | Memories with an attribute in a range or equal to a value. |
+| `search_by_attribute` | Memories with an attribute of a type, optionally narrowed by a numeric range, a currency, a date range, or an exact value match. |
 | `get_memory` | Full details for one memory. |
-| `get_related_memories` | Nearest neighbours of a memory by vector, plus shared entities. |
+| `get_related_memories` | Nearest neighbours of a memory by vector, plus memories sharing its entities. The memory itself is never returned. |
 | `filter_results` | Narrow the active result set with the same filters as `search_metadata`. |
-| `aggregate_results` | `max`, `min`, `sum`, `avg` or `count` over an attribute in the active result set. |
+| `aggregate_results` | `max`, `min`, `sum`, `avg`, `count` or `latest` over an attribute in the active result set. Values in a minority currency are skipped and reported. |
 
 Every search tool stores its hits as a new result set and returns the set id plus compact cards (id, taken date, summary, category, key attributes). Full extracted text is only returned by `get_memory`, which keeps prompts small.
 
