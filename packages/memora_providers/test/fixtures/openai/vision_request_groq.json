@@ -1,0 +1,19 @@
+{
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+  "messages": [
+    { "role": "system", "content": "<analyze_instructions>" },
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Extract the memory data for this image." },
+        {
+          "type": "image_url",
+          "image_url": { "url": "data:image/png;base64,iVBORw0KGgo=" }
+        }
+      ]
+    }
+  ],
+  "temperature": 0.1,
+  "response_format": { "type": "json_object" },
+  "max_tokens": 4096
+}

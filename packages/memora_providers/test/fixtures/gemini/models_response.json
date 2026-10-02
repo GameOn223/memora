@@ -1,0 +1,25 @@
+{
+  "models": [
+    {
+      "name": "models/gemini-2.5-flash",
+      "version": "001",
+      "displayName": "Gemini 2.5 Flash",
+      "inputTokenLimit": 1048576,
+      "outputTokenLimit": 65536,
+      "supportedGenerationMethods": ["generateContent", "countTokens", "createCachedContent", "batchGenerateContent"]
+    },
+    {
+      "name": "models/gemini-embedding-001",
+      "version": "001",
+      "displayName": "Gemini Embedding 001",
+      "supportedGenerationMethods": ["embedContent", "countTextTokens", "countTokens", "asyncBatchEmbedContent"]
+    },
+    {
+      "name": "models/gemini-2.5-flash-lite",
+      "version": "001",
+      "displayName": "Gemini 2.5 Flash-Lite",
+      "supportedGenerationMethods": ["generateContent", "countTokens"]
+    }
+  ],
+  "nextPageToken": "Chdtb2RlbHMvZ2VtaW5pLTIuNS1wcm8"
+}
