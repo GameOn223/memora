@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Memora</string>
+
+    <string name="channel_capture">Captures</string>
+    <string name="channel_capture_description">Confirms when a screenshot or shared image is saved.</string>
+    <string name="channel_processing">Background processing</string>
+    <string name="channel_processing_description">Shown while Memora files and understands images in the background.</string>
+
+    <string name="tile_label">Memora</string>
+    <string name="tile_subtitle">Save screen</string>
+
+    <string name="accessibility_label">Memora capture</string>
+    <string name="accessibility_summary">Takes a screenshot only when you tap the Memora tile.</string>
+    <string name="accessibility_description">Memora uses this service for one thing: when you tap the Memora tile in Quick Settings, it saves a screenshot of the current screen to Memora. The service doesn\'t receive accessibility events or read window content, and it never takes a screenshot unless you tap the tile.</string>
+
+    <string name="capture_saved">Saved to Memora</string>
+    <string name="capture_filed">Filed in Memora</string>
+    <string name="capture_cancelled">Capture cancelled</string>
+    <string name="capture_failed_title">Couldn\'t save the screen</string>
+    <string name="capture_failed_generic">Something went wrong while taking the screenshot. Try again.</string>
+    <string name="capturing">Capturing the screen</string>
+
+    <string name="share_saved_one">Saved 1 image to Memora</string>
+    <string name="share_saved_many">Saved %1$d images to Memora</string>
+    <string name="share_nothing">Nothing to save. Memora only accepts images.</string>
+
+    <string name="processing">Understanding images</string>
+    <string name="ingesting">Filing new images</string>
+</resources>

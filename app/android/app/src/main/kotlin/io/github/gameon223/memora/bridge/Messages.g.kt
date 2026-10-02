@@ -525,6 +525,11 @@ data class CaptureStatus (
  * Generated class from Pigeon that represents data sent in messages.
  */
 data class InboxItem (
+  /**
+   * Inbox id, passed back to [CaptureHostApi.confirmInbox] once the memory
+   * row exists.
+   */
+  val id: String,
   val relativePath: String,
   /** `tile` or `share`. */
   val source: String,
@@ -538,19 +543,21 @@ data class InboxItem (
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): InboxItem {
-      val relativePath = pigeonVar_list[0] as String
-      val source = pigeonVar_list[1] as String
-      val capturedAtMillis = pigeonVar_list[2] as Long
-      val sha256 = pigeonVar_list[3] as String
-      val mimeType = pigeonVar_list[4] as String
-      val width = pigeonVar_list[5] as Long
-      val height = pigeonVar_list[6] as Long
-      val byteSize = pigeonVar_list[7] as Long
-      return InboxItem(relativePath, source, capturedAtMillis, sha256, mimeType, width, height, byteSize)
+      val id = pigeonVar_list[0] as String
+      val relativePath = pigeonVar_list[1] as String
+      val source = pigeonVar_list[2] as String
+      val capturedAtMillis = pigeonVar_list[3] as Long
+      val sha256 = pigeonVar_list[4] as String
+      val mimeType = pigeonVar_list[5] as String
+      val width = pigeonVar_list[6] as Long
+      val height = pigeonVar_list[7] as Long
+      val byteSize = pigeonVar_list[8] as Long
+      return InboxItem(id, relativePath, source, capturedAtMillis, sha256, mimeType, width, height, byteSize)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
+      id,
       relativePath,
       source,
       capturedAtMillis,
@@ -569,11 +576,12 @@ data class InboxItem (
       return true
     }
     val other = other as InboxItem
-    return MessagesPigeonUtils.deepEquals(this.relativePath, other.relativePath) && MessagesPigeonUtils.deepEquals(this.source, other.source) && MessagesPigeonUtils.deepEquals(this.capturedAtMillis, other.capturedAtMillis) && MessagesPigeonUtils.deepEquals(this.sha256, other.sha256) && MessagesPigeonUtils.deepEquals(this.mimeType, other.mimeType) && MessagesPigeonUtils.deepEquals(this.width, other.width) && MessagesPigeonUtils.deepEquals(this.height, other.height) && MessagesPigeonUtils.deepEquals(this.byteSize, other.byteSize)
+    return MessagesPigeonUtils.deepEquals(this.id, other.id) && MessagesPigeonUtils.deepEquals(this.relativePath, other.relativePath) && MessagesPigeonUtils.deepEquals(this.source, other.source) && MessagesPigeonUtils.deepEquals(this.capturedAtMillis, other.capturedAtMillis) && MessagesPigeonUtils.deepEquals(this.sha256, other.sha256) && MessagesPigeonUtils.deepEquals(this.mimeType, other.mimeType) && MessagesPigeonUtils.deepEquals(this.width, other.width) && MessagesPigeonUtils.deepEquals(this.height, other.height) && MessagesPigeonUtils.deepEquals(this.byteSize, other.byteSize)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.id)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.relativePath)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.source)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.capturedAtMillis)
@@ -585,7 +593,7 @@ data class InboxItem (
     return result
   }
   override fun toString(): String {
-    return "InboxItem(relativePath=$relativePath, source=$source, capturedAtMillis=$capturedAtMillis, sha256=$sha256, mimeType=$mimeType, width=$width, height=$height, byteSize=$byteSize)"
+    return "InboxItem(id=$id, relativePath=$relativePath, source=$source, capturedAtMillis=$capturedAtMillis, sha256=$sha256, mimeType=$mimeType, width=$width, height=$height, byteSize=$byteSize)"
   }
 }
 
@@ -1144,10 +1152,16 @@ interface CaptureHostApi {
   suspend fun requestAddTile(): Boolean
   suspend fun requestNotificationPermission(): Boolean
   /**
-   * Moves inbox files into `originals/` and returns their facts. Items
-   * returned here are removed from the inbox.
+   * Moves inbox files into `originals/` and returns their facts. Items stay
+   * in the inbox until [confirmInbox] acknowledges them, so a capture
+   * survives a worker that is stopped halfway.
    */
   suspend fun drainInbox(): List<InboxItem>
+  /**
+   * Drops inbox entries whose memories now exist. Anything left unconfirmed
+   * is offered again by the next [drainInbox].
+   */
+  suspend fun confirmInbox(ids: List<String>)
 
   companion object {
     /** The codec used by CaptureHostApi. */
@@ -1230,6 +1244,26 @@ interface CaptureHostApi {
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
                 listOf(api.drainInbox())
+              } catch (exception: Throwable) {
+                MessagesPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.CaptureHostApi.confirmInbox$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val idsArg = args[0] as List<String>
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.confirmInbox(idsArg)
+                listOf(null)
               } catch (exception: Throwable) {
                 MessagesPigeonUtils.wrapError(exception)
               }
@@ -1401,6 +1435,11 @@ class BackgroundFlutterApi(private val binaryMessenger: BinaryMessenger, private
  */
 interface BackgroundHostApi {
   fun backgroundReady()
+  /**
+   * The entrypoint could not build its services. Ends the worker right away
+   * instead of waiting for the readiness timeout.
+   */
+  fun backgroundFailed(message: String)
 
   companion object {
     /** The codec used by BackgroundHostApi. */
@@ -1417,6 +1456,24 @@ interface BackgroundHostApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               api.backgroundReady()
+              listOf(null)
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.BackgroundHostApi.backgroundFailed$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val messageArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              api.backgroundFailed(messageArg)
               listOf(null)
             } catch (exception: Throwable) {
               MessagesPigeonUtils.wrapError(exception)
