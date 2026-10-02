@@ -67,6 +67,33 @@ const monthAbbreviations = [
   'Dec',
 ];
 
+/// Full English month names, index 0 is January.
+const monthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/// English weekday names, index 0 is Monday, matching [DateTime.weekday].
+const weekdayNames = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
 /// Looks up a month by English name or abbreviation, case-insensitively.
 int? monthNumber(String name) => _monthNumbers[name.toLowerCase()];
 
@@ -209,6 +236,13 @@ String isoDate(DateTime d) {
 String displayDate(DateTime d) {
   final local = d.toLocal();
   return '${local.day} ${monthAbbreviations[local.month - 1]} ${local.year}';
+}
+
+/// A full date such as `Tuesday, 15 September 2026`.
+String displayLongDate(DateTime d) {
+  final local = d.toLocal();
+  final weekday = weekdayNames[local.weekday - 1];
+  return '$weekday, ${local.day} ${monthNames[local.month - 1]} ${local.year}';
 }
 
 /// A month and year such as `Aug 2026`.

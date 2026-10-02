@@ -131,6 +131,7 @@ mixin FakeSearchStore on FakeMemoraState implements SearchStore {
           category: r.category,
           thumbnailPath: r.thumbnailPath,
           facts: _facts(r),
+          entities: [for (final e in r.entities) e.value],
         ),
   ];
 

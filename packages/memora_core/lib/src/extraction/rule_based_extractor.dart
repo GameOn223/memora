@@ -247,10 +247,11 @@ class RuleBasedExtractor implements OcrUnderstandingExtractor {
       counts[token] = (counts[token] ?? 0) + 1;
     }
     final order = counts.keys.toList();
+    final position = {for (var i = 0; i < order.length; i++) order[i]: i};
     final ranked = [...order]
       ..sort((a, b) {
         final byCount = counts[b]!.compareTo(counts[a]!);
-        return byCount != 0 ? byCount : order.indexOf(a) - order.indexOf(b);
+        return byCount != 0 ? byCount : position[a]! - position[b]!;
       });
     keywords.addAll(ranked.take(3));
     return keywords.toList();

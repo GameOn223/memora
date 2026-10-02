@@ -18,6 +18,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
     required this._vectors,
     required this._router,
     this._fallbackReranker = const FusionReranker(),
+    this.structuredLimit = defaultStructuredLimit,
   });
 
   /// How many fused results are reranked.
@@ -25,6 +26,14 @@ class DefaultRetrievalEngine implements RetrievalEngine {
 
   /// How many results each text strategy contributes before fusion.
   static const strategyLimit = 50;
+
+  /// How many memories a filter may match before the engine stops holding
+  /// them all and checks the filters after searching instead.
+  static const defaultStructuredLimit = 5000;
+
+  /// Lower it in tests to exercise the path where a filter matches more
+  /// memories than fit.
+  final int structuredLimit;
 
   final SearchStore _search;
   final VectorStore _vectors;
@@ -45,14 +54,22 @@ class DefaultRetrievalEngine implements RetrievalEngine {
 
     var structuredRanking = const <ScoredId>[];
     Set<String>? candidates;
+    var truncated = false;
     if (query.hasFilters || text == null) {
-      final ids = await _search.structured(query);
+      final ids = await _search.structured(query, limit: structuredLimit);
       used.add(RetrievalStrategy.structured);
       structuredRanking = [for (final id in ids) ScoredId(id, 0)];
       if (query.hasFilters) {
-        candidates = ids.toSet();
-        if (candidates.isEmpty) {
-          return RetrievalResult(hits: const [], strategiesUsed: used);
+        if (ids.length >= structuredLimit) {
+          // More memories match the filters than one query can carry. Search
+          // the whole library and check the filters afterwards instead, so
+          // they stay hard constraints rather than "the newest N of them".
+          truncated = true;
+        } else {
+          candidates = ids.toSet();
+          if (candidates.isEmpty) {
+            return RetrievalResult(hits: const [], strategiesUsed: used);
+          }
         }
       }
     }
@@ -78,8 +95,10 @@ class DefaultRetrievalEngine implements RetrievalEngine {
         }
       }
     }
-    final textFoundNothing = rankings.every((r) => r.isEmpty);
-    if (text == null || (textFoundNothing && candidates != null)) {
+    final textFoundNothing = text != null && rankings.every((r) => r.isEmpty);
+    final fellBackToFilters =
+        textFoundNothing && (candidates != null || truncated);
+    if (text == null || fellBackToFilters) {
       rankings
         ..clear()
         ..add(structuredRanking);
@@ -90,9 +109,26 @@ class DefaultRetrievalEngine implements RetrievalEngine {
     final depth = text == null
         ? limit
         : (limit > rerankDepth ? limit : rerankDepth);
-    final fused = reciprocalRankFusion(rankings).take(depth).toList();
+    var fused = reciprocalRankFusion(rankings).take(depth).toList();
+    if (truncated && fused.isNotEmpty) {
+      final allowed = (await _search.structured(
+        query.copyWith(within: {for (final f in fused) f.id}),
+        limit: fused.length,
+      )).toSet();
+      fused = [
+        for (final f in fused)
+          if (allowed.contains(f.id)) f,
+      ];
+      for (final f in fused) {
+        (foundBy[f.id] ??= {}).add(RetrievalStrategy.structured);
+      }
+    }
     if (fused.isEmpty) {
-      return RetrievalResult(hits: const [], strategiesUsed: used);
+      return RetrievalResult(
+        hits: const [],
+        strategiesUsed: used,
+        textMatched: !fellBackToFilters,
+      );
     }
 
     final cards = await _search.cards([for (final f in fused) f.id]);
@@ -111,6 +147,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
           ),
       ],
       strategiesUsed: used,
+      textMatched: !fellBackToFilters,
     );
   }
 
@@ -129,7 +166,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
       );
     } on CapabilityUnavailableException {
       return null;
-    } on Exception {
+    } on Object {
       // Semantic search is an extra. Text and filters still answer.
       return null;
     }
@@ -146,6 +183,9 @@ class DefaultRetrievalEngine implements RetrievalEngine {
           id: card.id,
           text: cardSearchText(card),
           priorScore: prior[card.id] ?? 0,
+          entities: card.entities,
+          category: card.category,
+          takenAt: card.takenAt,
         ),
     ];
     RerankService reranker;
@@ -157,15 +197,17 @@ class DefaultRetrievalEngine implements RetrievalEngine {
     List<RerankScore> scores;
     try {
       scores = await reranker.rerank(text, candidates);
-    } on Exception {
+    } on Object {
       scores = await _fallbackReranker.rerank(text, candidates);
     }
 
     final byId = {for (final card in cards) card.id: card};
     final position = {for (var i = 0; i < scores.length; i++) scores[i].id: i};
+    // A reranker that repeats an id must not put the same card in twice.
+    final seenScores = <String>{};
     final ranked = [
       for (final s in scores)
-        if (byId[s.id] != null) (byId[s.id]!, s.score),
+        if (byId[s.id] != null && seenScores.add(s.id)) (byId[s.id]!, s.score),
     ];
     ranked.sort((a, b) {
       final byScore = b.$2.compareTo(a.$2);
@@ -185,6 +227,7 @@ class DefaultRetrievalEngine implements RetrievalEngine {
   static String cardSearchText(MemoryCard card) => [
     card.summary ?? '',
     (card.category ?? '').replaceAll('_', ' '),
+    card.entities.join(', '),
     for (final fact in card.facts.entries)
       '${fact.key.replaceAll('_', ' ')} ${fact.value}',
   ].where((part) => part.isNotEmpty).join('. ');

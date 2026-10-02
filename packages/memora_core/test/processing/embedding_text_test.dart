@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 
 void main() {
   const normalizer = FactNormalizer();
+  final takenAt = DateTime(2026, 9, 1);
 
   test('builds every section in order', () {
     const u = MemoryUnderstanding(
@@ -19,7 +20,10 @@ void main() {
       ],
     );
 
-    final text = buildEmbeddingText(u, normalizer.normalize(u));
+    final text = buildEmbeddingText(
+      u,
+      normalizer.normalize(u, takenAt: takenAt),
+    );
 
     expect(
       text,
@@ -37,7 +41,10 @@ void main() {
   test('omits empty sections', () {
     const u = MemoryUnderstanding(summary: 'A sunset', category: 'other');
 
-    final text = buildEmbeddingText(u, normalizer.normalize(u));
+    final text = buildEmbeddingText(
+      u,
+      normalizer.normalize(u, takenAt: takenAt),
+    );
 
     expect(text, 'A sunset\nCategory: other');
   });
@@ -49,7 +56,10 @@ void main() {
       extractedText: 'x' * 700,
     );
 
-    final text = buildEmbeddingText(u, normalizer.normalize(u));
+    final text = buildEmbeddingText(
+      u,
+      normalizer.normalize(u, takenAt: takenAt),
+    );
 
     expect(text, 'Category: document\nText: ${'x' * 600}');
   });
@@ -66,7 +76,7 @@ void main() {
         AttributeMention(type: 'booking_reference', value: 'K4T9RB'),
       ],
     );
-    final facts = normalizer.normalize(u);
+    final facts = normalizer.normalize(u, takenAt: takenAt);
     final details = MemoryDetails(
       memory: Memory(
         id: 'm1',

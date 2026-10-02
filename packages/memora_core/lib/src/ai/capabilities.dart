@@ -189,6 +189,9 @@ class RerankCandidate {
     required this.id,
     required this.text,
     this.priorScore = 0,
+    this.entities = const [],
+    this.category,
+    this.takenAt,
   });
 
   final String id;
@@ -196,6 +199,16 @@ class RerankCandidate {
 
   /// Score from first-stage retrieval, available to local rerankers.
   final double priorScore;
+
+  /// Entity values for this memory. A remote reranker sees only [text]; the
+  /// on-device one uses these for exact name matches.
+  final List<String> entities;
+
+  /// The memory's category, for matching a category word in the question.
+  final String? category;
+
+  /// When the image was taken, used as a small recency tie-break.
+  final DateTime? takenAt;
 }
 
 @immutable

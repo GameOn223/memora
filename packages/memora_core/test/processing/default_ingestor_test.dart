@@ -39,6 +39,7 @@ void main() {
 
     expect(report.addedIds, ['id-1', 'id-2']);
     expect(report.duplicateCount, 0);
+    expect(report.duplicatePaths, isEmpty);
 
     final memory = (await db.getMemory('id-1'))!;
     expect(memory.status, ProcessingStatus.captured);
@@ -63,6 +64,10 @@ void main() {
 
     expect(report.addedIds, hasLength(1));
     expect(report.duplicateCount, 2);
+    expect(report.duplicatePaths, [
+      'originals/a-again.png',
+      'originals/c-twice.png',
+    ], reason: 'the caller has to be able to remove the wasted copies');
     expect(images.deleted, ['originals/a-again.png', 'originals/c-twice.png']);
     expect(images.thumbnailsCreated, [
       'thumbnails/a.webp',
