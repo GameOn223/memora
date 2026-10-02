@@ -6,6 +6,8 @@ import '../shared/endpoint.dart';
 import '../shared/image_payload.dart';
 import '../shared/json_extract.dart';
 import '../shared/json_read.dart';
+import '../shared/model_facts.dart';
+import '../shared/schema.dart';
 import '../shared/verification.dart';
 import 'messages.dart';
 
@@ -30,7 +32,7 @@ class AnthropicVisionService implements VisionService {
 
   @override
   Future<MemoryUnderstanding> analyze(VisionRequest request) async {
-    final input = await _callTool(
+    final input = await _requestJson(
       system: VisionPrompts.analyzeInstructions(request),
       userText: VisionPrompts.analyzeUserText,
       image: _image(request.imageBytes, request.mimeType),
@@ -44,7 +46,7 @@ class AnthropicVisionService implements VisionService {
 
   @override
   Future<VerificationResult> verify(VerificationRequest request) async {
-    final input = await _callTool(
+    final input = await _requestJson(
       system: VisionPrompts.verifyInstructions(request),
       userText: verifyUserText,
       image: _image(request.imageBytes, request.mimeType),
@@ -64,7 +66,14 @@ class AnthropicVisionService implements VisionService {
     supportedMimeTypes: anthropicImageMimeTypes,
   );
 
-  Future<Map<String, Object?>> _callTool({
+  /// Asks for JSON the way [modelId] supports.
+  ///
+  /// Current models take `output_config.format` and answer with the JSON as
+  /// text. Anything else, including a model released after this was written,
+  /// gets a tool it may call plus an instruction to use it. Forced
+  /// `tool_choice` is never sent: the current lineup rejects it with a 400,
+  /// which would fail every image and pause the queue.
+  Future<Map<String, Object?>> _requestJson({
     required String system,
     required String userText,
     required ImagePayload image,
@@ -73,7 +82,7 @@ class AnthropicVisionService implements VisionService {
     required Map<String, Object?> schema,
     required int maxTokens,
   }) async {
-    final forced = acceptsForcedToolChoice(modelId);
+    final structured = anthropicSupportsStructuredOutput(modelId);
     final json = await _endpoint.post('/messages', {
       'model': modelId,
       'max_tokens': maxTokens,
@@ -92,23 +101,27 @@ class AnthropicVisionService implements VisionService {
             },
             {
               'type': 'text',
-              'text': forced
+              'text': structured
                   ? userText
                   : '$userText Record the result with the $toolName tool.',
             },
           ],
         },
       ],
-      'tools': [
-        {
-          'name': toolName,
-          'description': toolDescription,
-          'input_schema': schema,
-        },
-      ],
-      'tool_choice': forced
-          ? {'type': 'tool', 'name': toolName}
-          : {'type': 'auto'},
+      if (structured)
+        'output_config': {
+          'format': {'type': 'json_schema', 'schema': closedSchema(schema)},
+        }
+      else ...{
+        'tools': [
+          {
+            'name': toolName,
+            'description': toolDescription,
+            'input_schema': schema,
+          },
+        ],
+        'tool_choice': {'type': 'auto'},
+      },
     });
 
     final stopReason = json['stop_reason'];

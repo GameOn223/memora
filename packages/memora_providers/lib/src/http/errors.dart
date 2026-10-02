@@ -6,8 +6,18 @@ import 'package:memora_core/memora_core.dart';
 /// Longest provider message copied into an exception.
 const maxProviderDetailLength = 200;
 
+/// Phrases that mean the provider rejected this particular picture rather
+/// than the shape of the request.
+///
+/// Kept narrow on purpose. A content error fails the memory for good, so an
+/// ambiguous 400 is better treated as configuration, which pauses the queue
+/// once and can be fixed. Bare "content" and "size" are left out because
+/// they show up in ordinary validation messages such as
+/// `Invalid value for 'messages[0].content'`.
 final _contentHints = RegExp(
-  r'image|content|safety|size|too large|policy|moderation|blocked',
+  r'\bimages?\b|\bsafety\b|\bmoderation\b|\bpolicy\b|\bblocked\b|'
+  r'content filter|content policy|content filtering|too large|'
+  r'unsupported image|cannot process image|could not process image',
   caseSensitive: false,
 );
 

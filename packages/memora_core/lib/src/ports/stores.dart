@@ -94,6 +94,9 @@ abstract interface class MemoryStore {
   Future<List<Memory>> missingThumbnails({int limit = 50});
 
   /// Changes whenever any connection commits. The UI polls this to refresh.
+  ///
+  /// It can also change once after a write that rolled back, so treat it as a
+  /// hint that something may have changed rather than proof that it did.
   Future<int> dataVersion();
 }
 
@@ -121,6 +124,12 @@ class QueueItem {
 }
 
 /// Queue bookkeeping. Implemented by `memora_database`.
+///
+/// The four methods a worker calls when it's done with a memory
+/// ([markReady], [releaseForRetry], [releaseWithoutAttempt] and [markFailed])
+/// only apply while that memory is still `processing`. A worker whose lease
+/// expired, and whose memory another worker has taken over since, changes
+/// nothing. The same goes for a memory that no longer exists.
 abstract interface class QueueStore {
   /// Atomically claims the next claimable memory, oldest taken first, and
   /// sets it to `processing` with a lease. Returns null when nothing is due.
@@ -129,7 +138,7 @@ abstract interface class QueueStore {
   /// Marks a processing memory as ready and clears its lease.
   Future<void> markReady(String id, DateTime now);
 
-  /// Returns a memory to `captured` for a later attempt.
+  /// Returns a processing memory to `captured` for a later attempt.
   Future<void> releaseForRetry(
     String id, {
     required DateTime nextAttemptAt,
@@ -137,9 +146,11 @@ abstract interface class QueueStore {
     required DateTime now,
   });
 
-  /// Returns a memory to `captured` and gives back the attempt it used.
+  /// Returns a processing memory to `captured` and gives back the attempt it
+  /// used.
   Future<void> releaseWithoutAttempt(String id, DateTime now);
 
+  /// Marks a processing memory as failed with [reason].
   Future<void> markFailed(String id, String reason, DateTime now);
 
   /// User tapped Retry on a failed memory.
@@ -149,7 +160,15 @@ abstract interface class QueueStore {
   Future<void> requestReprocess(String id, DateTime now);
 
   /// Waiting, processing and failed items first, then recently finished ones.
-  Future<List<QueueItem>> queueItems({int recentLimit = 20});
+  ///
+  /// [waitingLimit] caps the waiting and failed lists and [recentLimit] the
+  /// finished one. A backlog runs to tens of thousands of memories, so the
+  /// queue screen shows the head of each list and takes its totals from
+  /// [MemoryStore.queueSummary].
+  Future<List<QueueItem>> queueItems({
+    int waitingLimit = 200,
+    int recentLimit = 20,
+  });
 
   /// True if anything is waiting to be claimed.
   Future<bool> hasWork(DateTime now);

@@ -5,26 +5,20 @@ import 'package:memora_core/memora_core.dart';
 
 import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
+import '../shared/model_facts.dart';
 import '../shared/vectors.dart';
 import 'response.dart';
 
 /// Embeddings over `models/{model}:batchEmbedContents`.
 ///
-/// `gemini-embedding-001` produces 3072 dimensions by default. Memora asks
-/// for 768, which keeps vectors small, and normalizes them because Gemini
-/// only normalizes the full-size output. Other models report the length of
-/// the first response, the same way the OpenAI-compatible adapter does.
+/// Gemini's embedding models produce 3072 dimensions by default. Memora
+/// asks for 768, which keeps vectors small, and normalizes the result,
+/// which `gemini-embedding-001` needs for a truncated size and the newer
+/// models do anyway. A model that isn't in the table reports the length of
+/// its first response, the same way the OpenAI-compatible adapter does.
 class GeminiEmbeddingService implements EmbeddingService {
   GeminiEmbeddingService(this._endpoint, String modelId)
     : modelId = bareModelId(modelId);
-
-  /// Output size requested per model.
-  static const requestedDimensions = {'gemini-embedding-001': 768};
-
-  static const knownDimensions = {
-    'gemini-embedding-001': 768,
-    'text-embedding-004': 768,
-  };
 
   /// Gemini accepts up to 100 requests in one batch.
   static const batchSize = 100;
@@ -39,8 +33,17 @@ class GeminiEmbeddingService implements EmbeddingService {
     provider: _endpoint.providerId,
     modelId: modelId,
     version: '1',
-    dimensions: _learnedDimensions[modelId] ?? knownDimensions[modelId] ?? 0,
+    dimensions:
+        _learnedDimensions[modelId] ?? geminiRequestedDimensions[modelId] ?? 0,
   );
+
+  /// [model] with its real dimensions, asking Gemini once when they aren't
+  /// known yet. Costs one embedding of a single token.
+  Future<EmbeddingModelInfo> resolveModel() async {
+    if (model.dimensions > 0) return model;
+    await embed(const ['a']);
+    return model;
+  }
 
   @override
   Future<List<Float32List>> embed(
@@ -48,7 +51,7 @@ class GeminiEmbeddingService implements EmbeddingService {
     EmbeddingPurpose purpose = EmbeddingPurpose.document,
   }) async {
     if (texts.isEmpty) return const [];
-    final dimensions = requestedDimensions[modelId];
+    final dimensions = geminiRequestedDimensions[modelId];
     final taskType = purpose == EmbeddingPurpose.query
         ? 'RETRIEVAL_QUERY'
         : 'RETRIEVAL_DOCUMENT';

@@ -25,7 +25,7 @@ class OpenAiVisionService implements VisionService {
   final OpenAiCompatibleProfile _profile;
   final String modelId;
 
-  bool get _reasoning => isOpenAiReasoningModel(modelId);
+  bool get _reasoning => _profile.reasons(modelId);
 
   @override
   Future<MemoryUnderstanding> analyze(VisionRequest request) async {
@@ -85,7 +85,7 @@ class OpenAiVisionService implements VisionService {
     Map<String, Object?> body({required bool withFormat}) => {
       'model': modelId,
       'messages': messages,
-      if (!_reasoning) 'temperature': 0.1,
+      if (_profile.sendsTemperature(modelId)) 'temperature': 0.1,
       if (withFormat) 'response_format': _responseFormat(schemaName, schema),
       _profile.maxTokensField: maxTokens,
     };
@@ -125,7 +125,7 @@ class OpenAiVisionService implements VisionService {
         'json_schema': {
           'name': name,
           'schema': closedSchema(schema),
-          'strict': false,
+          'strict': _profile.strictJsonSchema,
         },
       },
       JsonResponseFormat.jsonObject => {'type': 'json_object'},

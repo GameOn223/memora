@@ -38,7 +38,10 @@ jobs:
 
       - name: Analyze app
         working-directory: app
-        run: flutter analyze --fatal-infos
+        # The paths matter here. Without them the workspace analysis_options,
+        # which excludes app/**, wins and this step passes without analyzing
+        # anything.
+        run: flutter analyze --fatal-infos lib test
 
       - name: Test memora_core
         working-directory: packages/memora_core

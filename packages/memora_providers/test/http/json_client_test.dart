@@ -100,6 +100,50 @@ void main() {
       await expectLater(post(), throwsAi<AiContentException>());
     });
 
+    test('a 400 about the picture itself is a content problem', () async {
+      for (final message in [
+        'Could not process image',
+        'Your request was rejected as a result of our safety system',
+        'The image is too large, maximum size is 5 MB',
+        'Request blocked by our content filter',
+        'unsupported image format: image/tiff',
+        'Output blocked by content filtering policy',
+        'This request violates our usage policy',
+      ]) {
+        http_.reply({
+          'error': {'message': message},
+        }, status: 400);
+        await expectLater(
+          post(),
+          throwsAi<AiContentException>(),
+          reason: message,
+        );
+      }
+    });
+
+    test('a request-shape 400 stays a configuration problem', () async {
+      // A bad request body is Memora's bug, not the image's. Calling it
+      // content would fail every memory permanently instead of pausing the
+      // queue once with something the user can fix.
+      for (final message in [
+        "Invalid value for 'messages[0].content': expected an array",
+        'Unsupported parameter: max_tokens is not supported with this model',
+        'max_tokens: must be greater than 0',
+        'Input is too long for requested model',
+        'response_format.type must be json_schema',
+        'model not found: content-writer-9000',
+      ]) {
+        http_.reply({
+          'error': {'message': message},
+        }, status: 400);
+        await expectLater(
+          post(),
+          throwsAi<AiConfigurationException>(),
+          reason: message,
+        );
+      }
+    });
+
     test('other 400 is a configuration problem with the message', () async {
       http_.reply({
         'error': {

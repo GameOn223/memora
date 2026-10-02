@@ -5,27 +5,20 @@ import 'package:memora_core/memora_core.dart';
 
 import '../shared/endpoint.dart';
 import '../shared/json_read.dart';
+import '../shared/model_facts.dart';
 import '../shared/vectors.dart';
 import 'presets.dart';
 
 /// Embeddings over `POST /embeddings`.
 ///
 /// Stored vectors are tagged with [model], so its dimensions have to be
-/// right. Common models are listed in [knownDimensions]. For anything else
-/// the dimensions are learned from the first response and shared by every
-/// later service for the same provider and model. Until that first call
-/// returns, an unknown model reports 0 dimensions, so callers should read
-/// [model] after [embed] when tagging vectors.
+/// right. Well known models are in `openAiCompatibleEmbeddingDimensions`.
+/// For anything else the length comes from the provider, learned on the
+/// first response and shared by every later service for the same provider
+/// and model. Call [resolveModel] before tagging vectors and the answer is
+/// never a guess.
 class OpenAiEmbeddingService implements EmbeddingService {
   OpenAiEmbeddingService(this._endpoint, this._profile, this.modelId);
-
-  static const knownDimensions = {
-    'text-embedding-3-small': 1536,
-    'text-embedding-3-large': 3072,
-    'text-embedding-ada-002': 1536,
-    'nvidia/nv-embedqa-e5-v5': 1024,
-    'nomic-embed-text': 768,
-  };
 
   /// Largest number of texts sent in one request.
   static const batchSize = 64;
@@ -36,19 +29,32 @@ class OpenAiEmbeddingService implements EmbeddingService {
   final OpenAiCompatibleProfile _profile;
   final String modelId;
 
-  String get _cacheKey => '${_endpoint.providerId}|$modelId';
+  /// `nomic-embed-text` and `nomic-embed-text:latest` are the same model, so
+  /// they have to share one storage id or their vectors never compare.
+  String get _storageModelId => modelId.endsWith(':latest')
+      ? modelId.substring(0, modelId.length - ':latest'.length)
+      : modelId;
+
+  String get _cacheKey => '${_endpoint.providerId}|$_storageModelId';
 
   @override
   EmbeddingModelInfo get model => EmbeddingModelInfo(
     provider: _endpoint.providerId,
-    modelId: modelId,
+    modelId: _storageModelId,
     version: '1',
     dimensions:
         _learnedDimensions[_cacheKey] ??
-        knownDimensions[modelId] ??
-        knownDimensions[modelId.split(':').first] ??
+        openAiCompatibleEmbeddingDimensions[_storageModelId] ??
         0,
   );
+
+  /// [model] with its real dimensions, asking the provider once when they
+  /// aren't known yet. Costs one embedding of a single token.
+  Future<EmbeddingModelInfo> resolveModel() async {
+    if (model.dimensions > 0) return model;
+    await embed(const ['a']);
+    return model;
+  }
 
   @override
   Future<List<Float32List>> embed(

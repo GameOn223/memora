@@ -30,10 +30,13 @@ class OnnxEmbeddingService implements EmbeddingService {
   /// Tokenizers by vocab path, shared so the vocab is read once per run.
   static final Map<String, Future<WordPieceTokenizer>> _tokenizers = {};
 
+  /// Model files already handed to the runtime. The router builds a service
+  /// per call, so this is static too, or every call would reload the model.
+  static final Set<String> _loadedPaths = {};
+
   final EmbeddingRuntime _runtime;
   final LocalModelFiles _modelFiles;
   final LocalModelSpec spec;
-  String? _loadedPath;
 
   @override
   EmbeddingModelInfo get model => EmbeddingModelInfo(
@@ -66,9 +69,11 @@ class OnnxEmbeddingService implements EmbeddingService {
       final lines = await File(vocabPath).readAsLines();
       return WordPieceTokenizer.fromVocabLines(lines, maxLength: maxTokens);
     });
-    if (_loadedPath != modelPath || !await _runtime.isLoaded()) {
+    if (!_loadedPaths.contains(modelPath) || !await _runtime.isLoaded()) {
       await _runtime.load(modelPath);
-      _loadedPath = modelPath;
+      _loadedPaths
+        ..clear()
+        ..add(modelPath);
     }
 
     final inputs = purpose == EmbeddingPurpose.query

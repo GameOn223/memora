@@ -1,14 +1,16 @@
 import 'package:memora_core/memora_core.dart';
 
+import '../shared/model_facts.dart';
+
 const geminiDescriptor = ProviderDescriptor(
   id: 'gemini',
   displayName: 'Google Gemini',
   location: ProviderLocation.cloud,
   capabilities: {Capability.vision, Capability.chat, Capability.embeddings},
   suggestedModels: {
-    Capability.vision: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-    Capability.chat: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-    Capability.embeddings: ['gemini-embedding-001'],
+    Capability.vision: geminiVisionModels,
+    Capability.chat: geminiVisionModels,
+    Capability.embeddings: geminiEmbeddingModels,
   },
   requiresApiKey: true,
   apiKeyHint: 'AIza...',

@@ -18,8 +18,11 @@ final _png = Uint8List.fromList([
   0x0A,
 ]);
 
-VisionRequest _visionRequest({String mimeType = 'image/png'}) => VisionRequest(
-  imageBytes: _png,
+VisionRequest _visionRequest({
+  Uint8List? bytes,
+  String mimeType = 'image/png',
+}) => VisionRequest(
+  imageBytes: bytes ?? _png,
   mimeType: mimeType,
   takenAt: DateTime(2026, 9, 1),
 );
@@ -51,17 +54,21 @@ void main() {
       Capability.chat,
       Capability.embeddings,
     });
-    expect(geminiDescriptor.suggestedModels[Capability.vision], [
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-    ]);
-    expect(geminiDescriptor.suggestedModels[Capability.chat], [
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-    ]);
+    expect(
+      geminiDescriptor.suggestedModels[Capability.vision],
+      geminiVisionModels,
+    );
+    expect(
+      geminiDescriptor.suggestedModels[Capability.chat],
+      geminiVisionModels,
+    );
     expect(
       geminiDescriptor.defaultModel(Capability.embeddings),
-      'gemini-embedding-001',
+      geminiEmbeddingModels.first,
+    );
+    expect(
+      geminiRequestedDimensions,
+      containsPair(geminiEmbeddingModels.first, 768),
     );
     expect(client().reranker('x'), isNull);
     expect(client().descriptor, same(geminiDescriptor));
@@ -194,6 +201,17 @@ void main() {
         client().vision('gemini-2.5-flash')!.analyze(_visionRequest()),
         throwsA(isA<AiContentException>()),
       );
+    });
+
+    test('a 16 MB photo is refused before base64 blows the request', () async {
+      // 16 MB of file is over 21 MB encoded, past Gemini's 20 MB request cap.
+      await expectLater(
+        client()
+            .vision('gemini-3.5-flash')!
+            .analyze(_visionRequest(bytes: Uint8List(16 * 1024 * 1024))),
+        throwsA(isA<AiContentException>()),
+      );
+      expect(http.requests, isEmpty);
     });
 
     test('HEIC is accepted, PDF is not', () async {
@@ -521,6 +539,24 @@ void main() {
       final request = (http.body(0)['requests']! as List).single! as Map;
       expect(request['taskType'], 'RETRIEVAL_QUERY');
       expect(request.containsKey('outputDimensionality'), isFalse);
+    });
+
+    test('resolveModel probes once for an unknown model', () async {
+      http.reply({
+        'embeddings': [
+          {
+            'values': [0, 3, 4],
+          },
+        ],
+      });
+      final service =
+          client().embeddings('gemini-embedding-next')!
+              as GeminiEmbeddingService;
+      expect(service.model.dimensions, 0);
+
+      expect((await service.resolveModel()).dimensions, 3);
+      expect(service.model.dimensions, 3);
+      expect(http.requests, hasLength(1));
     });
 
     test('a count mismatch is an error', () async {

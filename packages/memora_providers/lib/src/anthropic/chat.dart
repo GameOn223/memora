@@ -33,7 +33,7 @@ class AnthropicChatService implements ChatService {
         case AssistantEntry(:final text, :final toolCalls):
           messages.add(
             'assistant',
-            _turns.lookup(toolCalls) ??
+            _turns.lookup(modelId, toolCalls) ??
                 [
                   if (text.isNotEmpty) {'type': 'text', 'text': text},
                   for (final call in toolCalls)
@@ -92,7 +92,7 @@ class AnthropicChatService implements ChatService {
         ),
       );
     }
-    if (calls.isNotEmpty) _turns.remember(calls, content);
+    if (calls.isNotEmpty) _turns.remember(modelId, calls, content);
 
     return ChatTurn(
       text: responseText(content),

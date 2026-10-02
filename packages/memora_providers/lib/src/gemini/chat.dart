@@ -86,7 +86,7 @@ class GeminiChatService implements ChatService {
             ],
           });
         case AssistantEntry(:final text, :final toolCalls):
-          final replay = _turns.lookup(toolCalls);
+          final replay = _turns.lookup(modelId, toolCalls);
           if (replay != null) {
             providerIds.addAll(replay.providerIds);
             contents.add({'role': 'model', 'parts': replay.parts});
@@ -151,7 +151,7 @@ class GeminiChatService implements ChatService {
       );
     }
     if (calls.isNotEmpty) {
-      _turns.remember(calls, _ModelTurn(parts, providerIds));
+      _turns.remember(modelId, calls, _ModelTurn(parts, providerIds));
     }
 
     return ChatTurn(

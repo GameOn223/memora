@@ -1,5 +1,7 @@
 import 'package:memora_core/memora_core.dart';
 
+import '../shared/model_facts.dart';
+
 /// Model id of on-device vision: ML Kit OCR plus rule-based extraction.
 const ocrRulesModelId = 'ocr-rules';
 
@@ -16,9 +18,9 @@ const localDescriptor = ProviderDescriptor(
     Capability.reranking,
   },
   suggestedModels: {
-    Capability.vision: [ocrRulesModelId],
+    Capability.vision: localVisionModels,
     // Must match an entry in the local model catalog.
-    Capability.embeddings: ['bge-small-en-v1.5'],
-    Capability.reranking: [scoreFusionModelId],
+    Capability.embeddings: localEmbeddingModels,
+    Capability.reranking: localRerankModels,
   },
 );

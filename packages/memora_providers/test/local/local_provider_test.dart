@@ -34,14 +34,17 @@ VisionRequest _vision({String? path = '/data/files/originals/a.png'}) =>
       absoluteImagePath: path,
     );
 
-VerificationRequest _verify(String expected, {String? path = '/data/a.png'}) =>
-    VerificationRequest(
-      imageBytes: Uint8List(0),
-      mimeType: 'image/png',
-      attributeType: 'amount',
-      expectedValue: expected,
-      absoluteImagePath: path,
-    );
+VerificationRequest _verify(
+  String expected, {
+  String? path = '/data/a.png',
+  String type = 'amount',
+}) => VerificationRequest(
+  imageBytes: Uint8List(0),
+  mimeType: 'image/png',
+  attributeType: type,
+  expectedValue: expected,
+  absoluteImagePath: path,
+);
 
 class _RecordingExtractor implements OcrUnderstandingExtractor {
   final calls = <(OcrResult, DateTime)>[];
@@ -214,6 +217,29 @@ void main() {
       expect((await vision.verify(_verify('no digits'))).confirmed, isFalse);
     });
 
+    test('an amount needs a line that looks like money', () async {
+      // 702 here is an order number, not the total.
+      ocr.result = ocrOf(['Order 702', 'Items 3', 'Delivered']);
+      final vision = LocalProviderClient(local()).vision('ocr-rules')!;
+
+      expect((await vision.verify(_verify('₹702'))).confirmed, isFalse);
+      expect(
+        (await vision.verify(_verify('702', type: 'order_number'))).confirmed,
+        isTrue,
+        reason: 'the same digits confirm for a field that is not money',
+      );
+    });
+
+    test('a value with several numbers is never confirmed', () async {
+      ocr.result = ocrOf(['Due 31/08/2026', 'Total ₹500']);
+      final vision = LocalProviderClient(local()).vision('ocr-rules')!;
+      final result = await vision.verify(
+        _verify('2026-08-31', type: 'due_date'),
+      );
+      expect(result.confirmed, isFalse);
+      expect(result.observedValue, isNull);
+    });
+
     test('verify reads Indian digit grouping', () async {
       ocr.result = ocrOf(['MacBook Air', 'Price ₹1,24,900']);
       final vision = LocalProviderClient(local()).vision('ocr-rules')!;
@@ -298,6 +324,18 @@ void main() {
         14,
         4,
       ]);
+    });
+
+    test('a second service does not reload the model', () async {
+      markDownloaded();
+      final client = LocalProviderClient(local());
+
+      // The router builds a new service for every call.
+      await client.embeddings('bge-small-en-v1.5')!.embed(['bill']);
+      await client.embeddings('bge-small-en-v1.5')!.embed(['receipt']);
+
+      expect(runtime.loads, hasLength(1));
+      expect(runtime.batches, hasLength(2));
     });
 
     test('reloads when the runtime lost the model', () async {

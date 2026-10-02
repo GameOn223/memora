@@ -6,13 +6,9 @@ import '../shared/json_read.dart';
 
 /// NVIDIA's hosted reranking endpoint for [modelId].
 ///
-/// Current models have their own path, with dots in the name written as
-/// underscores. The original `nvidia/rerank-qa-mistral-4b` used a shared one.
+/// Each model has its own path, with dots in the name written as
+/// underscores.
 Uri nvidiaRerankUrl(String modelId) {
-  const shared = {'nvidia/rerank-qa-mistral-4b', 'nv-rerank-qa-mistral-4b:1'};
-  if (shared.contains(modelId)) {
-    return Uri.parse('https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking');
-  }
   final path = modelId.replaceAll('.', '_');
   return Uri.parse('https://ai.api.nvidia.com/v1/retrieval/$path/reranking');
 }

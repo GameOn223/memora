@@ -17,6 +17,12 @@ final _png = Uint8List.fromList([
   0x0A,
 ]);
 
+/// The shared understanding schema with `additionalProperties: false`, which
+/// structured outputs require on every object.
+final closedUnderstandingSchema = fixtureJson(
+  'openai/understanding_schema_closed.json',
+);
+
 VisionRequest _visionRequest({
   Uint8List? bytes,
   String mimeType = 'image/png',
@@ -53,21 +59,19 @@ void main() {
       Capability.chat,
     });
     for (final capability in [Capability.vision, Capability.chat]) {
-      expect(anthropicDescriptor.suggestedModels[capability], [
-        'claude-sonnet-5',
-        'claude-haiku-4-5',
-      ]);
+      expect(anthropicDescriptor.suggestedModels[capability], anthropicModels);
     }
+    expect(anthropicModels.first, startsWith('claude-sonnet-'));
     expect(client().embeddings('x'), isNull);
     expect(client().reranker('x'), isNull);
   });
 
   group('vision', () {
-    test('forces the record_memory tool and reads its input', () async {
-      http.replyFixture('anthropic/vision_response.json');
+    test('asks current models for structured output', () async {
+      http.replyFixture('anthropic/vision_response_structured.json');
 
       final u = await client()
-          .vision('claude-sonnet-5')!
+          .vision('claude-sonnet-5-5')!
           .analyze(_visionRequest());
 
       final request = http.requests.single;
@@ -81,10 +85,12 @@ void main() {
           '<analyze_instructions>': VisionPrompts.analyzeInstructions(
             _visionRequest(),
           ),
-          '<schema>': VisionPrompts.understandingSchema,
+          '<closed_schema>': closedUnderstandingSchema,
         }),
       );
       expect(http.body(0).containsKey('temperature'), isFalse);
+      expect(http.body(0).containsKey('tool_choice'), isFalse);
+      expect(http.body(0).containsKey('tools'), isFalse);
 
       expect(u.summary, 'Swiggy order receipt from Meghana Foods');
       expect(u.category, 'receipt');
@@ -93,18 +99,49 @@ void main() {
       expect(u.attributes.single.type, 'order_number');
     });
 
+    test('never forces a tool on models that reject it', () async {
+      // Forced tool_choice returns 400 on the current lineup, which would
+      // fail every image with a configuration error and pause the queue.
+      for (final model in [
+        'claude-opus-5-5',
+        'claude-sonnet-5-5',
+        'claude-fable-5-1',
+        'claude-mythos-5-1',
+        'claude-opus-5',
+        'claude-sonnet-5',
+        'claude-haiku-4-5',
+      ]) {
+        http.replyFixture('anthropic/vision_response_structured.json');
+        await client().vision(model)!.analyze(_visionRequest());
+        final body = http.body(http.requests.length - 1);
+        expect(body['tool_choice'], isNull, reason: model);
+        expect((body['output_config']! as Map)['format'], {
+          'type': 'json_schema',
+          'schema': closedUnderstandingSchema,
+        }, reason: model);
+      }
+    });
+
     test(
-      'models that refuse forced tools get auto and an instruction',
+      'an unknown model gets a tool it may call, never a forced one',
       () async {
         http.replyFixture('anthropic/vision_response.json');
 
-        await client().vision('claude-fable-5-1')!.analyze(_visionRequest());
+        final u = await client()
+            .vision('claude-opus-7')!
+            .analyze(_visionRequest());
 
         final body = http.body(0);
         expect(body['tool_choice'], {'type': 'auto'});
+        expect(body.containsKey('output_config'), isFalse);
+        expect(
+          ((body['tools']! as List).single! as Map)['input_schema'],
+          VisionPrompts.understandingSchema,
+        );
         final content =
             ((body['messages']! as List).single! as Map)['content']! as List;
         expect((content.last! as Map)['text'], contains('record_memory'));
+        expect(u.category, 'receipt');
       },
     );
 
@@ -156,19 +193,17 @@ void main() {
       expect(http.requests, isEmpty);
     });
 
-    test('verify forces record_verification', () async {
+    test('verify asks for the verification schema', () async {
       http.reply({
         'type': 'message',
         'role': 'assistant',
         'content': [
           {
-            'type': 'tool_use',
-            'id': 'toolu_v',
-            'name': 'record_verification',
-            'input': {'confirmed': false, 'observed_value': '₹720'},
+            'type': 'text',
+            'text': '{"confirmed": false, "observed_value": "₹720"}',
           },
         ],
-        'stop_reason': 'tool_use',
+        'stop_reason': 'end_turn',
       });
       final request = VerificationRequest(
         imageBytes: _png,
@@ -181,14 +216,21 @@ void main() {
 
       final body = http.body(0);
       expect(body['system'], VisionPrompts.verifyInstructions(request));
-      expect(body['tool_choice'], {
-        'type': 'tool',
-        'name': 'record_verification',
+      expect(body.containsKey('tool_choice'), isFalse);
+      expect((body['output_config']! as Map)['format'], {
+        'type': 'json_schema',
+        'schema': {
+          'type': 'object',
+          'properties': {
+            'confirmed': {'type': 'boolean'},
+            'observed_value': {
+              'type': ['string', 'null'],
+            },
+          },
+          'required': ['confirmed', 'observed_value'],
+          'additionalProperties': false,
+        },
       });
-      expect(
-        ((body['tools']! as List).single! as Map)['input_schema'],
-        VisionPrompts.verificationSchema,
-      );
       expect(result.confirmed, isFalse);
       expect(result.observedValue, '₹720');
     });
@@ -427,10 +469,7 @@ void main() {
           'message': 'invalid x-api-key',
         },
       }, status: 401);
-      expect(await client().listModels(Capability.vision), [
-        'claude-sonnet-5',
-        'claude-haiku-4-5',
-      ]);
+      expect(await client().listModels(Capability.vision), anthropicModels);
     });
 
     test('testConnection', () async {

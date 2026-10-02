@@ -22,9 +22,13 @@ class OpenAiChatService implements ChatService {
   final OpenAiCompatibleProfile _profile;
   final String modelId;
 
+  /// One cache serves every OpenAI-compatible preset, so entries are kept
+  /// apart by provider and model.
+  String get _replayScope => '${_endpoint.providerId}|$modelId';
+
   @override
   Future<ChatTurn> complete(ChatRequest request) async {
-    final reasoning = isOpenAiReasoningModel(modelId);
+    final reasoning = _profile.reasons(modelId);
     final json = await _endpoint.post('/chat/completions', {
       'model': modelId,
       'messages': [
@@ -45,7 +49,8 @@ class OpenAiChatService implements ChatService {
               },
             },
         ],
-      if (!reasoning) 'temperature': request.temperature,
+      if (_profile.sendsTemperature(modelId))
+        'temperature': request.temperature,
       _profile.maxTokensField: reasoning
           ? request.maxOutputTokens + reasoningHeadroomTokens
           : request.maxOutputTokens,
@@ -58,7 +63,7 @@ class OpenAiChatService implements ChatService {
       case UserEntry(:final text):
         return {'role': 'user', 'content': text};
       case AssistantEntry(:final text, :final toolCalls):
-        final details = _reasoningDetails.lookup(toolCalls);
+        final details = _reasoningDetails.lookup(_replayScope, toolCalls);
         return {
           'role': 'assistant',
           'content': text.isEmpty && toolCalls.isNotEmpty ? null : text,
@@ -110,7 +115,7 @@ class OpenAiChatService implements ChatService {
 
     final details = message['reasoning_details'];
     if (calls.isNotEmpty && details is List && details.isNotEmpty) {
-      _reasoningDetails.remember(calls, details);
+      _reasoningDetails.remember(_replayScope, calls, details);
     }
 
     final refusal = asString(message['refusal']);

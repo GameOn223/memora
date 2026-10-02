@@ -1,13 +1,15 @@
 import 'package:memora_core/memora_core.dart';
 
+import '../shared/model_facts.dart';
+
 const anthropicDescriptor = ProviderDescriptor(
   id: 'anthropic',
   displayName: 'Anthropic',
   location: ProviderLocation.cloud,
   capabilities: {Capability.vision, Capability.chat},
   suggestedModels: {
-    Capability.vision: ['claude-sonnet-5', 'claude-haiku-4-5'],
-    Capability.chat: ['claude-sonnet-5', 'claude-haiku-4-5'],
+    Capability.vision: anthropicModels,
+    Capability.chat: anthropicModels,
   },
   requiresApiKey: true,
   apiKeyHint: 'sk-ant-...',

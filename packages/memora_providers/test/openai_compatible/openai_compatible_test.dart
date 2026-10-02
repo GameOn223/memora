@@ -62,11 +62,14 @@ void main() {
       expect(openAiDescriptor.requiresApiKey, isTrue);
       expect(openAiDescriptor.apiKeyHint, 'sk-...');
       expect(openAiDescriptor.defaultBaseUrl, 'https://api.openai.com/v1');
-      expect(openAiDescriptor.defaultModel(Capability.vision), 'gpt-5-mini');
-      expect(openAiDescriptor.suggestedModels[Capability.chat], [
-        'gpt-5-mini',
-        'gpt-4.1-mini',
-      ]);
+      expect(
+        openAiDescriptor.defaultModel(Capability.vision),
+        openAiVisionModels.first,
+      );
+      expect(
+        openAiDescriptor.suggestedModels[Capability.chat],
+        openAiChatModels,
+      );
       expect(
         openAiDescriptor.defaultModel(Capability.embeddings),
         'text-embedding-3-small',
@@ -76,11 +79,11 @@ void main() {
       expect(groqDescriptor.capabilities, {Capability.vision, Capability.chat});
       expect(
         groqDescriptor.defaultModel(Capability.vision),
-        'meta-llama/llama-4-scout-17b-16e-instruct',
+        groqVisionModels.first,
       );
       expect(
         groqDescriptor.defaultModel(Capability.chat),
-        'llama-3.3-70b-versatile',
+        groqChatModels.first,
       );
 
       expect(nvidiaDescriptor.capabilities, Capability.values.toSet());
@@ -695,6 +698,65 @@ void main() {
       expect(http.body(1)['input_type'], 'passage');
     });
 
+    test('resolveModel probes once for an unknown model', () async {
+      http.reply({
+        'data': [
+          {
+            'index': 0,
+            'embedding': [1, 0, 0, 0, 1],
+          },
+        ],
+      });
+      final service =
+          clientFor(
+                ollamaDescriptor,
+                apiKey: null,
+              ).embeddings('some-private-model')!
+              as OpenAiEmbeddingService;
+
+      expect(service.model.dimensions, 0, reason: 'nothing known yet');
+
+      final info = await service.resolveModel();
+
+      expect(info.dimensions, 5);
+      expect(service.model.dimensions, 5);
+      expect(http.requests, hasLength(1));
+      expect(http.body(0)['input']! as List, hasLength(1));
+
+      // A second call answers from the cache.
+      expect((await service.resolveModel()).dimensions, 5);
+      expect(http.requests, hasLength(1));
+    });
+
+    test('resolveModel does not call a provider it already knows', () async {
+      final service =
+          clientFor(openAiDescriptor).embeddings('text-embedding-3-small')!
+              as OpenAiEmbeddingService;
+      expect((await service.resolveModel()).dimensions, 1536);
+      expect(http.requests, isEmpty);
+    });
+
+    test('an Ollama tag does not split the embedding space', () async {
+      http.reply({
+        'data': [
+          {
+            'index': 0,
+            'embedding': [0, 1],
+          },
+        ],
+      });
+      final tagged = clientFor(
+        ollamaDescriptor,
+        apiKey: null,
+      ).embeddings('nomic-embed-text:latest')!;
+
+      expect(tagged.model.storageId, 'ollama/nomic-embed-text');
+      expect(tagged.model.dimensions, 768);
+
+      await tagged.embed(['bill']);
+      expect(http.body(0)['model'], 'nomic-embed-text:latest');
+    });
+
     test('empty input makes no request', () async {
       expect(
         await clientFor(openAiDescriptor)
@@ -740,6 +802,23 @@ void main() {
       expect(
         http.requests.first.url.toString(),
         'https://api.openai.com/v1/models',
+      );
+    });
+
+    test('a server with no embedding model offers none', () async {
+      http.reply({
+        'data': [
+          {'id': 'llama3.2'},
+          {'id': 'qwen2.5vl'},
+        ],
+      });
+      expect(
+        await clientFor(
+          ollamaDescriptor,
+          apiKey: null,
+        ).listModels(Capability.embeddings),
+        ollamaEmbeddingModels,
+        reason: 'the suggestions, never the chat models',
       );
     });
 
