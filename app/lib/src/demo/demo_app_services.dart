@@ -165,6 +165,9 @@ class DemoGalleryService implements GalleryService {
   /// What the system picker returns.
   List<String>? pickerResult;
 
+  /// When set, the next listing or add throws.
+  bool failNext = false;
+
   final List<DeviceImage> _images = [];
   final Map<String, (DemoImageKind, int)> _kinds = {};
   final Set<String> _added = {};
@@ -193,6 +196,10 @@ class DemoGalleryService implements GalleryService {
     required int limit,
   }) async {
     listCalls.add((offset, limit));
+    if (failNext) {
+      failNext = false;
+      throw StateError('The gallery could not be read');
+    }
     final page = _images.skip(offset).take(limit).toList();
     return DeviceImagePage(
       images: page,
@@ -214,6 +221,10 @@ class DemoGalleryService implements GalleryService {
   @override
   Future<AddImagesResult> addToMemora(List<String> uris) async {
     addCalls.add([...uris]);
+    if (failNext) {
+      failNext = false;
+      throw StateError('The images could not be copied');
+    }
     var added = 0;
     var duplicates = 0;
     final now = db.clock.now();
@@ -336,6 +347,9 @@ class DemoLocalModelService implements LocalModelService {
   ];
   final List<String> downloads = [];
 
+  /// When set, the next download throws part way through.
+  bool failNext = false;
+
   void _emit(List<LocalModelInfo> models) {
     _models = models;
     _controller.add(models);
@@ -359,6 +373,10 @@ class DemoLocalModelService implements LocalModelService {
   @override
   Future<void> download(String modelId) async {
     downloads.add(modelId);
+    if (failNext) {
+      failNext = false;
+      throw StateError('The download could not be verified');
+    }
     for (var step = 1; step <= 10; step++) {
       _emit([
         for (final m in _models)
@@ -386,11 +404,18 @@ class DemoLocalModelService implements LocalModelService {
 class DemoExportService implements ExportService {
   int exports = 0;
 
+  /// When set, the next export throws, so error paths can be tested.
+  bool failNext = false;
+
   @override
   Future<bool> exportAll({
     void Function(ExportProgress progress)? onProgress,
   }) async {
     exports++;
+    if (failNext) {
+      failNext = false;
+      throw StateError('The export could not be written');
+    }
     const total = 17;
     for (var i = 1; i <= total; i++) {
       await Future<void>.delayed(Duration.zero);
@@ -437,6 +462,9 @@ class DemoPipeline implements ProcessingPipeline {
   final CapabilityRouter router;
   int reindexCalls = 0;
 
+  /// When set, the next reindex throws.
+  bool failNext = false;
+
   @override
   Future<QueueBlock?> currentBlock() async {
     try {
@@ -472,6 +500,10 @@ class DemoPipeline implements ProcessingPipeline {
   @override
   Future<int> reindexEmbeddings({required Duration budget}) async {
     reindexCalls++;
+    if (failNext) {
+      failNext = false;
+      throw StateError('The embedding model is not loaded');
+    }
     return db.memories.values
         .where((m) => m.status == ProcessingStatus.ready)
         .length;

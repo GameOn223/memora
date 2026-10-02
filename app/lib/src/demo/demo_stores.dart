@@ -595,6 +595,9 @@ class DemoSettingsStore implements SettingsStore {
 class DemoSecretStore implements SecretStore {
   final Map<String, String> values = {};
 
+  /// When set, the next write or delete throws.
+  bool failNext = false;
+
   @override
   Future<void> delete(String key) async => values.remove(key);
 
@@ -605,7 +608,13 @@ class DemoSecretStore implements SecretStore {
   Future<String?> read(String key) async => values[key];
 
   @override
-  Future<void> write(String key, String value) async => values[key] = value;
+  Future<void> write(String key, String value) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('The keystore is unavailable');
+    }
+    values[key] = value;
+  }
 }
 
 class DemoImageFiles implements ImageFiles {

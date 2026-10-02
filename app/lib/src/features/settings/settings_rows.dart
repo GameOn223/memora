@@ -62,10 +62,7 @@ class SettingsRow extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: Space.s3),
-            Flexible(child: trailing!),
-          ],
+          if (trailing != null) ...[const SizedBox(width: Space.s3), trailing!],
           if (chevron) ...[
             const SizedBox(width: Space.s3),
             Icon(MemoraIcons.caretRight, size: 12, color: c.dim),
@@ -91,11 +88,15 @@ class SettingsSection extends StatelessWidget {
     required this.label,
     required this.child,
     this.footnote,
+    this.footnoteIsError = false,
   });
 
   final String label;
   final Widget child;
   final String? footnote;
+
+  /// Draws the footnote in accent ink, for something that went wrong.
+  final bool footnoteIsError;
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +111,11 @@ class SettingsSection extends StatelessWidget {
           const SizedBox(height: Space.s3),
           Text(
             footnote!,
-            style: MemoraText.style(12, height: 1.55, color: c.dim),
+            style: MemoraText.style(
+              12,
+              height: 1.55,
+              color: footnoteIsError ? c.accentInk : c.dim,
+            ),
           ),
         ],
       ],

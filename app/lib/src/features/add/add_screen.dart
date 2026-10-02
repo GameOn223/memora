@@ -37,10 +37,12 @@ class AddScreen extends ConsumerStatefulWidget {
 class _AddScreenState extends ConsumerState<AddScreen> {
   final _scroll = ScrollController();
   final _images = <DeviceImage>[];
+  List<_DateGroup> _groups = const [];
   GalleryAccess? _access;
   bool _loading = false;
   bool _hasMore = true;
   bool _adding = false;
+  String? _error;
 
   @override
   void initState() {
@@ -58,11 +60,17 @@ class _AddScreenState extends ConsumerState<AddScreen> {
   GalleryService get _gallery => ref.read(appServicesProvider).gallery;
 
   Future<void> _start() async {
-    final access = await _gallery.access();
-    if (!mounted) return;
-    setState(() => _access = access);
-    if (access == GalleryAccess.full || access == GalleryAccess.partial) {
-      await _loadMore();
+    try {
+      final access = await _gallery.access();
+      if (!mounted) return;
+      setState(() => _access = access);
+      if (access == GalleryAccess.full || access == GalleryAccess.partial) {
+        await _loadMore();
+      }
+    } on Object {
+      if (mounted) {
+        setState(() => _error = 'The gallery could not be read.');
+      }
     }
   }
 
@@ -76,27 +84,53 @@ class _AddScreenState extends ConsumerState<AddScreen> {
 
   Future<void> _loadMore() async {
     if (_loading || !_hasMore) return;
-    setState(() => _loading = true);
-    final page = await _gallery.list(
-      offset: _images.length,
-      limit: AddScreen.pageSize,
-    );
-    if (!mounted) return;
     setState(() {
-      _images.addAll(page.images);
-      _hasMore = page.hasMore;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final page = await _gallery.list(
+        offset: _images.length,
+        limit: AddScreen.pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _images.addAll(page.images);
+        _hasMore = page.hasMore;
+        _groups = _groupByDay(_images, ref.read(clockProvider).now());
+      });
+    } on Object {
+      if (mounted) {
+        setState(() => _error = 'The gallery could not be read.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Groups the loaded page once, instead of on every rebuild.
+  static List<_DateGroup> _groupByDay(List<DeviceImage> images, DateTime now) {
+    final groups = <String, List<DeviceImage>>{};
+    for (final image in images) {
+      (groups[dayLabel(image.takenAt, now)] ??= []).add(image);
+    }
+    return [for (final e in groups.entries) _DateGroup(e.key, e.value)];
   }
 
   Future<void> _requestAccess() async {
-    final access = _access == GalleryAccess.permanentlyDenied
-        ? await _openSettings()
-        : await _gallery.requestAccess();
-    if (!mounted) return;
-    setState(() => _access = access);
-    if (access == GalleryAccess.full || access == GalleryAccess.partial) {
-      await _loadMore();
+    try {
+      final access = _access == GalleryAccess.permanentlyDenied
+          ? await _openSettings()
+          : await _gallery.requestAccess();
+      if (!mounted) return;
+      setState(() => _access = access);
+      if (access == GalleryAccess.full || access == GalleryAccess.partial) {
+        await _loadMore();
+      }
+    } on Object {
+      if (mounted) {
+        setState(() => _error = 'Android would not open that setting.');
+      }
     }
   }
 
@@ -105,12 +139,31 @@ class _AddScreenState extends ConsumerState<AddScreen> {
     return _gallery.access();
   }
 
+  Future<void> _retry() async {
+    setState(() {
+      _error = null;
+      _hasMore = true;
+    });
+    await (_images.isEmpty ? _start() : _loadMore());
+  }
+
   Future<void> _addUris(List<String> uris) async {
     if (uris.isEmpty || _adding) return;
-    setState(() => _adding = true);
-    final result = await _gallery.addToMemora(uris);
-    if (!mounted) return;
-    setState(() => _adding = false);
+    setState(() {
+      _adding = true;
+      _error = null;
+    });
+    AddImagesResult? result;
+    try {
+      result = await _gallery.addToMemora(uris);
+    } on Object {
+      if (mounted) {
+        setState(() => _error = 'Those images could not be added.');
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+    if (!mounted || result == null) return;
     ref.read(gallerySelectionProvider.notifier).clear();
     ref.read(addedToastProvider.notifier).show(result);
     await ref.read(dataVersionProvider.notifier).check();
@@ -120,21 +173,11 @@ class _AddScreenState extends ConsumerState<AddScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final selection = ref.watch(gallerySelectionProvider);
-    final policy = ref.watch(queuePolicyProvider).value ?? const QueuePolicy();
-    final overnight = policy.mode == QueueMode.overnight;
-    final now = ref.watch(clockProvider).now();
     final denied =
         _access == GalleryAccess.denied ||
         _access == GalleryAccess.permanentlyDenied;
-    final allSelected =
-        _images.isNotEmpty && selection.length == _images.length;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-
-    final groups = <String, List<DeviceImage>>{};
-    for (final image in _images) {
-      (groups[dayLabel(image.takenAt, now)] ??= []).add(image);
-    }
+    final blocked = _error != null && _images.isEmpty;
 
     return ColoredBox(
       color: c.bg,
@@ -148,123 +191,196 @@ class _AddScreenState extends ConsumerState<AddScreen> {
                 leading: HeaderLeading.close,
                 onLeading: () => context.go(Routes.home),
                 trailing: [
-                  if (!denied)
-                    TapArea(
-                      onTap: () {
-                        final notifier = ref.read(
-                          gallerySelectionProvider.notifier,
-                        );
-                        if (allSelected) {
-                          notifier.clear();
-                        } else {
-                          notifier.selectAll([
-                            for (final image in _images) image.uri,
-                          ]);
-                        }
-                      },
-                      semanticLabel: allSelected
-                          ? 'Clear selection'
-                          : 'Select all images',
-                      minSize: 0,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: Space.s2,
-                          vertical: Space.s3,
-                        ),
-                        child: Text(
-                          allSelected ? 'Clear' : 'Select all',
-                          style: MemoraText.style(
-                            12,
-                            medium: true,
-                            color: c.accentInk,
-                          ),
-                        ),
-                      ),
+                  if (!denied && !blocked)
+                    _SelectAllButton(
+                      uris: [for (final image in _images) image.uri],
                     ),
                 ],
               ),
               const FadingRule(),
               Expanded(
-                child: denied
-                    ? _PermissionPanel(
-                        permanent: _access == GalleryAccess.permanentlyDenied,
-                        onAllow: _requestAccess,
-                        onPicker: () async {
-                          final uris = await _gallery.pickWithSystemPicker();
-                          await _addUris(uris);
-                        },
-                      )
-                    : _GalleryGrid(
-                        controller: _scroll,
-                        groups: groups,
-                        selection: selection,
-                        partial: _access == GalleryAccess.partial,
-                        onChooseMore: _requestAccess,
-                        onToggle: (uri) => ref
-                            .read(gallerySelectionProvider.notifier)
-                            .toggle(uri),
-                      ),
+                child: switch ((denied, blocked)) {
+                  (true, _) => _PermissionPanel(
+                    permanent: _access == GalleryAccess.permanentlyDenied,
+                    onAllow: _requestAccess,
+                    onPicker: () => unawaited(_pickWithSystemPicker()),
+                  ),
+                  (_, true) => _FailurePanel(
+                    message: _error!,
+                    onRetry: () => unawaited(_retry()),
+                    onPicker: () => unawaited(_pickWithSystemPicker()),
+                  ),
+                  _ => _GalleryGrid(
+                    controller: _scroll,
+                    groups: _groups,
+                    partial: _access == GalleryAccess.partial,
+                    onChooseMore: _requestAccess,
+                  ),
+                },
               ),
             ],
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [c.bg, c.bg, c.bg.withValues(alpha: 0)],
-                  stops: const [0, 0.68, 1],
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  Space.s4,
-                  Space.s4,
-                  Space.s4,
-                  Space.s6 + bottomInset,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ToggleCard.compact(
-                      value: overnight,
-                      icon: MemoraIcons.moonStars,
-                      body: overnight
-                          ? 'Queued for tonight, while charging'
-                          : 'Process now, as you add them',
-                      onChanged: (value) => ref
-                          .read(queuePolicyProvider.notifier)
-                          .setMode(
-                            value ? QueueMode.overnight : QueueMode.immediate,
-                          ),
+          if (!blocked)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // A fixed fade, then solid background, so the row behind
+                  // never shows through the buttons.
+                  SizedBox(
+                    height: Space.s8,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [c.bg, c.bg.withValues(alpha: 0)],
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: Space.s2),
-                    OutlineAction(
-                      label: _adding
-                          ? 'Adding…'
-                          : selection.isEmpty
-                          ? 'Select images to add'
-                          : 'Add ${imageCount(selection.length)}',
-                      icon: MemoraIcons.images,
-                      height: 46,
-                      tone: selection.isEmpty
-                          ? ActionTone.disabled
-                          : ActionTone.accent,
-                      onPressed: selection.isEmpty || _adding
-                          ? null
-                          : () => _addUris(selection.toList()),
+                  ),
+                  ColoredBox(
+                    color: c.bg,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        Space.s4,
+                        0,
+                        Space.s4,
+                        Space.s6 + bottomInset,
+                      ),
+                      child: _AddBar(
+                        adding: _adding,
+                        error: _images.isEmpty ? null : _error,
+                        onAdd: (uris) => unawaited(_addUris(uris)),
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickWithSystemPicker() async {
+    try {
+      final uris = await _gallery.pickWithSystemPicker();
+      await _addUris(uris);
+    } on Object {
+      if (mounted) {
+        setState(() => _error = 'The system picker could not be opened.');
+      }
+    }
+  }
+}
+
+/// One day of gallery images.
+class _DateGroup {
+  const _DateGroup(this.label, this.images);
+
+  final String label;
+  final List<DeviceImage> images;
+}
+
+/// Ticks or clears every loaded image. Watches the selection on its own, so
+/// the grid doesn't rebuild with it.
+class _SelectAllButton extends ConsumerWidget {
+  const _SelectAllButton({required this.uris});
+
+  final List<String> uris;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final count = ref.watch(gallerySelectionProvider.select((s) => s.length));
+    final allSelected = uris.isNotEmpty && count == uris.length;
+    return TapArea(
+      onTap: () {
+        final notifier = ref.read(gallerySelectionProvider.notifier);
+        if (allSelected) {
+          notifier.clear();
+        } else {
+          notifier.selectAll(uris);
+        }
+      },
+      semanticLabel: allSelected ? 'Clear selection' : 'Select all images',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Space.s2,
+          vertical: Space.s3,
+        ),
+        child: Text(
+          allSelected ? 'Clear' : 'Select all',
+          style: MemoraText.style(12, medium: true, color: c.accentInk),
+        ),
+      ),
+    );
+  }
+}
+
+/// The overnight card and the add button. Watches the selection so the grid
+/// above it doesn't have to.
+class _AddBar extends ConsumerWidget {
+  const _AddBar({
+    required this.adding,
+    required this.error,
+    required this.onAdd,
+  });
+
+  final bool adding;
+  final String? error;
+  final ValueChanged<List<String>> onAdd;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final selection = ref.watch(gallerySelectionProvider);
+    final policy = ref.watch(queuePolicyProvider).value ?? const QueuePolicy();
+    final overnight = policy.mode == QueueMode.overnight;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (error != null) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: Space.s2),
+            child: Text(
+              error!,
+              style: MemoraText.style(12.5, color: c.accentInk),
             ),
           ),
         ],
-      ),
+        ToggleCard.compact(
+          value: overnight,
+          icon: MemoraIcons.moonStars,
+          body: overnight
+              ? 'Queued for tonight, while charging'
+              : 'Process now, as you add them',
+          onChanged: (value) => unawaited(
+            ref
+                .read(queuePolicyProvider.notifier)
+                .setMode(value ? QueueMode.overnight : QueueMode.immediate),
+          ),
+        ),
+        const SizedBox(height: Space.s2),
+        OutlineAction(
+          label: adding
+              ? 'Adding…'
+              : selection.isEmpty
+              ? 'Select images to add'
+              : 'Add ${imageCount(selection.length)}',
+          icon: MemoraIcons.images,
+          height: 46,
+          tone: selection.isEmpty ? ActionTone.disabled : ActionTone.accent,
+          onPressed: selection.isEmpty || adding
+              ? null
+              : () => onAdd(selection.toList()),
+        ),
+      ],
     );
   }
 }
@@ -273,17 +389,13 @@ class _GalleryGrid extends StatelessWidget {
   const _GalleryGrid({
     required this.controller,
     required this.groups,
-    required this.selection,
     required this.partial,
-    required this.onToggle,
     required this.onChooseMore,
   });
 
   final ScrollController controller;
-  final Map<String, List<DeviceImage>> groups;
-  final Set<String> selection;
+  final List<_DateGroup> groups;
   final bool partial;
-  final ValueChanged<String> onToggle;
   final VoidCallback onChooseMore;
 
   @override
@@ -326,7 +438,7 @@ class _GalleryGrid extends StatelessWidget {
                     ),
                   ),
                 ),
-              for (final group in groups.entries)
+              for (final group in groups)
                 SliverMainAxisGroup(
                   slivers: [
                     SliverToBoxAdapter(
@@ -337,7 +449,7 @@ class _GalleryGrid extends StatelessWidget {
                           children: [
                             Flexible(
                               child: Text(
-                                group.key.toUpperCase(),
+                                group.label.toUpperCase(),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: MemoraText.caps(
@@ -357,7 +469,7 @@ class _GalleryGrid extends StatelessWidget {
                             ),
                             const SizedBox(width: Space.s3),
                             Text(
-                              imageCount(group.value.length),
+                              imageCount(group.images.length),
                               style: MemoraText.caps(
                                 9.5,
                                 spacing: 0.8,
@@ -379,14 +491,17 @@ class _GalleryGrid extends StatelessWidget {
                               crossAxisSpacing: Space.s2,
                               childAspectRatio: 3 / 4,
                             ),
-                        delegate: SliverChildBuilderDelegate((context, i) {
-                          final image = group.value[i];
-                          return _GalleryCell(
-                            image: image,
-                            selected: selection.contains(image.uri),
-                            onTap: () => onToggle(image.uri),
-                          );
-                        }, childCount: group.value.length),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, i) => _GalleryCell(image: group.images[i]),
+                          childCount: group.images.length,
+                          findChildIndexCallback: (key) {
+                            final uri = (key as ValueKey<String>).value;
+                            final index = group.images.indexWhere(
+                              (image) => image.uri == uri,
+                            );
+                            return index < 0 ? null : index;
+                          },
+                        ),
                       ),
                     ),
                   ],
@@ -400,22 +515,22 @@ class _GalleryGrid extends StatelessWidget {
 }
 
 class _GalleryCell extends ConsumerWidget {
-  const _GalleryCell({
-    required this.image,
-    required this.selected,
-    required this.onTap,
-  });
+  _GalleryCell({required this.image}) : super(key: ValueKey(image.uri));
 
   final DeviceImage image;
-  final bool selected;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
+    // Watching one entry keeps a tap from rebuilding every other cell.
+    final selected = ref.watch(
+      gallerySelectionProvider.select((s) => s.contains(image.uri)),
+    );
+    final taken = dayLabel(image.takenAt, ref.watch(clockProvider).now());
     return TapArea(
-      onTap: onTap,
-      semanticLabel: 'Image from ${dayLabel(image.takenAt, image.takenAt)}',
+      onTap: () =>
+          ref.read(gallerySelectionProvider.notifier).toggle(image.uri),
+      semanticLabel: 'Image from $taken',
       selected: selected,
       minSize: 0,
       child: Container(
@@ -524,6 +639,68 @@ class _PermissionPanel extends StatelessWidget {
             label: permanent ? 'Open Android settings' : 'Allow access',
             onPressed: onAllow,
           ),
+          const SizedBox(height: Space.s2),
+          OutlineAction(
+            label: 'Pick with system picker',
+            tone: ActionTone.neutral,
+            onPressed: onPicker,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the gallery itself could not be read.
+class _FailurePanel extends StatelessWidget {
+  const _FailurePanel({
+    required this.message,
+    required this.onRetry,
+    required this.onPicker,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+  final VoidCallback onPicker;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(Space.s6, Space.s8, Space.s6, 160),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: c.surface2,
+              borderRadius: BorderRadius.circular(Radii.md),
+              border: Border.all(color: c.accentLine),
+            ),
+            child: Icon(MemoraIcons.warningCircle, size: 22, color: c.accent),
+          ),
+          const SizedBox(height: Space.s6),
+          Text(
+            message,
+            style: MemoraText.style(
+              20,
+              medium: true,
+              height: 1.3,
+              spacing: -0.4,
+              color: c.text,
+            ),
+          ),
+          const SizedBox(height: Space.s4),
+          Text(
+            'Nothing was added. Try again, or pick images with the system '
+            'picker instead.',
+            style: MemoraText.style(13.5, height: 1.6, color: c.muted),
+          ),
+          const SizedBox(height: Space.s8),
+          OutlineAction(label: 'Try again', onPressed: onRetry),
           const SizedBox(height: Space.s2),
           OutlineAction(
             label: 'Pick with system picker',

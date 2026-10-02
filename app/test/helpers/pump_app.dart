@@ -87,11 +87,28 @@ Future<DemoAppServices> pumpApp(
   return demo;
 }
 
-/// Scrolls [finder] into view and past anything floating over the bottom of
-/// the screen, so it can be tapped.
-Future<void> scrollTo(WidgetTester tester, Finder finder) async {
+/// Scrolls [finder] into the clear part of the viewport, past the header
+/// and anything floating over the bottom, so it can be tapped.
+Future<void> scrollTo(
+  WidgetTester tester,
+  Finder finder, {
+  double bottomClearance = 130,
+}) async {
   final scrollable = find.byType(Scrollable).last;
-  await tester.scrollUntilVisible(finder, 300, scrollable: scrollable);
-  await tester.drag(scrollable, const Offset(0, -160));
-  await tester.pumpAndSettle();
+  final height = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+  Rect? previous;
+  for (var i = 0; i < 40; i++) {
+    if (finder.evaluate().isNotEmpty) {
+      final rect = tester.getRect(finder.first);
+      final clear = rect.top > 70 && rect.bottom < height - bottomClearance;
+      // Stop once it sits clear, or once the list will not move further.
+      if (clear || (previous != null && (previous.top - rect.top).abs() < 1)) {
+        return;
+      }
+      previous = rect;
+    }
+    await tester.drag(scrollable, const Offset(0, -150));
+    await tester.pumpAndSettle();
+  }
+  throw StateError('Could not scroll $finder into view');
 }
