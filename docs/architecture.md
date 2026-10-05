@@ -372,9 +372,11 @@ Shipped adapters live in `memora_providers`:
 | `gemini` | Google Gemini | vision, chat, embeddings |
 | `anthropic` | Anthropic | vision, chat |
 | `nvidia_rerank` | NVIDIA | reranking |
-| `local` | On this device | vision (OCR plus rules), embeddings (bge-small-en-v1.5), reranking (score fusion) |
+| `local` | On this device | vision (OCR plus rules, or an imported Gemma that reads images), chat (an imported Gemma), embeddings (bge-small-en-v1.5), reranking (score fusion) |
 
 Model lists are fetched from the provider where an endpoint exists (for example `GET /v1/models`), so the picker doesn't depend on hard-coded names that go stale. Suggested defaults are only a starting point, and the user can type any model id.
+
+A model that lives in a file on the phone is only usable once the file is there, so `ProviderClient.isModelReady` is asked before a service is handed out. A missing file comes back as `modelNotDownloaded`, which settings shows as "model not on this phone" rather than letting the first question fail. Every network adapter mixes in `ModelsAlwaysReady`.
 
 See `docs/providers.md` for a walkthrough of adding a provider.
 
@@ -387,6 +389,8 @@ When local-only mode is on, `CapabilityRouter` applies `LocalOnlyPolicy` before 
 - `cloud` providers are refused.
 
 A refused capability is shown as unavailable in the UI. Memora never quietly falls back to a cloud provider.
+
+With a generative model imported (7.6) and selected for chat, every capability can run on the phone, and the settings toggle says so instead of pointing at a server on your own network.
 
 ### 7.4 What vision returns
 
@@ -430,6 +434,35 @@ Text: {first 600 characters of extracted_text}
 The on-device model is `bge-small-en-v1.5` (384 dimensions, int8 ONNX). It isn't bundled with the APK. Settings offers a one-time download, pinned to a specific upstream revision and verified against a SHA-256 before it's loaded. Tokenization (WordPiece) runs in Dart so it can be unit tested. ONNX Runtime runs in Kotlin.
 
 Changing the embedding model marks existing vectors as stale. Search only compares vectors whose model id and version match the active model. "Reindex embeddings" rebuilds them one memory at a time through the same queue machinery, and memories stay searchable by text and filters while it runs.
+
+### 7.6 A generative model on the phone
+
+Chat and vision can run on a Gemma model the user brings. Two ports in `memora_core` cover it, and the platform layer implements both:
+
+```dart
+abstract interface class LocalLlmRuntime {
+  Future<void> load(String relativeModelPath, {required bool vision, int maxTokens});
+  Future<bool> isLoaded();
+  Future<String?> loadedModelPath();
+  Future<void> unload();
+  Stream<String> generate(String prompt, {List<Uint8List> images, int maxTokens});
+  Future<DeviceMemory> memory();
+}
+
+abstract interface class LocalLlmFiles {
+  Future<List<InstalledLlmModel>> installed();
+  Stream<ModelImportEvent> import(String modelId, {required List<String> extensions});
+  Future<void> remove(String modelId);
+}
+```
+
+`local/model_catalog.dart` describes what settings offers: Gemma 3 1B (about 550 MB, text) and Gemma 3n E2B (about 3 GB, text and images), each with the RAM it realistically needs, the page it comes from and the licence. Memora never downloads one. The Gemma terms are accepted on the model page before the file appears, so the user downloads it and imports it through the system picker.
+
+`DeviceMemory` decides what the settings rows say. A phone whose total RAM is under what the model needs, or one Android marks as low memory, is told plainly that the model will not run there, and no import is offered. A phone with the RAM but little free right now is called tight and the import goes ahead.
+
+The prompt follows the cloud adapters: the same system prompt, the same transcript, the same tool definitions, written as Gemma turns with the system text on the first user turn. Tool definitions go in as one signature line each rather than eleven JSON schemas, which would crowd out the question. Generation is read piece by piece and the stream is cancelled at `<end_of_turn>`, so a model that carries on inventing turns does not spend the battery to do it.
+
+Vision uses the same `VisionPrompts` and the same lenient JSON reader as every other adapter. A text-only model keeps the OCR path, so selecting one for vision leaves that capability exactly as it was.
 
 ## 8. Retrieval
 
@@ -509,6 +542,8 @@ If no chat capability is available (none configured, or blocked by local-only mo
 - `QueryParser` recognizes relative and absolute dates ("last month", "in August", "last year", "yesterday"), amount constraints ("over ₹2000", "above 2k", "under $50"), category words ("bills", "bookings", "receipts") and superlatives ("highest", "latest", "total").
 - It builds a `RetrievalQuery`, runs hybrid search and, for superlatives, an aggregate.
 - The reply is plain and labeled: "Found 8 memories matching Reliance, utility bills." The chat header shows that no chat model is active.
+
+The same answer covers a chat model that cannot work the tools. A 1B model offered eleven tools often writes prose where a call belongs or names a tool that does not exist. When tools were offered, nothing has been searched yet and no usable call came back, the adapter raises `ToolCallingUnavailableException` and the turn is answered from search instead, with the model still recorded on the message. Guessing at someone's own bills is the one answer worth refusing to give.
 
 ### 9.3 Presentation
 
