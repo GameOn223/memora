@@ -64,7 +64,11 @@ class AiSettingsController extends AsyncNotifier<AiSettings> {
 
   Future<void> save(AiSettings settings) async {
     state = AsyncData(settings);
-    await ref.read(appServicesProvider).aiSettings.save(settings);
+    final services = ref.read(appServicesProvider);
+    await services.aiSettings.save(settings);
+    // Which providers are selected decides whether background work needs
+    // Wi-Fi, so the native schedule is rebuilt whenever they change.
+    await services.scheduler.refresh();
   }
 
   Future<void> setLocalOnly({required bool localOnly}) async {

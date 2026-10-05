@@ -170,6 +170,19 @@ LIMIT ?''', args);
           .offer(attributeFromRow(row));
     }
 
+    // The names on a card are what a reranker matches a question against.
+    // Without them the exact-name match in docs/architecture.md, section 8.2
+    // never fires, because this is the only store cards come from.
+    final names = <String, List<String>>{};
+    for (final row in _db.select(
+      'SELECT memory_id, value FROM entities '
+      'WHERE memory_id IN (SELECT value FROM json_each(?)) '
+      'ORDER BY id',
+      [idsJson],
+    )) {
+      (names[row['memory_id'] as String] ??= []).add(row['value'] as String);
+    }
+
     final byId = <String, MemoryCard>{};
     for (final row in _db.select(
       'SELECT id, taken_at, status, summary, category, thumbnail_path '
@@ -186,6 +199,7 @@ LIMIT ?''', args);
         category: row['category'] as String?,
         thumbnailPath: row['thumbnail_path'] as String?,
         facts: facts[id]?.toMap() ?? const {},
+        entities: names[id] ?? const [],
       );
     }
     return [for (final id in ids) ?byId[id]];

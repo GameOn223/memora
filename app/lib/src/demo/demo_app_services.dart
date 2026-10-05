@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:memora_core/memora_core.dart';
 
+import '../bootstrap/app_preferences_impl.dart';
 import '../services/app_services.dart';
 import 'demo_ai.dart';
 import 'demo_chat.dart';
@@ -50,7 +51,12 @@ class DemoAppServices implements AppServices {
       imageCount: galleryImageCount,
     );
     pipeline = DemoPipeline(db, router);
-    preferences = DemoPreferences(onboarded: onboardingComplete);
+    // The same preferences the real services use, over the demo's settings
+    // store, so a demo build reads and writes them exactly as a phone does.
+    preferences = StoredAppPreferences(settings);
+    if (onboardingComplete) {
+      settings.values[StoredAppPreferences.onboardingKey] = true;
+    }
     ingestor = DemoIngestor(memories, clock: this.clock);
     retrieval = DemoRetrieval(db);
     if (seed) {
@@ -115,7 +121,7 @@ class DemoAppServices implements AppServices {
   @override
   final DemoExportService export = DemoExportService();
   @override
-  late final DemoPreferences preferences;
+  late final AppPreferences preferences;
 }
 
 class DemoGalleryService implements GalleryService {
@@ -423,36 +429,6 @@ class DemoExportService implements ExportService {
     }
     return true;
   }
-}
-
-class DemoPreferences implements AppPreferences {
-  DemoPreferences({
-    this.onboarded = true,
-    this.themeValue = ThemePreference.system,
-  }) : _onboardingComplete = onboarded;
-
-  final bool onboarded;
-  ThemePreference themeValue;
-  bool _onboardingComplete;
-  int columns = 2;
-
-  @override
-  Future<bool> onboardingComplete() async => _onboardingComplete;
-
-  @override
-  Future<void> setOnboardingComplete() async => _onboardingComplete = true;
-
-  @override
-  Future<ThemePreference> theme() async => themeValue;
-
-  @override
-  Future<void> setTheme(ThemePreference theme) async => themeValue = theme;
-
-  @override
-  Future<int> gridColumns() async => columns;
-
-  @override
-  Future<void> setGridColumns(int columns) async => this.columns = columns;
 }
 
 class DemoPipeline implements ProcessingPipeline {

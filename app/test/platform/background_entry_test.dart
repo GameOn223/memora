@@ -38,6 +38,30 @@ void main() {
     expect(services.pipeline.budgets.last, const Duration(minutes: 1));
   });
 
+  test('closes what the isolate opened once the call is done', () async {
+    var closed = 0;
+    final handler = BackgroundCallHandler(
+      _FakeServices(),
+      onFinished: () async => closed++,
+    );
+
+    expect(await handler.ingestInbox(), 3);
+    expect(closed, 1);
+    await handler.runQueue(540000, false);
+    expect(closed, 2);
+    await handler.reindexEmbeddings(60000);
+    expect(closed, 3);
+  });
+
+  test('the worker still gets its result if the cleanup fails', () async {
+    final handler = BackgroundCallHandler(
+      _FakeServices(),
+      onFinished: () async => throw StateError('the database was busy'),
+    );
+
+    expect(await handler.ingestInbox(), 3);
+  });
+
   group('the headless entrypoint stays in the build', () {
     test('background_main.dart keeps the entry-point pragma', () {
       final source = File('lib/background_main.dart').readAsStringSync();

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'src/bootstrap/bootstrap.dart';
 import 'src/platform/background_entry.dart';
 import 'src/platform/messages.g.dart';
 import 'src/services/app_services.dart';
@@ -14,7 +15,13 @@ import 'src/services/app_services.dart';
 Future<void> backgroundMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await runBackground(createBackgroundServices);
+    await runBackground(
+      createBackgroundServices,
+      // The engine is destroyed once the worker's call returns, and that
+      // leaves the database connection and the HTTP client open. Close them
+      // while there is still an isolate to close them from.
+      onFinished: disposeMemoraServices,
+    );
   } catch (error, stack) {
     // Fail the worker now instead of letting it wait out the readiness
     // timeout, and leave something in the log to act on.
@@ -24,12 +31,7 @@ Future<void> backgroundMain() async {
   }
 }
 
-/// Hook for the composition root. Integration replaces the body with a call
-/// that opens the database and builds real services, for example
-/// `createAppServices(background: true)`.
-Future<AppServices> createBackgroundServices() {
-  throw UnimplementedError(
-    'Background services are not wired yet. '
-    'Point createBackgroundServices at the composition root.',
-  );
-}
+/// The services a worker runs on. A headless engine is its own isolate, so
+/// this opens a second connection to the same database file rather than
+/// sharing the one the UI holds. WAL lets both write.
+Future<AppServices> createBackgroundServices() => memoraServices();
