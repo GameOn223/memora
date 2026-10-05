@@ -88,10 +88,23 @@ jobs:
         working-directory: app
         run: flutter build apk --release --split-per-abi
 
+      # People download these from a phone, where "app-x86_64-release.apk"
+      # tells them nothing and installs on nothing. Say who each file is for.
+      - name: Name the files for the people downloading them
+        working-directory: app/build/app/outputs/flutter-apk
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          mv app-arm64-v8a-release.apk "memora-$version-arm64-v8a(android_phone).apk"
+          mv app-armeabi-v7a-release.apk "memora-$version-armeabi-v7a(old_android_phone).apk"
+          mv app-x86_64-release.apk "memora-$version-x86_64(emulator_not_a_phone).apk"
+          ls -1 memora-*.apk
+
       - name: Checksums
         working-directory: app/build/app/outputs/flutter-apk
         run: |
-          sha256sum app-*-release.apk > SHA256SUMS.txt
+          sha256sum memora-*.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Remove the signing key
@@ -119,8 +132,12 @@ jobs:
             echo
             echo "## Which file do I want?"
             echo
-            echo "\`app-arm64-v8a-release.apk\` for nearly every phone sold since 2017."
-            echo "\`app-armeabi-v7a-release.apk\` for older 32-bit devices."
+            echo "The file marked **android_phone** is the one you want. It runs on"
+            echo "nearly every phone sold since 2017."
+            echo
+            echo "Take **old_android_phone** only if your device is 32-bit, and"
+            echo "**emulator_not_a_phone** only for an emulator. That one will not"
+            echo "install on a normal phone."
             echo
             echo "Verify your download against \`SHA256SUMS.txt\`."
           } >> "$notes"
@@ -133,7 +150,7 @@ jobs:
             } >> "$notes"
           fi
           gh release create "$TAG" \
-            app/build/app/outputs/flutter-apk/app-*-release.apk \
+            app/build/app/outputs/flutter-apk/memora-*.apk \
             app/build/app/outputs/flutter-apk/SHA256SUMS.txt \
             --title "Memora $TAG" \
             --notes-file "$notes" \
