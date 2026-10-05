@@ -104,6 +104,125 @@ abstract interface class EmbeddingRuntime {
   Future<List<Float32List>> run(List<EncodedText> batch);
 }
 
+/// What the device can offer a large model right now.
+@immutable
+class DeviceMemory {
+  const DeviceMemory({
+    required this.totalBytes,
+    required this.availableBytes,
+    required this.lowRamDevice,
+  });
+
+  /// Physical RAM on the device.
+  final int totalBytes;
+
+  /// RAM the system says is free for a new allocation right now.
+  final int availableBytes;
+
+  /// Android's own low-memory flag. A model that fits on paper still has to
+  /// be refused on one of these phones.
+  final bool lowRamDevice;
+}
+
+/// A generative model running on this device.
+abstract interface class LocalLlmRuntime {
+  /// Loads a model file already in app storage. Safe to call again with the
+  /// same path and settings.
+  Future<void> load(
+    String relativeModelPath, {
+    required bool vision,
+    int maxTokens,
+  });
+
+  Future<bool> isLoaded();
+
+  Future<String?> loadedModelPath();
+
+  Future<void> unload();
+
+  /// Generated text, a piece at a time. Images are only accepted when the
+  /// model was loaded with vision.
+  Stream<String> generate(
+    String prompt, {
+    List<Uint8List> images,
+    int maxTokens,
+  });
+
+  Future<DeviceMemory> memory();
+}
+
+/// A generative model file sitting in app storage.
+@immutable
+class InstalledLlmModel {
+  const InstalledLlmModel({
+    required this.modelId,
+    required this.relativePath,
+    required this.sizeBytes,
+  });
+
+  /// Catalog id the file was imported as.
+  final String modelId;
+
+  /// Path inside the app's files directory, as [LocalLlmRuntime.load] takes
+  /// it.
+  final String relativePath;
+  final int sizeBytes;
+}
+
+/// Progress of bringing a model file in, from the system picker to a file in
+/// app storage.
+sealed class ModelImportEvent {
+  const ModelImportEvent();
+}
+
+/// Copying, from 0 to 1.
+final class ModelImportCopying extends ModelImportEvent {
+  const ModelImportCopying(this.fraction);
+
+  final double fraction;
+}
+
+final class ModelImportDone extends ModelImportEvent {
+  const ModelImportDone(this.model);
+
+  final InstalledLlmModel model;
+}
+
+/// The picker closed without a file.
+final class ModelImportCancelled extends ModelImportEvent {
+  const ModelImportCancelled();
+}
+
+/// Why a picked file cannot be used. Picking the same file again would end
+/// the same way, so the UI says what to do instead of offering a retry.
+enum ModelImportRefusal { wrongFileType, notEnoughStorage, unreadable }
+
+final class ModelImportRefused extends ModelImportEvent {
+  const ModelImportRefused(this.reason, {this.fileName});
+
+  final ModelImportRefusal reason;
+
+  /// Name of the file the user picked, when the picker reported one.
+  final String? fileName;
+}
+
+/// Model files the user brings in themselves. The platform layer opens the
+/// system picker and copies the chosen file into app storage.
+abstract interface class LocalLlmFiles {
+  /// Model files in app storage.
+  Future<List<InstalledLlmModel>> installed();
+
+  /// Opens the system picker, then copies the chosen file into app storage
+  /// as [modelId]. [extensions] are the endings the model is published with,
+  /// such as `.task`, and anything else is refused.
+  Stream<ModelImportEvent> import(
+    String modelId, {
+    required List<String> extensions,
+  });
+
+  Future<void> remove(String modelId);
+}
+
 /// State of an on-device model download.
 enum LocalModelState { notDownloaded, downloading, ready, failed }
 

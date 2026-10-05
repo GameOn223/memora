@@ -11,7 +11,7 @@ import 'vision.dart';
 
 /// [ProviderClient] for the Gemini API. The key travels in the
 /// `x-goog-api-key` header, never in the URL.
-class GeminiClient implements ProviderClient {
+class GeminiClient with ModelsAlwaysReady implements ProviderClient {
   GeminiClient(
     ProviderConfig config, {
     required http.Client httpClient,

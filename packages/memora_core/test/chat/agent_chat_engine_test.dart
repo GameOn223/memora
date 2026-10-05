@@ -425,6 +425,50 @@ void main() {
     });
   });
 
+  group('when a model cannot call tools', () {
+    test('answers from search and keeps the model on the message', () async {
+      final chat = ScriptedChatService([
+        const ToolCallingUnavailableException(
+          providerId: 'local',
+          modelId: 'gemma-3-1b-it-int4',
+        ),
+      ]);
+      final engine = await engineWith(await AiHarness.create(chat: chat));
+
+      final (events, conversation) = await ask(engine, 'reliance bills');
+
+      final message = (events.last as ChatAnswered).message;
+      expect(
+        message.content,
+        'Found 3 memories matching reliance, utility bills or invoices.',
+      );
+      expect(message.presentation!.searchOnly, isTrue);
+      expect(message.provider, 'fake');
+      expect(message.model, 'chat-model');
+      expect(message.references.map((r) => r.memoryId).toSet(), {
+        'jul',
+        'aug',
+        'sep',
+      });
+      expect(await db.latestResultSet(conversation.id), isNotNull);
+      expect(chat.requests, hasLength(1));
+    });
+
+    test('a failure worth retrying is still a failure', () async {
+      final engine = await engineWith(
+        await AiHarness.create(
+          chat: ScriptedChatService([
+            const AiTransientException('busy', providerId: 'local'),
+          ]),
+        ),
+      );
+
+      final (events, _) = await ask(engine, 'reliance bills');
+
+      expect(events.last, isA<ChatFailed>());
+    });
+  });
+
   group('without a chat model', () {
     test('answers from search and marks the message search-only', () async {
       final ai = await AiHarness.create();

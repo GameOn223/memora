@@ -10,7 +10,7 @@ import 'messages.dart';
 import 'vision.dart';
 
 /// [ProviderClient] for the Claude API.
-class AnthropicClient implements ProviderClient {
+class AnthropicClient with ModelsAlwaysReady implements ProviderClient {
   AnthropicClient(
     ProviderConfig config, {
     required http.Client httpClient,

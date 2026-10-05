@@ -13,7 +13,7 @@ import 'vision.dart';
 /// [ProviderClient] for every server that speaks the OpenAI chat
 /// completions protocol. The [descriptor] decides which services exist and
 /// its id picks the [OpenAiCompatibleProfile].
-class OpenAiCompatibleClient implements ProviderClient {
+class OpenAiCompatibleClient with ModelsAlwaysReady implements ProviderClient {
   OpenAiCompatibleClient(
     this.descriptor,
     ProviderConfig config, {
