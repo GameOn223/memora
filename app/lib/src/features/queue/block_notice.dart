@@ -48,14 +48,26 @@ class BlockNotice {
             : Routes.providerKey(keyProviderId),
       );
 
-  /// The provider is throttling. Memora retries on its own at [retryAt], so
-  /// the only thing left to decide is whether to use something else.
+  /// The provider is throttling. The queue waits and picks up again at
+  /// [retryAt] on its own, so the only thing left to decide is whether to
+  /// use something else in the meantime.
   BlockNotice.rateLimited(String providerName, DateTime retryAt)
     : this(
         sentence:
             '$providerName is rate limiting. Retrying at '
             '${DateFormat('HH:mm').format(retryAt.toLocal())}.',
         action: 'Choose another',
+        route: Routes.capability(Capability.vision),
+      );
+
+  /// The provider is selected but has nothing that can read an image with
+  /// the chosen model, so the pick itself has to change.
+  BlockNotice.providerUnavailable(String providerName, String? modelId)
+    : this(
+        sentence: modelId == null
+            ? '$providerName cannot understand images.'
+            : '$providerName has nothing that can run $modelId.',
+        action: 'Change model',
         route: Routes.capability(Capability.vision),
       );
 
@@ -92,10 +104,10 @@ BlockNotice blockNotice(QueueBlock block, {ProviderRegistry? providers}) =>
           message,
           keyProviderId: keyProviderId(providers, providerName),
         ),
-      // RateLimited lands with memora_core's conversation and rate limit
-      // work. Its arm is one line:
-      //   RateLimited(:final providerName, :final retryAt) =>
-      //       BlockNotice.rateLimited(providerName, retryAt),
+      RateLimited(:final providerName, :final retryAt) =>
+        BlockNotice.rateLimited(providerName, retryAt),
+      ProviderUnavailable(:final providerName, :final modelId) =>
+        BlockNotice.providerUnavailable(providerName, modelId),
     };
 
 /// The id of the provider called [providerName], when it is one that needs

@@ -430,8 +430,17 @@ class DemoQueueStore implements QueueStore {
   }
 
   @override
-  Future<void> releaseWithoutAttempt(String id, DateTime now) =>
-      releaseForRetry(id, nextAttemptAt: now, reason: '', now: now);
+  Future<void> releaseWithoutAttempt(
+    String id,
+    DateTime now, {
+    DateTime? nextAttemptAt,
+    String? reason,
+  }) => releaseForRetry(
+    id,
+    nextAttemptAt: nextAttemptAt ?? now,
+    reason: reason ?? '',
+    now: now,
+  );
 
   @override
   Future<void> markFailed(String id, String reason, DateTime now) async {

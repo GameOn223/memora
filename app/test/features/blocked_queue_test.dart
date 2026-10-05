@@ -38,6 +38,18 @@ Future<DemoAppServices> _localOnly() async {
   return services;
 }
 
+/// Demo services waiting out a rate limit, as the queue does after a 429.
+Future<DemoAppServices> _rateLimited() async {
+  final services = demoServices();
+  await services.pipeline.policy.saveRateLimit(
+    QueueRateLimit(
+      providerName: 'NVIDIA',
+      retryAt: testNow.add(const Duration(minutes: 7)),
+    ),
+  );
+  return services;
+}
+
 /// Adds the first two gallery images from the Add screen.
 Future<void> _addTwoImages(WidgetTester tester) async {
   await tester.tap(find.byType(DeviceImageView).first);
@@ -115,18 +127,36 @@ void main() {
       );
     });
 
-    // Written ahead of the RateLimited block type in memora_core. When it
-    // lands, the switch in blockNotice gets its arm and this copy is already
-    // in place.
     test('rate limiting says when it will try again', () {
-      final notice = BlockNotice.rateLimited(
-        'Groq',
-        DateTime(2026, 9, 15, 14, 32),
+      final notice = blockNotice(
+        RateLimited('Groq', DateTime(2026, 9, 15, 14, 32)),
+        providers: registry,
       );
 
       expect(notice.sentence, 'Groq is rate limiting. Retrying at 14:32.');
       expect(notice.action, 'Choose another');
       expect(notice.route, '/settings/capability/vision');
+    });
+
+    test('a provider with nothing for the model names the model', () {
+      final notice = blockNotice(
+        const ProviderUnavailable('Groq', 'llama-3.3-70b'),
+        providers: registry,
+      );
+
+      expect(notice.sentence, 'Groq has nothing that can run llama-3.3-70b.');
+      expect(notice.action, 'Change model');
+      expect(notice.route, '/settings/capability/vision');
+    });
+
+    test('a provider with no model set says it cannot read images', () {
+      final notice = blockNotice(
+        const ProviderUnavailable('Groq', null),
+        providers: registry,
+      );
+
+      expect(notice.sentence, 'Groq cannot understand images.');
+      expect(notice.action, 'Change model');
     });
   });
 
@@ -192,6 +222,24 @@ void main() {
       expect(find.byType(SettingsScreen), findsOneWidget);
     });
 
+    testWidgets('says when a rate limited provider will be tried again', (
+      tester,
+    ) async {
+      await pumpApp(
+        tester,
+        services: await _rateLimited(),
+        initialLocation: Routes.add,
+      );
+
+      await _addTwoImages(tester);
+
+      expect(find.text('2 images added'), findsOneWidget);
+      expect(
+        find.text('NVIDIA is rate limiting. Retrying at 10:07.'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('keeps the usual copy when nothing is blocked', (tester) async {
       await pumpApp(tester, initialLocation: Routes.add);
 
@@ -240,6 +288,23 @@ void main() {
       await tester.tap(find.text('Fix key'));
       await tester.pumpAndSettle();
       expect(find.byType(ProviderKeyScreen), findsOneWidget);
+    });
+
+    testWidgets('says a rate limit is being waited out', (tester) async {
+      await pumpApp(
+        tester,
+        services: await _rateLimited(),
+        initialLocation: Routes.queue,
+      );
+
+      expect(
+        find.text('NVIDIA is rate limiting. Retrying at 10:07.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Choose another'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CapabilityScreen), findsOneWidget);
     });
   });
 }
