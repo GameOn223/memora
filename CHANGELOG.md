@@ -4,6 +4,18 @@ All notable changes to Memora are recorded here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **A conversation drawer in Ask.** The history button opens a drawer down the left edge listing your conversations, pinned ones first, each with when it was last used and the open one marked. Every row can be pinned, renamed or deleted. Deleting the conversation you are in starts a fresh one.
+
+### Changed
+
+- **Adding images says when nothing will be understood.** With no vision model selected, a key the provider rejected, a provider that cannot run the chosen model, or one that is rate limiting, the toast after an add names the reason and links to the screen that settles it, instead of leaving the images in a queue that cannot move. The queue banner says the same thing and covers every reason the queue reports, including a rate limit it is waiting out and the time it picks up again.
+
+### Fixed
+
+- Keywords on a memory took a whole line each. They now sit beside each other as chips and wrap onto as many lines as they need, the way the design draws them.
+
 ## [0.1.0]
 
 The first release. Memora turns images you choose to keep into a private, searchable memory you can ask questions about.

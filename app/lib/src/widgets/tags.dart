@@ -80,12 +80,16 @@ class KeywordChip extends StatelessWidget {
     return Container(
       height: 26,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      alignment: Alignment.center,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(Radii.sm),
         border: Border.all(color: c.line),
       ),
-      child: Text(keyword, style: MemoraText.style(12, color: c.muted)),
+      // widthFactor keeps the chip around its word. Centering without it
+      // takes the whole line a Wrap offers, which puts one chip per row.
+      child: Center(
+        widthFactor: 1,
+        child: Text(keyword, style: MemoraText.style(12, color: c.muted)),
+      ),
     );
   }
 }
