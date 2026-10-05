@@ -1,12 +1,19 @@
-<img src="docs/logo.png" width="96" align="left" alt="" hspace="12">
+<p align="center">
+  <img src="docs/logo.png" width="112" alt="">
+</p>
 
-# Memora
+<h1 align="center">Memora</h1>
 
-**Your visual memory.** An open-source Android app that turns the images you keep into a private, searchable memory you can talk to.
+<p align="center">
+  <strong>Your visual memory.</strong><br>
+  An open-source Android app that turns the images you keep into a private, searchable memory you can talk to.
+</p>
 
-[![CI](https://github.com/GameOn223/memora/actions/workflows/ci.yml/badge.svg)](https://github.com/GameOn223/memora/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84)
+<p align="center">
+  <a href="https://github.com/GameOn223/memora/actions/workflows/ci.yml"><img src="https://github.com/GameOn223/memora/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License Apache 2.0"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84" alt="Android 8.0 and newer">
+</p>
 
 <p align="center">
   <img src="docs/screenshots/01-home.png" width="200" alt="Memories grid">
@@ -133,7 +140,13 @@ Next: visual verification everywhere, smarter reranking, embedding migration bet
 
 ## Contributing
 
-Contributions are welcome, including ones written with AI tools, as long as you understand the change, have tested it, and can explain it in review. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome, including ones written with AI tools, as long as you understand the change, have tested it, and can explain it in review. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and see [AGENTS.md](AGENTS.md) if you work with a coding agent.
+
+## Support
+
+Bugs and ideas belong in [issues](https://github.com/GameOn223/memora/issues), where everyone can see them and help.
+
+For anything you would rather not post in public, email **jayrathod.dev@gmail.com**. Security problems have their own route in [SECURITY.md](SECURITY.md).
 
 ## License
 
