@@ -1,8 +1,9 @@
-gradle-wrapper.jar
+# The Gradle wrapper is committed on purpose. Flutter's template ignores it,
+# but then a fresh clone cannot run ./gradlew, which CONTRIBUTING and CI both
+# ask for, and everyone ends up on whichever Gradle their machine happens to
+# have. Committing it is what Gradle itself recommends.
 /.gradle
 /captures/
-/gradlew
-/gradlew.bat
 /local.properties
 GeneratedPluginRegistrant.java
 .cxx/
