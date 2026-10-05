@@ -27,6 +27,20 @@ void main() {
     });
   }
 
+  testWidgets('the conversation drawer holds together at 2x text', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await pumpApp(tester, initialLocation: Routes.ask);
+    await tester.tap(find.bySemanticsLabel('Conversations'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CONVERSATIONS'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the composer grows with the text scale', (tester) async {
     await pumpApp(tester, initialLocation: Routes.ask);
     final normal = tester.getSize(find.byType(TextField)).height;

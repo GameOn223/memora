@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:memora_core/memora_core.dart';
 
 import '../services/app_services.dart';
 
@@ -12,16 +14,29 @@ class HomeFilter extends Notifier<String> {
   void select(String label) => state = label;
 }
 
+/// What the last add produced: the counts, and the reason nothing will be
+/// understood when something is blocking the queue.
+@immutable
+class AddedOutcome {
+  const AddedOutcome(this.result, {this.block});
+
+  final AddImagesResult result;
+
+  /// Read once, right after the images were filed.
+  final QueueBlock? block;
+}
+
 /// Result of the last add, shown as a toast on home until it is cleared.
-final addedToastProvider = NotifierProvider<AddedToastState, AddImagesResult?>(
+final addedToastProvider = NotifierProvider<AddedToastState, AddedOutcome?>(
   AddedToastState.new,
 );
 
-class AddedToastState extends Notifier<AddImagesResult?> {
+class AddedToastState extends Notifier<AddedOutcome?> {
   @override
-  AddImagesResult? build() => null;
+  AddedOutcome? build() => null;
 
-  void show(AddImagesResult result) => state = result;
+  void show(AddImagesResult result, {QueueBlock? block}) =>
+      state = AddedOutcome(result, block: block);
 
   void clear() => state = null;
 }

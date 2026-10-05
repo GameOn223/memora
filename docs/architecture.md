@@ -232,6 +232,7 @@ The calls that finish an item (`markReady`, `markFailed`, `releaseForRetry`, `re
 
 `ProcessingPipeline.processNext()` in `memora_core`:
 
+0. **Check for a rate limit.** A rate limit from an earlier run is remembered under the `queue_rate_limit` setting. While its time has not passed, report `QueueBlocked(RateLimited)` and claim nothing.
 1. **Claim** the next row. Stop if there is none.
 2. **Resolve vision.** If no vision provider is configured, or the selected one is blocked by local-only mode, release the row back to `CAPTURED` without using an attempt and report `QueueBlocked(reason)`. The queue screen shows the reason with a link to settings.
 3. **Analyze.** Send the image to the vision capability and receive a `MemoryUnderstanding` (see 7.4).
@@ -244,9 +245,16 @@ Errors are classified by the provider layer:
 
 | Error kind | Example | What happens |
 |------------|---------|--------------|
-| Transient | timeout, 429, 5xx | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After the fourth attempt, `FAILED`. |
+| Transient | timeout, 5xx, unparseable output | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After the fourth attempt, `FAILED`. |
+| Rate limit | 429 | Back to `CAPTURED` with no attempt used, held until the retry time. The whole queue waits and reports `RateLimited`. |
 | Configuration | 401, 403, missing key, model not found | Row goes back to `CAPTURED` with no attempt used. The whole queue pauses with a message like "Check your NVIDIA key". |
 | Content | provider refused the image, unreadable file | `FAILED` right away with the reason. |
+
+A transient error that carries the provider's own `Retry-After` hint is scheduled from that hint rather than from the ladder, shorter or longer, capped at six hours. A provider that knows its own limits is believed.
+
+A rate limit is `AiRateLimitException`, a subtype of `AiTransientException`, so anything that only cares that an error is worth retrying keeps working. The queue treats it as the provider's state rather than a problem with the image: the attempt is given back, the memory is held until the retry time, and the note is saved so the UI isolate can tell the user why nothing is moving. The next success clears it.
+
+`ProcessingPipeline.currentBlock()` returns the same `QueueBlock` without claiming anything or calling a provider, so the UI can ask before every add. Its cases are `NoVisionProvider`, `BlockedByLocalOnly`, `ProviderConfigurationProblem`, `ProviderUnavailable` (the selected provider has no service for the model it is set to) and `RateLimited`.
 
 ### 5.4 Scheduling
 
@@ -297,7 +305,7 @@ All timestamps are UTC milliseconds since the epoch. Dates that come from image 
 
 **memories_fts**: FTS5 table with columns `summary`, `extracted_text`, `visual_description`, `keywords`, `entities`, using the `unicode61 remove_diacritics 2 categories 'L* N* Co Mc Mn'` tokenizer. `remove_diacritics 2` means Café is found by cafe. The categories add the combining marks that Indic scripts write vowels with, without which बिजली is indexed as the fragments ब, जल and ल. User text is tokenized the same way before it reaches `MATCH`. Changing these settings later needs a migration that rebuilds the index, so they're worth getting right now. The `rowid` is `memories.seq`, which an explicit `INTEGER PRIMARY KEY` keeps stable across `VACUUM`. The storage layer updates it inside the same transaction that writes AI output, so the index can't drift from the data.
 
-**conversations**: `id`, `title`, `created_at`, `updated_at`.
+**conversations**: `id`, `title`, `created_at`, `updated_at`, `pinned` INTEGER NOT NULL DEFAULT 0 (added by `m0002`). The conversation list reads pinned ones first, then the rest, each group newest updated first, which `conversations_pinned_updated_at` covers. Renaming and pinning leave `updated_at` alone, so neither reorders the list. Adding a message is the only thing that moves a conversation up. Deleting one cascades to its messages, their references and its result sets.
 
 **messages**: `id`, `conversation_id`, `role` (`user`, `assistant`), `content`, `presentation` TEXT NULL (JSON: strip, table, big value, verification note), `tool_trace` TEXT NULL (JSON list of tool calls for "How this was found"), `provider`, `model`, `created_at`.
 
@@ -563,7 +571,7 @@ Navigation is a bottom bar with Memories, Ask, Add and Settings. Screens:
 | Add | gallery grid by taken date, multi-select, overnight toggle, add button |
 | Queue | progress summary, overnight toggle, list of queued, active and failed items, Process now or Pause |
 | Browser | sort (newest, oldest, category), facets (category, taken date, processing), results grid |
-| Ask | conversation, sources, "How this was found", composer |
+| Ask | conversation, sources, "How this was found", composer, conversation drawer (pinned first, with pin, rename and delete per row) |
 | Detail | original image, category and status tags, summary, extracted facts table, filing note, keywords, conversations using it, provenance, Ask about this, Reprocess |
 | Settings | local-only mode, per-capability provider and model, processing, cloud disclosure, API keys, export, reindex, delete all, theme, tile and accessibility setup |
 
@@ -584,7 +592,7 @@ State management uses Riverpod. Screens read from core services through provider
 
 | Situation | Behavior |
 |-----------|----------|
-| No AI provider configured | Images are saved and browsable. The queue shows "AI processing is not configured" with a link to settings. |
+| No AI provider configured | Images are saved and browsable. The toast right after an add and the queue banner both name the reason nothing will be understood, with a link to the screen that settles it. Both read `currentBlock()` through one switch in `app/lib/src/features/queue/block_notice.dart`. |
 | Provider or network error | The memory stays saved. Retries follow 5.3. Failed items show Retry. |
 | Local-only mode blocks a capability | The capability is marked unavailable. Nothing is sent. |
 | Embedding failure | The memory is still `READY` and findable through text and filters. |

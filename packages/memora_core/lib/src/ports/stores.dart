@@ -147,8 +147,20 @@ abstract interface class QueueStore {
   });
 
   /// Returns a processing memory to `captured` and gives back the attempt it
-  /// used.
-  Future<void> releaseWithoutAttempt(String id, DateTime now);
+  /// used, for something that was not the memory's fault.
+  ///
+  /// [nextAttemptAt] holds it until then, which is how a rate limit waits
+  /// without spending an attempt. Left out, the memory is claimable again
+  /// right away, which is what a configuration problem wants: the queue is
+  /// blocked anyway and the row should run the moment the user fixes it.
+  /// [reason] fills `failure_reason` so the queue screen can say what
+  /// happened.
+  Future<void> releaseWithoutAttempt(
+    String id,
+    DateTime now, {
+    DateTime? nextAttemptAt,
+    String? reason,
+  });
 
   /// Marks a processing memory as failed with [reason].
   Future<void> markFailed(String id, String reason, DateTime now);
@@ -248,9 +260,23 @@ abstract interface class ConversationStore {
     DateTime now,
   );
 
+  /// Pinned conversations first, then the rest. Inside each group the
+  /// newest updated comes first, so adding a message moves a conversation to
+  /// the top of its group and renaming or pinning never reorders anything.
   Future<List<Conversation>> listConversations();
 
   Future<Conversation?> getConversation(String id);
+
+  /// Sets the title. [updatedAt] is left alone, so a rename does not move the
+  /// conversation in [listConversations]. [now] is the caller's clock, kept
+  /// for the write's own bookkeeping. Does nothing when [id] is unknown.
+  Future<void> renameConversation(String id, String title, DateTime now);
+
+  /// Pins or unpins a conversation. [updatedAt] is left alone, so pinning
+  /// changes which group a conversation is in and nothing else. [now] is the
+  /// caller's clock, kept for the write's own bookkeeping. Does nothing when
+  /// [id] is unknown.
+  Future<void> setConversationPinned(String id, bool pinned, DateTime now);
 
   Future<List<ChatMessage>> messages(String conversationId);
 
@@ -264,6 +290,9 @@ abstract interface class ConversationStore {
 
   Future<int> conversationsCiting(String memoryId);
 
+  /// Removes the conversation along with its messages, their references and
+  /// its result sets. The cited memories themselves are untouched. Does
+  /// nothing when [id] is unknown.
   Future<void> deleteConversation(String id);
 }
 

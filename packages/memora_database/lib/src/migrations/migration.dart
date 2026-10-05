@@ -2,6 +2,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../transactions.dart';
 import 'm0001_initial.dart';
+import 'm0002_pinned_conversations.dart';
 
 /// One step in the schema history.
 ///
@@ -20,7 +21,7 @@ abstract class Migration {
 }
 
 /// Every migration, oldest first.
-const migrations = <Migration>[M0001Initial()];
+const migrations = <Migration>[M0001Initial(), M0002PinnedConversations()];
 
 /// Brings [db] up to the newest version in [all].
 ///

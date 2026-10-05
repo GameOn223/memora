@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/features/detail/memory_facts.dart';
 import 'package:memora/src/features/queue/queue_screen.dart';
 import 'package:memora/src/widgets/caps_label.dart';
+import 'package:memora/src/widgets/tags.dart';
 import 'package:memora_core/memora_core.dart';
 
 import '../helpers/pump_app.dart';
@@ -89,6 +90,47 @@ void main() {
 
     expect(services.db.memories.containsKey('m6'), isFalse);
     expect(services.db.images.containsKey('originals/m6.png'), isFalse);
+  });
+
+  testWidgets('keywords are chips under their own label, not facts rows', (
+    tester,
+  ) async {
+    final services = demoServices();
+    await pumpApp(tester, services: services, initialLocation: '/memory/m9');
+
+    final details = (await services.memories.getDetails('m9'))!;
+    expect(details.keywords, [
+      'reliance',
+      'electricity',
+      'bill',
+      'payment',
+      'july',
+      'due date',
+    ]);
+    // The table is for facts. Keywords have no row in it.
+    expect(factRows(details).map((row) => row.$1), isNot(contains('Keywords')));
+
+    await scrollTo(tester, find.text('KEYWORDS'));
+    expect(find.byType(KeywordChip), findsNWidgets(details.keywords.length));
+    for (final keyword in details.keywords) {
+      expect(find.widgetWithText(KeywordChip, keyword), findsOneWidget);
+    }
+
+    // Every chip is the design's 26px pill, each row holds several of them,
+    // and they wrap rather than running off the screen.
+    final width = tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    final rects = [
+      for (final chip in find.byType(KeywordChip).evaluate())
+        tester.getRect(find.byWidget(chip.widget)),
+    ];
+    final rows = {for (final rect in rects) rect.top};
+    expect(rows.length, greaterThan(1));
+    expect(rows.length, lessThan(rects.length));
+    for (final rect in rects) {
+      expect(rect.height, moreOrLessEquals(26));
+      expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.right, lessThanOrEqualTo(width));
+    }
   });
 
   testWidgets('pending memories keep the caps label for their state', (

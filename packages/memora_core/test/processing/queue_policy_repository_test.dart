@@ -32,4 +32,45 @@ void main() {
     await settings.write('queue_policy', 'nonsense');
     expect(await repository.load(), const QueuePolicy());
   });
+
+  group('rate limit note', () {
+    const oneMinute = Duration(minutes: 1);
+    final retryAt = DateTime.utc(2026, 9, 15, 2, 20);
+    final limit = QueueRateLimit(providerName: 'NVIDIA', retryAt: retryAt);
+
+    test('round-trips under its own key', () async {
+      expect(QueuePolicyRepository.rateLimitKey, 'queue_rate_limit');
+      await repository.saveRateLimit(limit);
+
+      expect(
+        await repository.loadRateLimit(retryAt.subtract(oneMinute)),
+        limit,
+      );
+      expect(await repository.load(), const QueuePolicy());
+    });
+
+    test('is gone once its time has passed', () async {
+      await repository.saveRateLimit(limit);
+
+      expect(await repository.loadRateLimit(retryAt), isNull);
+      expect(await repository.loadRateLimit(retryAt.add(oneMinute)), isNull);
+    });
+
+    test('clearing writes nothing when there is nothing to clear', () async {
+      await repository.clearRateLimit();
+      expect(settings.values, isEmpty);
+
+      await repository.saveRateLimit(limit);
+      await repository.clearRateLimit();
+      expect(settings.values.containsKey('queue_rate_limit'), isFalse);
+    });
+
+    test('an unreadable note counts as no note', () async {
+      await settings.write('queue_rate_limit', {'retry_at': 'soon'});
+      expect(await repository.loadRateLimit(retryAt), isNull);
+
+      await settings.write('queue_rate_limit', 'nonsense');
+      expect(await repository.loadRateLimit(retryAt), isNull);
+    });
+  });
 }

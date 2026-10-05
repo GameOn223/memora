@@ -50,7 +50,7 @@ class DemoAppServices implements AppServices {
       access: galleryAccess,
       imageCount: galleryImageCount,
     );
-    pipeline = DemoPipeline(db, router);
+    pipeline = DemoPipeline(db, router, settings);
     // The same preferences the real services use, over the demo's settings
     // store, so a demo build reads and writes them exactly as a phone does.
     preferences = StoredAppPreferences(settings);
@@ -432,10 +432,15 @@ class DemoExportService implements ExportService {
 }
 
 class DemoPipeline implements ProcessingPipeline {
-  DemoPipeline(this.db, this.router);
+  DemoPipeline(this.db, this.router, SettingsStore settings)
+    : policy = QueuePolicyRepository(settings);
 
   final DemoDatabase db;
   final CapabilityRouter router;
+
+  /// Where a rate limit the queue is waiting out is kept, so the demo answers
+  /// `currentBlock` the same way a phone does.
+  final QueuePolicyRepository policy;
   int reindexCalls = 0;
 
   /// When set, the next reindex throws.
@@ -443,24 +448,14 @@ class DemoPipeline implements ProcessingPipeline {
 
   @override
   Future<QueueBlock?> currentBlock() async {
+    final limit = await policy.loadRateLimit(db.clock.now());
+    if (limit != null) return limit.block;
     try {
       await router.vision();
       return null;
     } on CapabilityUnavailableException catch (e) {
-      final name = e.providerName ?? 'the provider';
-      return switch (e.reason) {
-        UnavailableReason.notConfigured => const NoVisionProvider(),
-        UnavailableReason.blockedByLocalOnly => BlockedByLocalOnly(name),
-        UnavailableReason.missingApiKey => ProviderConfigurationProblem(
-          name,
-          'Add an API key for $name',
-        ),
-        UnavailableReason.modelNotDownloaded ||
-        UnavailableReason.unsupportedByProvider => ProviderConfigurationProblem(
-          name,
-          '$name cannot do vision',
-        ),
-      };
+      // The real mapping, so demo and phone never drift apart.
+      return DefaultProcessingPipeline.blockFor(e);
     }
   }
 

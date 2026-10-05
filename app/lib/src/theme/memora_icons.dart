@@ -199,6 +199,11 @@ abstract final class MemoraIcons {
     fontFamily: _family,
     fontPackage: _package,
   );
+  static const pushPin = IconData(
+    0xe3e2,
+    fontFamily: _family,
+    fontPackage: _package,
+  );
   static const shieldCheck = IconData(
     0xe40c,
     fontFamily: _family,

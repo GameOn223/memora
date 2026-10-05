@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/theme/memora_icons.dart';
+import 'package:memora/src/theme/tokens.dart';
 import 'package:memora/src/widgets/fading_rule.dart';
 import 'package:memora/src/widgets/memora_icon_button.dart';
 import 'package:memora/src/widgets/memora_toggle.dart';
 import 'package:memora/src/widgets/memory_tile.dart';
+import 'package:memora/src/widgets/tags.dart';
 import 'package:memora_core/memora_core.dart';
 
 import '../helpers/themed.dart';
@@ -141,6 +143,60 @@ void main() {
     expect(node.rect.size, const Size(48, 48));
     expect(node.label, 'Back');
     handle.dispose();
+  });
+
+  testWidgets('keyword chips are 26px pills that wrap onto more lines', (
+    tester,
+  ) async {
+    const keywords = [
+      'reliance',
+      'electricity',
+      'bill',
+      'payment',
+      'july',
+      'due date',
+    ];
+    await tester.pumpWidget(
+      themed(
+        const SizedBox(
+          width: 150,
+          child: Wrap(
+            spacing: Space.s2,
+            runSpacing: Space.s2,
+            children: [
+              KeywordChip('reliance'),
+              KeywordChip('electricity'),
+              KeywordChip('bill'),
+              KeywordChip('payment'),
+              KeywordChip('july'),
+              KeywordChip('due date'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final chips = find.byType(KeywordChip);
+    expect(chips, findsNWidgets(keywords.length));
+    final rects = [
+      for (final chip in chips.evaluate())
+        tester.getRect(find.byWidget(chip.widget)),
+    ];
+    for (final (i, rect) in rects.indexed) {
+      expect(rect.height, moreOrLessEquals(26), reason: keywords[i]);
+      // 10px of padding either side of the label, inside the hairline.
+      final label = tester.getRect(find.text(keywords[i]));
+      expect(label.left - rect.left, moreOrLessEquals(11));
+      expect(rect.right - label.right, moreOrLessEquals(11));
+    }
+    // Six chips cannot fit on one 150px line, so the wrap uses several and
+    // every chip still lands inside it.
+    expect({for (final rect in rects) rect.top}.length, greaterThan(1));
+    final wrap = tester.getRect(find.byType(Wrap));
+    for (final rect in rects) {
+      expect(rect.left, greaterThanOrEqualTo(wrap.left));
+      expect(rect.right, lessThanOrEqualTo(wrap.right));
+    }
   });
 
   group('MemoryTile', () {

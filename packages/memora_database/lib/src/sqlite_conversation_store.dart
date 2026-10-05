@@ -31,10 +31,13 @@ class SqliteConversationStore implements ConversationStore {
     return Conversation(id: id, title: title, createdAt: now, updatedAt: now);
   }
 
+  /// Pinned first, then the rest, each group newest updated first.
+  /// `conversations_pinned_updated_at` covers that order.
   @override
   Future<List<Conversation>> listConversations() async {
     final rows = _db.select(
-      'SELECT * FROM conversations ORDER BY updated_at DESC, rowid DESC',
+      'SELECT * FROM conversations '
+      'ORDER BY pinned DESC, updated_at DESC, rowid DESC',
     );
     return [for (final row in rows) _conversationFromRow(row)];
   }
@@ -43,6 +46,27 @@ class SqliteConversationStore implements ConversationStore {
   Future<Conversation?> getConversation(String id) async {
     final rows = _db.select('SELECT * FROM conversations WHERE id = ?', [id]);
     return rows.isEmpty ? null : _conversationFromRow(rows.first);
+  }
+
+  /// Leaves `updated_at` where it is, so the conversation keeps its place in
+  /// [listConversations].
+  @override
+  Future<void> renameConversation(String id, String title, DateTime now) async {
+    _db.execute('UPDATE conversations SET title = ? WHERE id = ?', [title, id]);
+  }
+
+  /// Leaves `updated_at` where it is, so pinning only changes which group
+  /// the conversation lists in.
+  @override
+  Future<void> setConversationPinned(
+    String id,
+    bool pinned,
+    DateTime now,
+  ) async {
+    _db.execute('UPDATE conversations SET pinned = ? WHERE id = ?', [
+      pinned ? 1 : 0,
+      id,
+    ]);
   }
 
   @override
@@ -214,6 +238,7 @@ WHERE r.memory_id = ?''',
     title: row['title'] as String,
     createdAt: fromMillis(row['created_at'] as int),
     updatedAt: fromMillis(row['updated_at'] as int),
+    pinned: (row['pinned'] as int) != 0,
   );
 
   static ResultSet _resultSetFromRow(Row row) => ResultSet(

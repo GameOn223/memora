@@ -33,6 +33,10 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
   /// the whole 1, 5 and 30 minute ladder gets used.
   static const maxAttempts = 4;
 
+  /// The longest a provider's own retry hint can push the next attempt out.
+  /// A provider asking for a week should not park the queue for a week.
+  static const maxRetryAfter = Duration(hours: 6);
+
   /// How many memories are embedded per call while reindexing.
   static const reindexBatchSize = 8;
 
@@ -59,8 +63,27 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     _ => const Duration(minutes: 30),
   };
 
+  /// How long to hold a memory before trying again.
+  ///
+  /// A provider that sent a [retryAfter] hint knows its own limits better
+  /// than the local ladder does, so the hint wins, shorter or longer. Capped
+  /// at [maxRetryAfter] either way.
+  static Duration waitFor(Duration? retryAfter, int attempts) {
+    final wait = retryAfter ?? backoffFor(attempts);
+    if (wait > maxRetryAfter) return maxRetryAfter;
+    return wait.isNegative ? Duration.zero : wait;
+  }
+
   @override
   Future<ProcessOutcome> processNext() async {
+    // Asked before anything is claimed: while a provider is rate limiting
+    // Memora there is no point claiming a memory just to hand it back.
+    final limit = await _policy.loadRateLimit(_clock.now());
+    if (limit != null) {
+      _noteRetry(limit.retryAt);
+      return QueueBlocked(limit.block);
+    }
+
     final Resolved<VisionService> vision;
     try {
       vision = await _router.vision();
@@ -112,6 +135,8 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
       );
       await _embed(memory.id, buildEmbeddingText(understanding, facts));
       await _queue.markReady(memory.id, _clock.now());
+      // The provider answered, so any rate limit it reported is over.
+      await _policy.clearRateLimit();
       return Processed(memory.id, ProcessingStatus.ready);
     } on AiConfigurationException catch (e) {
       // The status write comes first in every arm below. A processing record
@@ -126,6 +151,25 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
       final outcome = await _fail(memory, e.message);
       await _failureRecord(memory.id, vision, stopwatch, e.message);
       return outcome;
+    } on AiRateLimitException catch (e) {
+      // Caught before the plain transient arm. A rate limit says something
+      // about the provider, not about this image, so the attempt goes back
+      // and the whole queue waits rather than trying the next memory.
+      final retryAt = _clock.now().add(waitFor(e.retryAfter, memory.attempts));
+      await _queue.releaseWithoutAttempt(
+        memory.id,
+        _clock.now(),
+        nextAttemptAt: retryAt,
+        reason: e.message,
+      );
+      final limit = QueueRateLimit(
+        providerName: vision.provider.displayName,
+        retryAt: retryAt,
+      );
+      await _policy.saveRateLimit(limit);
+      _noteRetry(retryAt);
+      await _failureRecord(memory.id, vision, stopwatch, e.message);
+      return QueueBlocked(limit.block);
     } on AiTransientException catch (e) {
       final outcome = await _retryOrFail(
         memory,
@@ -175,12 +219,8 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
   }) async {
     if (memory.attempts >= maxAttempts) return _fail(memory, reason);
     final now = _clock.now();
-    var wait = backoffFor(memory.attempts);
-    if (retryAfter != null && retryAfter > wait) wait = retryAfter;
-    final due = now.add(wait);
-    if (_earliestRetry == null || due.isBefore(_earliestRetry!)) {
-      _earliestRetry = due;
-    }
+    final due = now.add(waitFor(retryAfter, memory.attempts));
+    _noteRetry(due);
     await _queue.releaseForRetry(
       memory.id,
       nextAttemptAt: due,
@@ -188,6 +228,13 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
       now: now,
     );
     return Processed(memory.id, ProcessingStatus.captured);
+  }
+
+  /// Remembers the soonest retry this [runQueue] has scheduled.
+  void _noteRetry(DateTime due) {
+    if (_earliestRetry == null || due.isBefore(_earliestRetry!)) {
+      _earliestRetry = due;
+    }
   }
 
   Future<ProcessOutcome> _fail(Memory memory, String reason) async {
@@ -408,8 +455,13 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
     return count;
   }
 
+  /// Costs one settings read and whatever resolving the vision capability
+  /// takes, which is settings plus the secret store. No provider call, no
+  /// claim, nothing written, so the UI can ask on every add.
   @override
   Future<QueueBlock?> currentBlock() async {
+    final limit = await _policy.loadRateLimit(_clock.now());
+    if (limit != null) return limit.block;
     try {
       await _router.vision();
       return null;
@@ -433,9 +485,12 @@ class DefaultProcessingPipeline implements ProcessingPipeline {
         name,
         'Download the on-device model for $name',
       ),
-      UnavailableReason.unsupportedByProvider => ProviderConfigurationProblem(
+      // Either the provider cannot understand images at all or the chosen
+      // model is gone from it. Both need a different pick, not a fix to the
+      // settings that are there.
+      UnavailableReason.unsupportedByProvider => ProviderUnavailable(
         name,
-        "$name can't understand images. Choose another vision provider.",
+        e.modelId,
       ),
     };
   }
