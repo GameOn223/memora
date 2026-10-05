@@ -1,3 +1,5 @@
+<img src="docs/logo.png" width="96" align="left" alt="" hspace="12">
+
 # Memora
 
 **Your visual memory.** An open-source Android app that turns the images you keep into a private, searchable memory you can talk to.
