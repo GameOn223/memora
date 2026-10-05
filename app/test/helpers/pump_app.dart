@@ -50,6 +50,7 @@ Future<DemoAppServices> pumpApp(
   Brightness platformBrightness = Brightness.dark,
   List<Override> overrides = const [],
   Widget Function(Widget app)? wrap,
+  Duration? pollInterval,
 }) async {
   final demo = services ?? demoServices();
   tester.view
@@ -70,11 +71,11 @@ Future<DemoAppServices> pumpApp(
   });
   await tester.pumpWidget(
     ProviderScope(
-      // Tests drive refreshes explicitly instead of polling.
+      // Tests drive refreshes explicitly unless they ask for the poll.
       overrides: [
         appServicesProvider.overrideWithValue(demo),
         clockProvider.overrideWithValue(TestClock(testNow)),
-        dataPollIntervalProvider.overrideWithValue(null),
+        dataPollIntervalProvider.overrideWithValue(pollInterval),
         ...overrides,
       ],
       retry: (_, _) => null,

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -263,8 +265,11 @@ class _SourceStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final scaler = MediaQuery.textScalerOf(context);
+    // The thumbnail is a fixed size; the two labels under it are not.
+    final labels = scaler.scale(10) * 1.5 + scaler.scale(9) * 1.5 + 2;
     return SizedBox(
-      height: 96 + Space.s2 + 30,
+      height: 96 + Space.s2 + math.max(30.0, labels),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: sources.length,
@@ -338,6 +343,7 @@ class _SourceTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final valueWidth = MediaQuery.textScalerOf(context).scale(62);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -358,7 +364,7 @@ class _SourceTable extends StatelessWidget {
                   child: CapsLabel('Month', size: 8.5, spacing: 1.1),
                 ),
                 SizedBox(
-                  width: 62,
+                  width: valueWidth,
                   child: CapsLabel(
                     sentenceCase(attribute),
                     size: 8.5,
@@ -392,14 +398,18 @@ class _SourceTable extends StatelessWidget {
                       Expanded(
                         child: Text(
                           sourceMonth(details),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: MemoraText.style(12.5, color: c.text),
                         ),
                       ),
                       SizedBox(
-                        width: 62,
+                        width: valueWidth,
                         child: Text(
                           sourceValue(details, attribute),
                           textAlign: TextAlign.right,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: MemoraText.style(
                             12.5,
                             medium: true,

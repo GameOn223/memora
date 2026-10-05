@@ -72,9 +72,14 @@ class BottomTabs extends StatelessWidget {
                       onTap: () => onSelected(i),
                       semanticLabel: label,
                       selected: currentIndex == i,
-                      child: SizedBox(
-                        height: 48,
+                      child: ConstrainedBox(
+                        // At least a 48px target, taller when the label is
+                        // scaled up, so nothing overflows.
+                        constraints: const BoxConstraints(
+                          minHeight: kMinTapTarget,
+                        ),
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(

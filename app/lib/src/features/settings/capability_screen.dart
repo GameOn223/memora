@@ -39,20 +39,34 @@ class _CapabilityScreenState extends ConsumerState<CapabilityScreen> {
   bool _loaded = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Prefill from what is already loaded, then from the first value that
+    // arrives, so opening this screen straight from a link still shows the
+    // saved configuration.
+    _loadFrom(ref.read(aiSettingsProvider).value, notify: false);
+    ref.listenManual(
+      aiSettingsProvider,
+      (previous, next) => _loadFrom(next.value),
+    );
+  }
+
+  @override
   void dispose() {
     _model.dispose();
     _baseUrl.dispose();
     super.dispose();
   }
 
-  void _loadFrom(AiSettings settings) {
-    if (_loaded) return;
+  void _loadFrom(AiSettings? settings, {bool notify = true}) {
+    if (_loaded || settings == null) return;
     _loaded = true;
     final selection = settings.selections[widget.capability];
     if (selection == null) return;
     _providerId = selection.providerId;
     _model.text = selection.modelId;
     _baseUrl.text = settings.baseUrls[selection.providerId] ?? '';
+    if (notify && mounted) setState(() {});
     unawaited(_loadSuggestions(selection.providerId));
   }
 
@@ -111,7 +125,6 @@ class _CapabilityScreenState extends ConsumerState<CapabilityScreen> {
     final c = context.colors;
     final services = ref.watch(appServicesProvider);
     final settings = ref.watch(aiSettingsProvider).value ?? const AiSettings();
-    _loadFrom(settings);
     final providers = services.providers.supporting(widget.capability);
     final selected = _providerId == null
         ? null

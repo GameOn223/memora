@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -379,19 +380,22 @@ class _Composer extends StatelessWidget {
     final c = context.colors;
     final media = MediaQuery.of(context);
     final bottom = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
+    // The field grows with the text scale, and its tap target with it.
+    final box = math.max(42.0, media.textScaler.scale(13.5) * 1.5 + 20);
+    final row = math.max(kMinTapTarget, box);
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: c.lineSoft)),
       ),
       child: SizedBox(
-        height: Space.s4 + 42 + Space.s6 + bottom,
+        height: Space.s4 + box + Space.s6 + bottom,
         child: Stack(
           children: [
             Positioned(
               left: Space.s4,
               right: Space.s4,
               top: Space.s4,
-              height: 42,
+              height: box,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: c.surface2,
@@ -403,8 +407,8 @@ class _Composer extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              top: Space.s4 + 21 - 24,
-              height: 48,
+              top: Space.s4 + box / 2 - row / 2,
+              height: row,
               child: Row(
                 children: [
                   const SizedBox(width: Space.s4 + 14),
