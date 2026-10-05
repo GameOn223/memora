@@ -1,0 +1,140 @@
+name: Release
+
+# Builds the APKs for a tag and attaches them to a GitHub release with their
+# checksums. Signing uses repository secrets when they exist. Without them the
+# build falls back to the debug key, which is fine for a pre-release people
+# install by hand and wrong for anything else, so the release says which it is.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build, for example v0.1.0
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.47.4
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Lifted to the job so the signing step can test for them. The secrets
+    # context is not available in a step-level `if`.
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Resolve workspace
+        run: flutter pub get
+
+      - name: Check the tag matches the app version
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          version="v$(grep '^version:' app/pubspec.yaml | sed 's/version: *//' | cut -d+ -f1)"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $tag does not match app/pubspec.yaml ($version)."
+            echo "Bump the version or fix the tag, then try again."
+            exit 1
+          fi
+
+      - name: Verify
+        run: |
+          dart format --output=none --set-exit-if-changed packages app/lib app/test app/pigeons
+          dart analyze --fatal-infos packages
+          (cd app && flutter analyze --fatal-infos lib test)
+          (cd packages/memora_core && dart test)
+          (cd packages/memora_database && dart test)
+          (cd packages/memora_providers && dart test)
+          (cd app && flutter test)
+
+      - name: Write the signing key
+        id: signing
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/memora-release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/memora-release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > app/android/key.properties
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        working-directory: app
+        run: flutter build apk --release --split-per-abi
+
+      - name: Checksums
+        working-directory: app/build/app/outputs/flutter-apk
+        run: |
+          sha256sum app-*-release.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f app/android/key.properties "$RUNNER_TEMP/memora-release.jks"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          # Everything under the tag's heading in the changelog, up to the next one.
+          awk -v tag="${TAG#v}" '
+            $0 ~ "^## \\[" tag "\\]" {found = 1; next}
+            found && /^## / {exit}
+            found {print}
+          ' CHANGELOG.md > "$notes"
+          if [ ! -s "$notes" ]; then
+            echo "No changelog section for $TAG. Add one before tagging." >&2
+            exit 1
+          fi
+          {
+            echo
+            echo "## Which file do I want?"
+            echo
+            echo "\`app-arm64-v8a-release.apk\` for nearly every phone sold since 2017."
+            echo "\`app-armeabi-v7a-release.apk\` for older 32-bit devices."
+            echo
+            echo "Verify your download against \`SHA256SUMS.txt\`."
+          } >> "$notes"
+          if [ "$SIGNED" != "true" ]; then
+            {
+              echo
+              echo "> These APKs are signed with a debug key because no release key is"
+              echo "> configured. Install them for testing only, and expect a later"
+              echo "> signed build to refuse to upgrade over them."
+            } >> "$notes"
+          fi
+          gh release create "$TAG" \
+            app/build/app/outputs/flutter-apk/app-*-release.apk \
+            app/build/app/outputs/flutter-apk/SHA256SUMS.txt \
+            --title "Memora $TAG" \
+            --notes-file "$notes" \
+            --verify-tag

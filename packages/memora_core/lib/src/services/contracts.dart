@@ -32,12 +32,21 @@ class ImportedFile {
 
 @immutable
 class IngestReport {
-  const IngestReport({required this.addedIds, required this.duplicateCount});
+  const IngestReport({
+    required this.addedIds,
+    required this.duplicateCount,
+    this.duplicatePaths = const [],
+  });
 
   final List<String> addedIds;
 
   /// Images skipped because they were already in Memora.
   final int duplicateCount;
+
+  /// The copies those skipped images were made into, relative to the app
+  /// files directory. Nothing points at them, so the caller can delete them.
+  /// The ingestor tries as well.
+  final List<String> duplicatePaths;
 }
 
 /// Turns copied files into memory rows and thumbnails.
@@ -78,13 +87,20 @@ class QueueRunReport {
     required this.processed,
     required this.remaining,
     this.block,
+    this.nextAttemptAt,
   });
 
   final int processed;
 
-  /// True when the budget ran out or the policy stopped the run with work left.
+  /// True when memories are still waiting, including ones that are waiting
+  /// out a retry backoff. The scheduler re-enqueues itself when this is set.
   final bool remaining;
   final QueueBlock? block;
+
+  /// The earliest retry this run scheduled, so the scheduler can wait that
+  /// long instead of starting again right away. Null when nothing was
+  /// deferred.
+  final DateTime? nextAttemptAt;
 }
 
 /// Runs understanding for queued memories. See docs/architecture.md, section 5.
@@ -107,12 +123,21 @@ abstract interface class ProcessingPipeline {
 
 @immutable
 class RetrievalResult {
-  const RetrievalResult({required this.hits, required this.strategiesUsed});
+  const RetrievalResult({
+    required this.hits,
+    required this.strategiesUsed,
+    this.textMatched = true,
+  });
 
   final List<RankedMemory> hits;
 
   /// Strategies that actually ran. Semantic is skipped without embeddings.
   final Set<RetrievalStrategy> strategiesUsed;
+
+  /// False when the query had words, none of them matched anything inside
+  /// the filters, and the hits are the filtered memories instead. The answer
+  /// should say so rather than pretending the words matched.
+  final bool textMatched;
 }
 
 /// Hybrid search. See docs/architecture.md, section 8.

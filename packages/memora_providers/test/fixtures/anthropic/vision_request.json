@@ -1,0 +1,20 @@
+{
+  "model": "claude-sonnet-5-5",
+  "max_tokens": 16000,
+  "system": "<analyze_instructions>",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "image",
+          "source": { "type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo=" }
+        },
+        { "type": "text", "text": "Extract the memory data for this image." }
+      ]
+    }
+  ],
+  "output_config": {
+    "format": { "type": "json_schema", "schema": "<closed_schema>" }
+  }
+}

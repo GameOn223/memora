@@ -1,0 +1,66 @@
+{
+  "systemInstruction": {
+    "parts": [{ "text": "You answer questions about saved memories." }]
+  },
+  "contents": [
+    { "role": "user", "parts": [{ "text": "Which bill was highest?" }] },
+    {
+      "role": "model",
+      "parts": [
+        { "text": "Searching." },
+        {
+          "functionCall": {
+            "name": "search_memories",
+            "args": { "text": "bill" }
+          }
+        },
+        {
+          "functionCall": {
+            "name": "search_by_date",
+            "args": { "from": "2026-01-01" }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "functionResponse": {
+            "name": "search_memories",
+            "response": { "content": { "result_set_id": "rs1", "count": 2 } }
+          }
+        },
+        {
+          "functionResponse": {
+            "name": "search_by_date",
+            "response": { "error": "from must be before to" }
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "name": "search_memories",
+          "description": "Hybrid search over memories.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string", "description": "Words to look for" },
+              "currency": { "type": "string", "nullable": true }
+            },
+            "required": ["text"]
+          }
+        },
+        {
+          "name": "list_categories",
+          "description": "Lists categories."
+        }
+      ]
+    }
+  ],
+  "generationConfig": { "temperature": 0.2, "maxOutputTokens": 9216 }
+}

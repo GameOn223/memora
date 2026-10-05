@@ -1,0 +1,57 @@
+{
+  "model": "claude-haiku-4-5",
+  "max_tokens": 9216,
+  "system": "You answer questions about saved memories.",
+  "messages": [
+    {
+      "role": "user",
+      "content": [{ "type": "text", "text": "Which food order cost the most?" }]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        { "type": "text", "text": "Let me search." },
+        {
+          "type": "tool_use",
+          "id": "toolu_1",
+          "name": "search_memories",
+          "input": { "text": "food order" }
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_2",
+          "name": "search_by_date",
+          "input": { "from": "2026-09-01" }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_1",
+          "content": "{\"result_set_id\":\"rs1\",\"count\":4}"
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_2",
+          "content": "{\"error\":\"to is required\"}",
+          "is_error": true
+        },
+        { "type": "text", "text": "Only Swiggy, please." }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "search_memories",
+      "description": "Hybrid search over memories.",
+      "input_schema": {
+        "type": "object",
+        "properties": { "text": { "type": "string" } },
+        "required": ["text"]
+      }
+    }
+  ]
+}

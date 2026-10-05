@@ -192,7 +192,7 @@ class CapabilityRouter {
     return ProviderConfig(
       providerId: descriptor.id,
       baseUrl: settings.baseUrls[descriptor.id] ?? descriptor.defaultBaseUrl,
-      apiKey: descriptor.requiresApiKey
+      apiKey: descriptor.requiresApiKey || descriptor.apiKeyOptional
           ? await _secrets.read(apiKeyName(descriptor.id))
           : null,
     );

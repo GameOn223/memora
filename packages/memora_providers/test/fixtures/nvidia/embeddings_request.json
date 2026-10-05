@@ -1,0 +1,7 @@
+{
+  "model": "nvidia/nv-embedqa-e5-v5",
+  "input": ["electricity bills over 2000"],
+  "input_type": "query",
+  "encoding_format": "float",
+  "truncate": "END"
+}

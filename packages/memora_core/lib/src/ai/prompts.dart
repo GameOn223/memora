@@ -29,8 +29,8 @@ Only report values you can see in the image. Leave a list empty rather than gues
   /// User turn text that accompanies the image.
   static const analyzeUserText = 'Extract the memory data for this image.';
 
-  /// JSON schema for [MemoryUnderstanding]. Kept to the subset of JSON schema
-  /// that OpenAI, Gemini and Anthropic all accept.
+  /// JSON schema for [MemoryUnderstanding]. Kept to the subset of JSON
+  /// schema every provider adapter can send as it is.
   static const Map<String, Object?> understandingSchema = {
     'type': 'object',
     'properties': {
