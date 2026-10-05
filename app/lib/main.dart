@@ -10,16 +10,15 @@ import 'src/routing/memora_app.dart';
 import 'src/services/app_services.dart';
 import 'src/state/services.dart';
 
+// Keeps the headless entrypoint in the build. A release build drops any
+// library main.dart can't reach, and WorkManager could then not start
+// backgroundMain. Do not remove this line.
+export 'background_main.dart' show backgroundMain;
 export 'src/routing/memora_app.dart' show MemoraApp;
 
 /// Until the composition root lands, the app runs on in-memory demo data.
 /// Build with `--dart-define=MEMORA_DEMO=false` once bootstrap is wired.
 const useDemoServices = bool.fromEnvironment('MEMORA_DEMO', defaultValue: true);
-
-// Keeps the headless entrypoint in the build. A release build drops any
-// library main.dart can't reach, and WorkManager could then not start
-// backgroundMain. Do not remove this line.
-export 'background_main.dart' show backgroundMain;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
