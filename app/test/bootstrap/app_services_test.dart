@@ -181,14 +181,12 @@ void main() {
   test('nothing is selected until the user chooses', () async {
     final statuses = await services.router.statuses();
     expect(statuses.keys, unorderedEquals(Capability.values));
-    expect(
-      [for (final status in statuses.values) status.available],
-      everyElement(isFalse),
-    );
-    expect(
-      [for (final status in statuses.values) status.reason],
-      everyElement(UnavailableReason.notConfigured),
-    );
+    expect([
+      for (final status in statuses.values) status.available,
+    ], everyElement(isFalse));
+    expect([
+      for (final status in statuses.values) status.reason,
+    ], everyElement(UnavailableReason.notConfigured));
     expect(await services.router.offDeviceProviders(), isEmpty);
     expect(await services.pipeline.currentBlock(), isA<NoVisionProvider>());
   });

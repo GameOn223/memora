@@ -16,7 +16,10 @@ void main() {
   test('a fresh install shows onboarding, the system theme and 2', () async {
     expect(await preferences.onboardingComplete(), isFalse);
     expect(await preferences.theme(), ThemePreference.system);
-    expect(await preferences.gridColumns(), StoredAppPreferences.defaultColumns);
+    expect(
+      await preferences.gridColumns(),
+      StoredAppPreferences.defaultColumns,
+    );
   });
 
   test('every preference is read back as it was written', () async {
@@ -39,7 +42,10 @@ void main() {
   test('each theme is stored under its own name', () async {
     for (final preference in ThemePreference.values) {
       await preferences.setTheme(preference);
-      expect(await settings.read(StoredAppPreferences.themeKey), preference.name);
+      expect(
+        await settings.read(StoredAppPreferences.themeKey),
+        preference.name,
+      );
       expect(await preferences.theme(), preference);
     }
   });
@@ -59,7 +65,10 @@ void main() {
     await settings.write(StoredAppPreferences.onboardingKey, 'yes');
 
     expect(await preferences.theme(), ThemePreference.system);
-    expect(await preferences.gridColumns(), StoredAppPreferences.defaultColumns);
+    expect(
+      await preferences.gridColumns(),
+      StoredAppPreferences.defaultColumns,
+    );
     expect(await preferences.onboardingComplete(), isFalse);
   });
 }

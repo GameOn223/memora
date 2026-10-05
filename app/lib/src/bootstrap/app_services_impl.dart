@@ -187,9 +187,7 @@ class MemoraAppServices implements AppServices {
   }) async {
     final resolvedHosts = hosts ?? PlatformHosts();
     final filesDir = await resolvedHosts.files.filesDir();
-    final database = MemoraDatabase.open(
-      resolveInside(filesDir, databaseFile),
-    );
+    final database = MemoraDatabase.open(resolveInside(filesDir, databaseFile));
     try {
       return MemoraAppServices(
         database: database,
