@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:memora_core/memora_core.dart';
+import 'package:memora_providers/memora_providers.dart';
 
 /// Everything the UI needs, built once by the composition root in
 /// `bootstrap/`. Widget tests and screenshot tests use a fake implementation.
@@ -25,6 +26,10 @@ abstract interface class AppServices {
   CaptureService get capture;
   QueueScheduler get scheduler;
   LocalModelService get localModels;
+
+  /// The generative models the user can bring to this phone, with install
+  /// state and what the device can hold.
+  LocalLlmModels get localLlm;
   ExportService get export;
   AppPreferences get preferences;
 }

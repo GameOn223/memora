@@ -80,6 +80,11 @@ class MemoraAppServices implements AppServices {
     );
     localModels = PlatformLocalModelService(modelFiles);
 
+    // The generative runtime comes from the platform layer. Until one is
+    // wired in here, the provider offers no chat, vision stays on the OCR
+    // path and settings leaves the model section out.
+    localLlm = const LocalLlmModels();
+
     providers = ProviderRegistry();
     registerBuiltInProviders(
       providers,
@@ -253,6 +258,8 @@ class MemoraAppServices implements AppServices {
   late final QueueScheduler scheduler;
   @override
   late final LocalModelService localModels;
+  @override
+  late final LocalLlmModels localLlm;
   @override
   late final ExportService export;
   @override
