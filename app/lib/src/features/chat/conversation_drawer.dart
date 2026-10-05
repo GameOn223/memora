@@ -55,86 +55,93 @@ class ConversationDrawer extends ConsumerWidget {
     final padding = MediaQuery.paddingOf(context);
     final conversations = ref.watch(conversationsProvider).value ?? const [];
     final current = ref.watch(chatControllerProvider).conversationId;
-    return SizedBox(
-      width: math.min(maxWidth, MediaQuery.sizeOf(context).width * 0.86),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: c.surface,
-          border: Border(right: BorderSide(color: c.line)),
-          boxShadow: Shadows.md,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                Space.s4,
-                padding.top + Space.s4,
-                Space.s2,
-                0,
-              ),
-              child: Row(
-                children: [
-                  const Expanded(child: CapsLabel('Conversations')),
-                  MemoraIconButton(
-                    icon: MemoraIcons.x,
-                    semanticLabel: 'Close conversations',
-                    box: 30,
-                    iconSize: 16,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            TapArea(
-              onTap: () {
-                ref.read(chatControllerProvider.notifier).startNew();
-                Navigator.of(context).pop();
-              },
-              semanticLabel: 'New conversation',
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
+    // The drawer opens as its own route, which has no Material above it.
+    // Text drawn without one falls back to the engine's default style, which
+    // is yellow and double underlined. The panel paints its own background,
+    // so this Material is here only to supply that missing default.
+    return Material(
+      type: MaterialType.transparency,
+      child: SizedBox(
+        width: math.min(maxWidth, MediaQuery.sizeOf(context).width * 0.86),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: c.surface,
+            border: Border(right: BorderSide(color: c.line)),
+            boxShadow: Shadows.md,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
                   Space.s4,
-                  Space.s3,
-                  Space.s4,
-                  Space.s3,
+                  padding.top + Space.s4,
+                  Space.s2,
+                  0,
                 ),
                 child: Row(
                   children: [
-                    Icon(MemoraIcons.plus, size: 15, color: c.accent),
-                    const SizedBox(width: Space.s3),
-                    Text(
-                      'New conversation',
-                      style: MemoraText.style(
-                        13.5,
-                        medium: true,
-                        color: c.text,
-                      ),
+                    const Expanded(child: CapsLabel('Conversations')),
+                    MemoraIconButton(
+                      icon: MemoraIcons.x,
+                      semanticLabel: 'Close conversations',
+                      box: 30,
+                      iconSize: 16,
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: Space.s2),
-            const FadingRule(fade: 24),
-            Expanded(
-              child: conversations.isEmpty
-                  ? const _EmptyDrawer()
-                  : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(
-                        0,
-                        Space.s2,
-                        0,
-                        Space.s6 + padding.bottom,
+              TapArea(
+                onTap: () {
+                  ref.read(chatControllerProvider.notifier).startNew();
+                  Navigator.of(context).pop();
+                },
+                semanticLabel: 'New conversation',
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    Space.s4,
+                    Space.s3,
+                    Space.s4,
+                    Space.s3,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(MemoraIcons.plus, size: 15, color: c.accent),
+                      const SizedBox(width: Space.s3),
+                      Text(
+                        'New conversation',
+                        style: MemoraText.style(
+                          13.5,
+                          medium: true,
+                          color: c.text,
+                        ),
                       ),
-                      itemCount: conversations.length,
-                      itemBuilder: (context, i) => _ConversationRow(
-                        conversation: conversations[i],
-                        current: conversations[i].id == current,
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: Space.s2),
+              const FadingRule(fade: 24),
+              Expanded(
+                child: conversations.isEmpty
+                    ? const _EmptyDrawer()
+                    : ListView.builder(
+                        padding: EdgeInsets.fromLTRB(
+                          0,
+                          Space.s2,
+                          0,
+                          Space.s6 + padding.bottom,
+                        ),
+                        itemCount: conversations.length,
+                        itemBuilder: (context, i) => _ConversationRow(
+                          conversation: conversations[i],
+                          current: conversations[i].id == current,
+                        ),
                       ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
