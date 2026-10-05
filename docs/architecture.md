@@ -571,7 +571,7 @@ Navigation is a bottom bar with Memories, Ask, Add and Settings. Screens:
 | Add | gallery grid by taken date, multi-select, overnight toggle, add button |
 | Queue | progress summary, overnight toggle, list of queued, active and failed items, Process now or Pause |
 | Browser | sort (newest, oldest, category), facets (category, taken date, processing), results grid |
-| Ask | conversation, sources, "How this was found", composer |
+| Ask | conversation, sources, "How this was found", composer, conversation drawer (pinned first, with pin, rename and delete per row) |
 | Detail | original image, category and status tags, summary, extracted facts table, filing note, keywords, conversations using it, provenance, Ask about this, Reprocess |
 | Settings | local-only mode, per-capability provider and model, processing, cloud disclosure, API keys, export, reindex, delete all, theme, tile and accessibility setup |
 
@@ -592,7 +592,7 @@ State management uses Riverpod. Screens read from core services through provider
 
 | Situation | Behavior |
 |-----------|----------|
-| No AI provider configured | Images are saved and browsable. The queue shows "AI processing is not configured" with a link to settings. |
+| No AI provider configured | Images are saved and browsable. The toast right after an add and the queue banner both name the reason nothing will be understood, with a link to the screen that settles it. Both read `currentBlock()` through one switch in `app/lib/src/features/queue/block_notice.dart`. |
 | Provider or network error | The memory stays saved. Retries follow 5.3. Failed items show Retry. |
 | Local-only mode blocks a capability | The capability is marked unavailable. Nothing is sent. |
 | Embedding failure | The memory is still `READY` and findable through text and filters. |
