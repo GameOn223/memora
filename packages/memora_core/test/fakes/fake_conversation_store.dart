@@ -22,14 +22,37 @@ mixin FakeConversationStore on FakeMemoraState implements ConversationStore {
     return conversation;
   }
 
+  /// Pinned first, then the rest, each group newest updated first.
   @override
   Future<List<Conversation>> listConversations() async =>
-      conversationRows.values.toList()
-        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      conversationRows.values.toList()..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
 
   @override
   Future<Conversation?> getConversation(String id) async =>
       conversationRows[id];
+
+  @override
+  Future<void> renameConversation(String id, String title, DateTime now) async {
+    final conversation = conversationRows[id];
+    if (conversation == null) return;
+    conversationRows[id] = conversation.copyWith(title: title);
+    touch();
+  }
+
+  @override
+  Future<void> setConversationPinned(
+    String id,
+    bool pinned,
+    DateTime now,
+  ) async {
+    final conversation = conversationRows[id];
+    if (conversation == null) return;
+    conversationRows[id] = conversation.copyWith(pinned: pinned);
+    touch();
+  }
 
   @override
   Future<List<ChatMessage>> messages(String conversationId) async => [
@@ -47,10 +70,7 @@ mixin FakeConversationStore on FakeMemoraState implements ConversationStore {
       throw StateError('No conversation ${message.conversationId}');
     }
     messageRows.add(message);
-    conversationRows[conversation.id] = Conversation(
-      id: conversation.id,
-      title: conversation.title,
-      createdAt: conversation.createdAt,
+    conversationRows[conversation.id] = conversation.copyWith(
       updatedAt: message.createdAt,
     );
     touch();
