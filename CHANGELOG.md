@@ -4,8 +4,11 @@ All notable changes to Memora are recorded here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.1]
+
 ### Added
 
+- **An app icon.** The Memora mark, a stack of saved images with a spark on the front one. It ships as an adaptive icon, as a monochrome version so themed icons work on Android 13 and newer, and as the Quick Settings tile.
 - **A conversation drawer in Ask.** The history button opens a drawer down the left edge listing your conversations, pinned ones first, each with when it was last used and the open one marked. Every row can be pinned, renamed or deleted. Deleting the conversation you are in starts a fresh one.
 
 ### Changed
