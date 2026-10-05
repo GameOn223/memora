@@ -107,6 +107,12 @@ object GemmaRuntime {
         )
     }
 
+    private fun isLoaded(relativeModelPath: String, vision: Boolean, maxTokens: Int): Boolean =
+        engine != null &&
+            loadedPath == relativeModelPath &&
+            loadedVision == vision &&
+            loadedMaxTokens == maxTokens
+
     suspend fun load(
         context: Context,
         relativeModelPath: String,
@@ -118,12 +124,20 @@ object GemmaRuntime {
         if (tokens <= 0) {
             throw FlutterError("invalid_max_tokens", "maxTokens has to be positive.", null)
         }
+        // Nothing to do, and no reason to queue behind a running generation.
+        if (isLoaded(relativeModelPath, vision, tokens)) return
+        // Without this the call would wait on the mutex until the generation
+        // finished, which looks like a hang from the settings screen.
+        turns.runningId?.let {
+            throw FlutterError(
+                "busy",
+                "A generation is running. Cancel it before loading a model.",
+                null,
+            )
+        }
         withContext(Dispatchers.IO) {
             mutex.withLock {
-                val sameModel = loadedPath == relativeModelPath &&
-                    loadedVision == vision &&
-                    loadedMaxTokens == tokens
-                if (sameModel && engine != null) return@withLock
+                if (isLoaded(relativeModelPath, vision, tokens)) return@withLock
 
                 // Free the old model before measuring, so swapping models is
                 // not refused over memory the previous one is still holding.
@@ -250,8 +264,11 @@ object GemmaRuntime {
     suspend fun run(id: Long, prompt: String, images: List<ByteArray>, emit: (LlmChunk) -> Unit) {
         try {
             withContext(Dispatchers.IO) {
-                val bitmaps = images.map { decodeImage(it) }
+                val bitmaps = mutableListOf<Bitmap>()
                 try {
+                    // Decoded before the lock is taken, and released whether
+                    // the turn ran or one of the images turned out to be junk.
+                    images.forEach { bitmaps += decodeImage(it) }
                     mutex.withLock { generateLocked(id, prompt, bitmaps, emit) }
                 } finally {
                     bitmaps.forEach { it.recycle() }
