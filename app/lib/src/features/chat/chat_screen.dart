@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:memora_core/memora_core.dart';
 
 import '../../routing/router.dart';
@@ -21,9 +20,9 @@ import '../../widgets/memora_icon_button.dart';
 import '../../widgets/memory_labels.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/screen_header.dart';
-import '../../widgets/sheet_scaffold.dart';
 import '../../widgets/tap_area.dart';
 import 'chat_message_view.dart';
+import 'conversation_drawer.dart';
 
 /// Ask Memora: the conversation, its sources, and the composer.
 class ChatScreen extends ConsumerStatefulWidget {
@@ -101,7 +100,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 semanticLabel: 'Conversations',
                 box: 30,
                 iconSize: 18,
-                onPressed: () => _openHistory(context),
+                onPressed: () => unawaited(showConversationDrawer(context)),
               ),
             ],
           ),
@@ -162,13 +161,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   int _trailingCount(ChatViewState state) =>
       state.thinking || state.error != null ? 1 : 0;
-
-  Future<void> _openHistory(BuildContext context) async {
-    await showMemoraSheet<void>(
-      context,
-      builder: (sheetContext) => const ConversationSheet(),
-    );
-  }
 }
 
 /// Hides the local echo of a question that was asked again after a failure.
@@ -459,103 +451,6 @@ class _Composer extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Past conversations, and a way to start a new one.
-class ConversationSheet extends ConsumerWidget {
-  const ConversationSheet({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = context.colors;
-    final conversations = ref.watch(conversationsProvider).value ?? const [];
-    final current = ref.watch(chatControllerProvider).conversationId;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: Space.s2),
-          child: CapsLabel('Conversations'),
-        ),
-        const SizedBox(height: Space.s3),
-        TapArea(
-          onTap: () {
-            ref.read(chatControllerProvider.notifier).startNew();
-            Navigator.of(context).pop();
-          },
-          semanticLabel: 'New conversation',
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Space.s2,
-              vertical: Space.s3,
-            ),
-            child: Row(
-              children: [
-                Icon(MemoraIcons.plus, size: 16, color: c.accent),
-                const SizedBox(width: Space.s3),
-                Text(
-                  'New conversation',
-                  style: MemoraText.style(14, medium: true, color: c.text),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Flexible(
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: conversations.length,
-            itemBuilder: (context, i) {
-              final conversation = conversations[i];
-              return TapArea(
-                onTap: () {
-                  unawaited(
-                    ref
-                        .read(chatControllerProvider.notifier)
-                        .open(conversation.id),
-                  );
-                  Navigator.of(context).pop();
-                },
-                semanticLabel: conversation.title,
-                selected: conversation.id == current,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Space.s2,
-                    vertical: Space.s3,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          conversation.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: MemoraText.style(
-                            14,
-                            color: conversation.id == current
-                                ? c.accentInk
-                                : c.text,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: Space.s3),
-                      CapsLabel(
-                        DateFormat('d MMM').format(conversation.updatedAt),
-                        size: 9.5,
-                        spacing: 0.8,
-                        tabular: true,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 }

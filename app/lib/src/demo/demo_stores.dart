@@ -523,12 +523,34 @@ class DemoConversationStore implements ConversationStore {
 
   @override
   Future<List<Conversation>> listConversations() async =>
-      db.conversations.values.toList()
-        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      db.conversations.values.toList()..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
 
   @override
   Future<Conversation?> getConversation(String id) async =>
       db.conversations[id];
+
+  @override
+  Future<void> renameConversation(String id, String title, DateTime now) async {
+    final c = db.conversations[id];
+    if (c == null) return;
+    db.conversations[id] = c.copyWith(title: title);
+    db.touch();
+  }
+
+  @override
+  Future<void> setConversationPinned(
+    String id,
+    bool pinned,
+    DateTime now,
+  ) async {
+    final c = db.conversations[id];
+    if (c == null) return;
+    db.conversations[id] = c.copyWith(pinned: pinned);
+    db.touch();
+  }
 
   @override
   Future<List<ChatMessage>> messages(String conversationId) async => [
@@ -540,12 +562,7 @@ class DemoConversationStore implements ConversationStore {
     (db.messages[message.conversationId] ??= []).add(message);
     final c = db.conversations[message.conversationId];
     if (c != null) {
-      db.conversations[c.id] = Conversation(
-        id: c.id,
-        title: c.title,
-        createdAt: c.createdAt,
-        updatedAt: message.createdAt,
-      );
+      db.conversations[c.id] = c.copyWith(updatedAt: message.createdAt);
     }
     db.touch();
   }
