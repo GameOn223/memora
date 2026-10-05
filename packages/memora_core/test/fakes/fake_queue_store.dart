@@ -120,7 +120,10 @@ mixin FakeQueueStore on FakeMemoraState implements QueueStore {
   }
 
   @override
-  Future<List<QueueItem>> queueItems({int recentLimit = 20}) async {
+  Future<List<QueueItem>> queueItems({
+    int recentLimit = 20,
+    int waitingLimit = 200,
+  }) async {
     List<MemoryRow> withStatus(Set<ProcessingStatus> statuses) =>
         rows.values.where((r) => statuses.contains(r.status)).toList()
           ..sort(_oldestTaken);
@@ -139,9 +142,10 @@ mixin FakeQueueStore on FakeMemoraState implements QueueStore {
     return [
       for (final r in processing)
         QueueItem(memory: r.toMemory(), position: null),
-      for (var i = 0; i < waiting.length; i++)
+      for (var i = 0; i < waiting.length && i < waitingLimit; i++)
         QueueItem(memory: waiting[i].toMemory(), position: i + 1),
-      for (final r in failed) QueueItem(memory: r.toMemory(), position: null),
+      for (final r in failed.take(waitingLimit))
+        QueueItem(memory: r.toMemory(), position: null),
       for (final r in ready.take(recentLimit))
         QueueItem(memory: r.toMemory(), position: null),
     ];
