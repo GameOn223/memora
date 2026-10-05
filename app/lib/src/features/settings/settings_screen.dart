@@ -39,6 +39,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String? _busy;
   String? _flash;
+  String? _modelError;
   Timer? _flashTimer;
 
   static const capabilityIcons = {
@@ -110,35 +111,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await ref.read(aiSettingsProvider.notifier).setLocalOnly(localOnly: value);
   }
 
-  Future<void> _export() async {
-    setState(() => _busy = 'export');
+  /// Runs one data action, clearing the busy flag even when the service
+  /// throws, and saying what happened instead of going quiet.
+  Future<void> _run(
+    String name,
+    Future<String> Function() action, {
+    required String onFailure,
+  }) async {
+    if (_busy != null) return;
+    setState(() => _busy = name);
+    var message = onFailure;
+    try {
+      message = await action();
+    } on Object {
+      message = onFailure;
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+    if (mounted) _setFlash(message);
+  }
+
+  Future<void> _export() => _run('export', () async {
     final done = await ref
         .read(appServicesProvider)
         .export
         .exportAll(
           onProgress: (progress) {
-            if (mounted) {
+            if (mounted && _busy != null) {
               setState(
                 () => _busy = 'export ${progress.done}/${progress.total}',
               );
             }
           },
         );
-    if (!mounted) return;
-    setState(() => _busy = null);
-    _setFlash(done ? 'Export saved.' : 'Export cancelled.');
-  }
+    return done ? 'Export saved.' : 'Export cancelled.';
+  }, onFailure: 'Export failed. Nothing was written.');
 
-  Future<void> _reindex() async {
-    setState(() => _busy = 'reindex');
+  Future<void> _reindex() => _run('reindex', () async {
     final count = await ref
         .read(appServicesProvider)
         .pipeline
         .reindexEmbeddings(budget: const Duration(minutes: 1));
-    if (!mounted) return;
-    setState(() => _busy = null);
-    _setFlash('Reindexed ${memoryCount(count)}.');
-  }
+    return 'Reindexed ${memoryCount(count)}.';
+  }, onFailure: 'Reindexing failed. Nothing changed.');
 
   Future<void> _deleteAll() async {
     final confirmed = await showDialog<bool>(
@@ -146,11 +161,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (context) => const _DeleteAllDialog(),
     );
     if (confirmed != true || !mounted) return;
-    final services = ref.read(appServicesProvider);
-    final files = await services.memories.deleteAll();
-    await services.images.delete([for (final f in files) ...f.all]);
-    await ref.read(dataVersionProvider.notifier).check();
-    if (mounted) _setFlash('Every memory was deleted.');
+    await _run('delete', () async {
+      final services = ref.read(appServicesProvider);
+      final files = await services.memories.deleteAll();
+      await services.images.delete([for (final f in files) ...f.all]);
+      await ref.read(dataVersionProvider.notifier).check();
+      return 'Every memory was deleted.';
+    }, onFailure: 'Some memories could not be deleted.');
+  }
+
+  Future<void> _capture(Future<Object?> Function() action) async {
+    try {
+      await action();
+    } on Object {
+      if (mounted) _setFlash('Android would not open that setting.');
+    }
+    if (mounted) ref.read(captureVersionProvider.notifier).bump();
+  }
+
+  Future<void> _model(String name, Future<void> Function() action) async {
+    setState(() => _modelError = null);
+    try {
+      await action();
+    } on Object {
+      // Shown beside the model rather than in the flash at the bottom of
+      // the screen, where it would be out of sight.
+      if (mounted) {
+        setState(() => _modelError = 'The $name download failed. Try again.');
+      }
+    }
   }
 
   @override
@@ -198,8 +237,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   alignTop: true,
                   offColor: c.surface,
                   body: settings.localOnly
-                      ? 'On. Vision and chat run on device. Tasks the device '
-                            'cannot do are shown as unavailable rather than '
+                      ? 'On. Vision runs on this device. Chat needs a model '
+                            'you run yourself, and anything the device '
+                            'cannot do is shown as unavailable rather than '
                             'sent away.'
                       : 'Off. Cloud providers handle vision and chat. Turn '
                             'on to keep every image on device.',
@@ -340,16 +380,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: Space.s8),
                   SettingsSection(
                     label: 'On-device models',
+                    footnote: _modelError,
+                    footnoteIsError: true,
                     child: BorderedList(
                       children: [
                         for (final model in models)
                           _ModelRow(
                             model: model,
                             onDownload: () => unawaited(
-                              services.localModels.download(model.id),
+                              _model(
+                                model.displayName,
+                                () => services.localModels.download(model.id),
+                              ),
                             ),
                             onRemove: () => unawaited(
-                              services.localModels.remove(model.id),
+                              _model(
+                                model.displayName,
+                                () => services.localModels.remove(model.id),
+                              ),
                             ),
                           ),
                       ],
@@ -399,12 +447,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ? const Tag('Add tile', tone: TagTone.accent)
                               : const Tag('Added'),
                           onTap: capture.canRequestTile
-                              ? () async {
-                                  await services.capture.requestAddTile();
-                                  ref
-                                      .read(captureVersionProvider.notifier)
-                                      .bump();
-                                }
+                              ? () => unawaited(
+                                  _capture(services.capture.requestAddTile),
+                                )
                               : null,
                         ),
                         SettingsRow(
@@ -420,13 +465,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 : TagTone.dim,
                           ),
                           onTap: capture.accessibilitySupported
-                              ? () async {
-                                  await services.capture
-                                      .openAccessibilitySettings();
-                                  ref
-                                      .read(captureVersionProvider.notifier)
-                                      .bump();
-                                }
+                              ? () => unawaited(
+                                  _capture(
+                                    services.capture.openAccessibilitySettings,
+                                  ),
+                                )
                               : null,
                         ),
                         SettingsRow(
@@ -441,13 +484,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                           onTap: capture.notificationsAllowed
                               ? null
-                              : () async {
-                                  await services.capture
-                                      .requestNotificationPermission();
-                                  ref
-                                      .read(captureVersionProvider.notifier)
-                                      .bump();
-                                },
+                              : () => unawaited(
+                                  _capture(
+                                    services
+                                        .capture
+                                        .requestNotificationPermission,
+                                  ),
+                                ),
                         ),
                       ],
                     ),
@@ -502,8 +545,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: Space.s2),
                       _DataAction(
                         icon: MemoraIcons.trash,
-                        label: 'Delete all memories',
-                        onTap: () => unawaited(_deleteAll()),
+                        label: _busy == 'delete'
+                            ? 'Deleting…'
+                            : 'Delete all memories',
+                        onTap: _busy == null
+                            ? () => unawaited(_deleteAll())
+                            : null,
                       ),
                       if (_flash != null) ...[
                         const SizedBox(height: Space.s3),

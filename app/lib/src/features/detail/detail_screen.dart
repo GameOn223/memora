@@ -115,15 +115,22 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final details = ref.watch(memoryDetailsProvider(widget.memoryId)).value;
+    final request = ref.watch(memoryDetailsProvider(widget.memoryId));
+    final details = request.value;
     final bottom = MediaQuery.paddingOf(context).bottom;
     if (details == null) {
       return ColoredBox(
         color: c.bg,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ScreenHeader(title: 'Memory', onLeading: () => context.pop()),
-            const Spacer(),
+            ScreenHeader(title: 'Memory', onLeading: () => popOrHome(context)),
+            Expanded(
+              // Still reading is a blank screen. Nothing to read is not.
+              child: request.isLoading
+                  ? const SizedBox.shrink()
+                  : _MissingMemory(onBack: () => popOrHome(context)),
+            ),
           ],
         ),
       );
@@ -423,6 +430,57 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 /// `3 conversations`, `1 conversation`.
 String conversationCount(int n) =>
     n == 1 ? '1 conversation' : '$n conversations';
+
+/// Shown when the id in the link has no memory behind it any more.
+class _MissingMemory extends StatelessWidget {
+  const _MissingMemory({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.all(Space.s6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: Space.s8),
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: c.surface2,
+              borderRadius: BorderRadius.circular(Radii.md),
+              border: Border.all(color: c.line),
+            ),
+            child: Icon(MemoraIcons.images, size: 22, color: c.muted),
+          ),
+          const SizedBox(height: Space.s6),
+          Text(
+            'That memory is gone.',
+            style: MemoraText.style(
+              20,
+              medium: true,
+              height: 1.3,
+              spacing: -0.4,
+              color: c.text,
+            ),
+          ),
+          const SizedBox(height: Space.s4),
+          Text(
+            'It was deleted, or this link points at something Memora no '
+            'longer has.',
+            style: MemoraText.style(13.5, height: 1.6, color: c.muted),
+          ),
+          const SizedBox(height: Space.s8),
+          OutlineAction(label: 'Back to memories', onPressed: onBack),
+        ],
+      ),
+    );
+  }
+}
 
 class _FactsTable extends StatelessWidget {
   const _FactsTable({required this.rows});

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:memora_core/memora_core.dart';
 
 import '../../routing/router.dart';
+import '../../services/app_services.dart';
 import '../../state/memories.dart';
 import '../../state/queue.dart';
 import '../../state/services.dart';
@@ -236,7 +237,25 @@ class _ToastHost extends ConsumerStatefulWidget {
 }
 
 class _ToastHostState extends ConsumerState<_ToastHost> {
+  static const _visibleFor = Duration(milliseconds: 5200);
   Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // The timer lives outside build: a rebuild from the data version poll
+    // would otherwise keep pushing the dismissal back.
+    _schedule(ref.read(addedToastProvider));
+    ref.listenManual(addedToastProvider, (previous, next) => _schedule(next));
+  }
+
+  void _schedule(AddImagesResult? result) {
+    _timer?.cancel();
+    if (result == null) return;
+    _timer = Timer(_visibleFor, () {
+      if (mounted) ref.read(addedToastProvider.notifier).clear();
+    });
+  }
 
   @override
   void dispose() {
@@ -248,10 +267,6 @@ class _ToastHostState extends ConsumerState<_ToastHost> {
   Widget build(BuildContext context) {
     final result = ref.watch(addedToastProvider);
     if (result == null) return const SizedBox.shrink();
-    _timer?.cancel();
-    _timer = Timer(const Duration(milliseconds: 5200), () {
-      if (mounted) ref.read(addedToastProvider.notifier).clear();
-    });
     final policy = ref.watch(queuePolicyProvider).value ?? const QueuePolicy();
     return Positioned(
       left: 14,

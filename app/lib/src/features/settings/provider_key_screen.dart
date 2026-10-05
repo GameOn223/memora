@@ -30,7 +30,9 @@ class ProviderKeyScreen extends ConsumerStatefulWidget {
 class _ProviderKeyScreenState extends ConsumerState<ProviderKeyScreen> {
   final _key = TextEditingController();
   String? _result;
+  bool _resultOk = true;
   bool _testing = false;
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -38,25 +40,44 @@ class _ProviderKeyScreenState extends ConsumerState<ProviderKeyScreen> {
     super.dispose();
   }
 
+  void _say(String message, {bool ok = true}) {
+    if (!mounted) return;
+    setState(() {
+      _result = message;
+      _resultOk = ok;
+    });
+  }
+
   Future<void> _save(ProviderDescriptor descriptor) async {
     final value = _key.text.trim();
-    if (value.isEmpty) return;
-    final services = ref.read(appServicesProvider);
-    await services.secrets.write(
-      CapabilityRouter.apiKeyName(descriptor.id),
-      value,
-    );
-    _key.clear();
-    ref.read(secretsVersionProvider.notifier).bump();
-    await ref.read(dataVersionProvider.notifier).check();
-    if (mounted) setState(() => _result = 'Key saved.');
+    if (value.isEmpty || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final services = ref.read(appServicesProvider);
+      await services.secrets.write(
+        CapabilityRouter.apiKeyName(descriptor.id),
+        value,
+      );
+      _key.clear();
+      ref.read(secretsVersionProvider.notifier).bump();
+      await ref.read(dataVersionProvider.notifier).check();
+      _say('Key saved.');
+    } on Object {
+      _say('The key could not be saved. Nothing was stored.', ok: false);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _remove(ProviderDescriptor descriptor) async {
-    final services = ref.read(appServicesProvider);
-    await services.secrets.delete(CapabilityRouter.apiKeyName(descriptor.id));
-    ref.read(secretsVersionProvider.notifier).bump();
-    if (mounted) setState(() => _result = 'Key removed.');
+    try {
+      final services = ref.read(appServicesProvider);
+      await services.secrets.delete(CapabilityRouter.apiKeyName(descriptor.id));
+      ref.read(secretsVersionProvider.notifier).bump();
+      _say('Key removed.');
+    } on Object {
+      _say('The key could not be removed.', ok: false);
+    }
   }
 
   Future<void> _test(ProviderDescriptor descriptor) async {
@@ -64,22 +85,24 @@ class _ProviderKeyScreenState extends ConsumerState<ProviderKeyScreen> {
       _testing = true;
       _result = null;
     });
-    final services = ref.read(appServicesProvider);
-    String message;
     try {
+      final services = ref.read(appServicesProvider);
       final client = await services.router.clientFor(descriptor.id);
       final check = await client.testConnection();
-      message = check.ok
-          ? 'Connected. ${check.detail ?? ''}'.trim()
-          : 'Could not connect. ${check.detail ?? ''}'.trim();
-    } on Object catch (error) {
-      message = 'Could not connect. $error';
-    }
-    if (mounted) {
-      setState(() {
-        _testing = false;
-        _result = message;
-      });
+      // Only the provider's own message is shown, never a raw exception,
+      // which could carry the key itself.
+      _say(
+        check.ok
+            ? 'Connected. ${check.detail ?? ''}'.trim()
+            : 'Could not connect. ${check.detail ?? ''}'.trim(),
+        ok: check.ok,
+      );
+    } on AiException catch (error) {
+      _say('Could not connect. ${error.message}', ok: false);
+    } on Object {
+      _say('Could not connect. Check the key and the network.', ok: false);
+    } finally {
+      if (mounted) setState(() => _testing = false);
     }
   }
 
@@ -163,9 +186,9 @@ class _ProviderKeyScreenState extends ConsumerState<ProviderKeyScreen> {
                 ),
                 const SizedBox(height: Space.s6),
                 OutlineAction(
-                  label: 'Save key',
+                  label: _saving ? 'Saving…' : 'Save key',
                   icon: MemoraIcons.checkCircle,
-                  onPressed: _key.text.trim().isEmpty
+                  onPressed: _key.text.trim().isEmpty || _saving
                       ? null
                       : () => unawaited(_save(descriptor)),
                 ),
@@ -187,9 +210,28 @@ class _ProviderKeyScreenState extends ConsumerState<ProviderKeyScreen> {
                 ],
                 if (_result != null) ...[
                   const SizedBox(height: Space.s4),
-                  Text(
-                    _result!,
-                    style: MemoraText.style(12.5, color: c.accentInk),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        _resultOk
+                            ? MemoraIcons.checkCircle
+                            : MemoraIcons.warningCircle,
+                        size: 15,
+                        color: _resultOk ? c.accent : c.muted,
+                      ),
+                      const SizedBox(width: Space.s3),
+                      Expanded(
+                        child: Text(
+                          _result!,
+                          style: MemoraText.style(
+                            12.5,
+                            height: 1.5,
+                            color: _resultOk ? c.accentInk : c.muted,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
                 if (descriptor.homepage != null) ...[

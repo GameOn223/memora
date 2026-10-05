@@ -45,7 +45,9 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
     final services = ref.read(appServicesProvider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final summary = view?.summary ?? QueueSummary.empty;
-    final policy = view?.policy ?? const QueuePolicy();
+    // Read the policy from the controller that the buttons write to, so the
+    // labels follow a change immediately.
+    final policy = ref.watch(queuePolicyProvider).value ?? const QueuePolicy();
     final overnight = policy.mode == QueueMode.overnight;
     final now = ref.watch(clockProvider).now();
     final running =

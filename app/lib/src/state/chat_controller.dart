@@ -130,6 +130,15 @@ class ChatController extends Notifier<ChatViewState> {
   Future<void> send(String text) async {
     final question = text.trim();
     if (question.isEmpty || state.thinking) return;
+    // Claim the turn before the first await, so a second tap can't start a
+    // second conversation.
+    state = state.copyWith(
+      thinking: true,
+      lastQuestion: question,
+      clearError: true,
+      clearProgress: true,
+      loaded: true,
+    );
     final services = ref.read(appServicesProvider);
     var conversationId = state.conversationId;
     if (conversationId == null) {
@@ -149,11 +158,6 @@ class ChatController extends Notifier<ChatViewState> {
     state = state.copyWith(
       conversationId: conversationId,
       messages: [...state.messages, pending],
-      thinking: true,
-      lastQuestion: question,
-      clearError: true,
-      clearProgress: true,
-      loaded: true,
     );
     await _ask(conversationId, question);
   }
@@ -213,6 +217,8 @@ class ChatController extends Notifier<ChatViewState> {
             }
           },
           onError: (Object error) {
+            // cancelOnError skips onDone, so release the caller here too.
+            if (!completer.isCompleted) completer.complete();
             if (!ref.mounted || token != _askToken) return;
             state = state.copyWith(
               thinking: false,

@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in Memora doesn't work the way it should.
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Please remove personal content from screenshots and logs before attaching them.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Add and select 3 images
+        2. Tap Process now on the queue screen
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Memora version
+      description: Settings shows it at the bottom, or use the release tag.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: Pixel 8, Android 16
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Adding images or capture
+        - Processing queue
+        - Search or Ask
+        - Memory detail
+        - Settings or providers
+        - Export or deletion
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: providers
+    attributes:
+      label: Selected providers
+      description: Which provider and model you had for vision, chat, embeddings and reranking, and whether local-only mode was on. Never paste API keys.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      render: shell

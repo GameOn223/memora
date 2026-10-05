@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,7 +47,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _send() {
     final text = _input.text.trim();
-    if (text.isEmpty) return;
+    // Keep what was typed when the turn is refused.
+    if (text.isEmpty || ref.read(chatControllerProvider).thinking) return;
     _input.clear();
     unawaited(ref.read(chatControllerProvider.notifier).send(text));
   }
@@ -148,7 +150,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
-          _Composer(controller: _input, onSend: _send),
+          _Composer(
+            controller: _input,
+            onSend: _send,
+            enabled: !state.thinking,
+          ),
         ],
       ),
     );
@@ -357,29 +363,39 @@ class _EmptyConversation extends StatelessWidget {
 }
 
 class _Composer extends StatelessWidget {
-  const _Composer({required this.controller, required this.onSend});
+  const _Composer({
+    required this.controller,
+    required this.onSend,
+    this.enabled = true,
+  });
 
   final TextEditingController controller;
   final VoidCallback onSend;
+
+  /// False while an answer is on its way.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final media = MediaQuery.of(context);
     final bottom = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
+    // The field grows with the text scale, and its tap target with it.
+    final box = math.max(42.0, media.textScaler.scale(13.5) * 1.5 + 20);
+    final row = math.max(kMinTapTarget, box);
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: c.lineSoft)),
       ),
       child: SizedBox(
-        height: Space.s4 + 42 + Space.s6 + bottom,
+        height: Space.s4 + box + Space.s6 + bottom,
         child: Stack(
           children: [
             Positioned(
               left: Space.s4,
               right: Space.s4,
               top: Space.s4,
-              height: 42,
+              height: box,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: c.surface2,
@@ -391,8 +407,8 @@ class _Composer extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              top: Space.s4 + 21 - 24,
-              height: 48,
+              top: Space.s4 + box / 2 - row / 2,
+              height: row,
               child: Row(
                 children: [
                   const SizedBox(width: Space.s4 + 14),
@@ -419,7 +435,7 @@ class _Composer extends StatelessWidget {
                   ),
                   const SizedBox(width: Space.s3),
                   TapArea(
-                    onTap: onSend,
+                    onTap: enabled ? onSend : null,
                     semanticLabel: 'Send',
                     child: Container(
                       width: 34,
@@ -427,12 +443,12 @@ class _Composer extends StatelessWidget {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: c.accent),
+                        border: Border.all(color: enabled ? c.accent : c.line),
                       ),
                       child: Icon(
                         MemoraIcons.arrowUp,
                         size: 16,
-                        color: c.accent,
+                        color: enabled ? c.accent : c.dim,
                       ),
                     ),
                   ),

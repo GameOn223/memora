@@ -34,7 +34,7 @@ class MemoraColors extends ThemeExtension<MemoraColors> {
     lineSoft: Nocturne.neutral900,
     text: Nocturne.text,
     muted: Nocturne.neutral500,
-    dim: Nocturne.neutral600,
+    dim: dimDark,
     accent: Nocturne.accent,
     accentInk: Nocturne.accent300,
     accentTint: Nocturne.accent900,
@@ -53,7 +53,7 @@ class MemoraColors extends ThemeExtension<MemoraColors> {
     lineSoft: Color(0xFFDEE1EF),
     text: Nocturne.neutral900,
     muted: Nocturne.neutral700,
-    dim: Nocturne.neutral600,
+    dim: dimLight,
     accent: Nocturne.accent600,
     accentInk: Nocturne.accent700,
     accentTint: Nocturne.accent200,
@@ -63,6 +63,14 @@ class MemoraColors extends ThemeExtension<MemoraColors> {
     scrim: Color.fromRGBO(243, 245, 254, 0.93),
     chip: Color(0xFFECEFFB),
   );
+
+  /// `dim` carries fact labels, section headers and provenance, all of it
+  /// small text. The prototype's neutral-600 measures 4.08:1 on the dark
+  /// background and 3.50:1 on the light one, under the 4.5:1 that WCAG AA
+  /// asks for below 18px, so Memora lightens it on dark (4.9:1) and darkens
+  /// it on light (4.8:1). This is a deliberate departure from the design.
+  static const dimDark = Color(0xFF82869A);
+  static const dimLight = Color(0xFF5F6375);
 
   final Color bg;
   final Color surface;
