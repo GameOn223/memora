@@ -83,7 +83,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Open settings'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsOneWidget);
   });

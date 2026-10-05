@@ -164,8 +164,18 @@ class _AddScreenState extends ConsumerState<AddScreen> {
       if (mounted) setState(() => _adding = false);
     }
     if (!mounted || result == null) return;
+    // Images are filed either way. Ask the pipeline whether anything will
+    // read them, so the toast can say so instead of leaving them to sit in
+    // a queue that cannot move.
+    QueueBlock? block;
+    try {
+      block = await ref.read(appServicesProvider).pipeline.currentBlock();
+    } on Object {
+      // The add still happened. Report it without the reason.
+    }
+    if (!mounted) return;
     ref.read(gallerySelectionProvider.notifier).clear();
-    ref.read(addedToastProvider.notifier).show(result);
+    ref.read(addedToastProvider.notifier).show(result, block: block);
     await ref.read(dataVersionProvider.notifier).check();
     if (mounted) context.go(Routes.home);
   }

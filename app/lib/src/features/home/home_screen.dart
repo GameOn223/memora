@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:memora_core/memora_core.dart';
 
 import '../../routing/router.dart';
-import '../../services/app_services.dart';
 import '../../state/memories.dart';
 import '../../state/queue.dart';
 import '../../state/services.dart';
@@ -25,6 +24,7 @@ import '../../widgets/memory_labels.dart';
 import '../../widgets/memory_tile.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/tap_area.dart';
+import '../queue/block_notice.dart';
 import 'empty_state.dart';
 import 'home_header.dart';
 
@@ -238,6 +238,7 @@ class _ToastHost extends ConsumerStatefulWidget {
 
 class _ToastHostState extends ConsumerState<_ToastHost> {
   static const _visibleFor = Duration(milliseconds: 5200);
+  static const _visibleForBlocked = Duration(milliseconds: 9000);
   Timer? _timer;
 
   @override
@@ -249,12 +250,16 @@ class _ToastHostState extends ConsumerState<_ToastHost> {
     ref.listenManual(addedToastProvider, (previous, next) => _schedule(next));
   }
 
-  void _schedule(AddImagesResult? result) {
+  void _schedule(AddedOutcome? outcome) {
     _timer?.cancel();
-    if (result == null) return;
-    _timer = Timer(_visibleFor, () {
-      if (mounted) ref.read(addedToastProvider.notifier).clear();
-    });
+    if (outcome == null) return;
+    // A toast that asks for a decision stays up long enough to read it.
+    _timer = Timer(
+      outcome.block == null ? _visibleFor : _visibleForBlocked,
+      () {
+        if (mounted) ref.read(addedToastProvider.notifier).clear();
+      },
+    );
   }
 
   @override
@@ -265,20 +270,32 @@ class _ToastHostState extends ConsumerState<_ToastHost> {
 
   @override
   Widget build(BuildContext context) {
-    final result = ref.watch(addedToastProvider);
-    if (result == null) return const SizedBox.shrink();
+    final outcome = ref.watch(addedToastProvider);
+    if (outcome == null) return const SizedBox.shrink();
     final policy = ref.watch(queuePolicyProvider).value ?? const QueuePolicy();
+    final block = outcome.block;
+    final notice = block == null
+        ? null
+        : blockNotice(
+            block,
+            providers: ref.read(appServicesProvider).providers,
+          );
     return Positioned(
       left: 14,
       right: 14,
       bottom: BottomTabs.barHeight(context) + Space.s3,
       child: AddedToast(
-        result: result,
+        result: outcome.result,
         overnight: policy.mode == QueueMode.overnight,
         windowStart: clockTime(policy.windowStartMinutes),
+        notice: notice,
         onQueue: () {
           ref.read(addedToastProvider.notifier).clear();
-          context.push(Routes.queue);
+          if (notice == null) {
+            context.push(Routes.queue);
+          } else {
+            context.go(notice.route);
+          }
         },
       ),
     );

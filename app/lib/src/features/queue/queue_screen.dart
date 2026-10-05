@@ -23,6 +23,7 @@ import '../../widgets/outline_action.dart';
 import '../../widgets/screen_header.dart';
 import '../../widgets/tap_area.dart';
 import '../../widgets/toggle_card.dart';
+import 'block_notice.dart';
 
 /// What Memora is understanding, what is waiting, and what went wrong.
 class QueueScreen extends ConsumerStatefulWidget {
@@ -86,7 +87,10 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
                     ),
                     if (view?.block != null) ...[
                       const SizedBox(height: Space.s6),
-                      _BlockBanner(block: view!.block!),
+                      _BlockBanner(
+                        block: view!.block!,
+                        providers: services.providers,
+                      ),
                     ],
                     const SizedBox(height: Space.s6),
                     ToggleCard(
@@ -335,21 +339,15 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _BlockBanner extends StatelessWidget {
-  const _BlockBanner({required this.block});
+  const _BlockBanner({required this.block, required this.providers});
 
   final QueueBlock block;
+  final ProviderRegistry providers;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final message = switch (block) {
-      NoVisionProvider() =>
-        'AI processing is not configured, so nothing is being understood.',
-      BlockedByLocalOnly(:final providerName) =>
-        'Local-only mode blocks $providerName, so nothing is being '
-            'understood.',
-      ProviderConfigurationProblem(:final message) => message,
-    };
+    final notice = blockNotice(block, providers: providers);
     return Container(
       padding: const EdgeInsets.all(Space.s4),
       decoration: BoxDecoration(
@@ -364,17 +362,17 @@ class _BlockBanner extends StatelessWidget {
           const SizedBox(width: Space.s4),
           Expanded(
             child: Text(
-              message,
+              notice.sentence,
               style: MemoraText.style(12.5, height: 1.55, color: c.text),
             ),
           ),
           const SizedBox(width: Space.s3),
           TapArea(
-            onTap: () => context.go(Routes.settings),
-            semanticLabel: 'Open settings',
+            onTap: () => context.go(notice.route),
+            semanticLabel: notice.action,
             minSize: 0,
             child: Text(
-              'Settings',
+              notice.action,
               style: MemoraText.style(12.5, medium: true, color: c.accentInk),
             ),
           ),
