@@ -10,7 +10,7 @@ Security fixes go into the latest release. Please check that your report applies
 
 Please don't open a public issue for security problems.
 
-Report privately through GitHub's **Report a vulnerability** button on the repository's Security tab. If that option isn't available to you, contact the maintainer (@GameOn223) privately on GitHub and we'll set up a private channel.
+Report privately through GitHub's **Report a vulnerability** button on the repository's Security tab. If that option isn't available to you, email **jayrathod.dev@gmail.com** instead.
 
 Include as much of this as you can:
 
