@@ -78,9 +78,15 @@ object GemmaRuntime {
     @Volatile
     private var session: LlmInferenceSession? = null
 
+    // Written under the mutex, read from the platform thread when a request
+    // is validated, so every field has to be visible across threads.
     @Volatile
     private var loadedPath: String? = null
+
+    @Volatile
     private var loadedVision = false
+
+    @Volatile
     private var loadedMaxTokens = 0
 
     /** A hint for the UI. Generation reads the engine under the mutex. */

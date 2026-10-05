@@ -62,6 +62,19 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            // tasks-core is on the classpath for one reason: the MPImage
+            // types the vision path uses to hand a Bitmap to the model.
+            // Those are plain Java. Its native library belongs to the
+            // graph-based MediaPipe tasks, which Memora never creates.
+            // Nothing in tasks-core calls System.loadLibrary, and
+            // libllm_inference_engine_jni.so has no DT_NEEDED entry for it,
+            // so this is about 10 MB per ABI of code that is never loaded.
+            excludes += "**/libmediapipe_tasks_jni.so"
+        }
+    }
+
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
