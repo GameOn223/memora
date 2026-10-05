@@ -46,7 +46,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _send() {
     final text = _input.text.trim();
-    if (text.isEmpty) return;
+    // Keep what was typed when the turn is refused.
+    if (text.isEmpty || ref.read(chatControllerProvider).thinking) return;
     _input.clear();
     unawaited(ref.read(chatControllerProvider.notifier).send(text));
   }
@@ -148,7 +149,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
-          _Composer(controller: _input, onSend: _send),
+          _Composer(
+            controller: _input,
+            onSend: _send,
+            enabled: !state.thinking,
+          ),
         ],
       ),
     );
@@ -357,10 +362,17 @@ class _EmptyConversation extends StatelessWidget {
 }
 
 class _Composer extends StatelessWidget {
-  const _Composer({required this.controller, required this.onSend});
+  const _Composer({
+    required this.controller,
+    required this.onSend,
+    this.enabled = true,
+  });
 
   final TextEditingController controller;
   final VoidCallback onSend;
+
+  /// False while an answer is on its way.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -419,7 +431,7 @@ class _Composer extends StatelessWidget {
                   ),
                   const SizedBox(width: Space.s3),
                   TapArea(
-                    onTap: onSend,
+                    onTap: enabled ? onSend : null,
                     semanticLabel: 'Send',
                     child: Container(
                       width: 34,
@@ -427,12 +439,12 @@ class _Composer extends StatelessWidget {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: c.accent),
+                        border: Border.all(color: enabled ? c.accent : c.line),
                       ),
                       child: Icon(
                         MemoraIcons.arrowUp,
                         size: 16,
-                        color: c.accent,
+                        color: enabled ? c.accent : c.dim,
                       ),
                     ),
                   ),

@@ -237,8 +237,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   alignTop: true,
                   offColor: c.surface,
                   body: settings.localOnly
-                      ? 'On. Vision and chat run on device. Tasks the device '
-                            'cannot do are shown as unavailable rather than '
+                      ? 'On. Vision runs on this device. Chat needs a model '
+                            'you run yourself, and anything the device '
+                            'cannot do is shown as unavailable rather than '
                             'sent away.'
                       : 'Off. Cloud providers handle vision and chat. Turn '
                             'on to keep every image on device.',

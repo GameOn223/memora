@@ -103,7 +103,10 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       takenBetween: _takenRange(now),
     );
     final results = ref.watch(memoriesProvider(filter)).value ?? const [];
-    final total = everything.length;
+    // The count comes from the store, so it stays right past the page cap
+    // that `everything` is subject to.
+    final total =
+        ref.watch(storageStatsProvider).value?.memoryCount ?? everything.length;
 
     int takenCount(String label) {
       final range = switch (label) {
