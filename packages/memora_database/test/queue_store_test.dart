@@ -192,6 +192,25 @@ void main() {
       expect((await queue.claimNext(later, lease))!.id, id);
     });
 
+    test('releaseWithoutAttempt can hold the memory and say why', () async {
+      final retryAt = later.add(const Duration(minutes: 20));
+
+      await queue.releaseWithoutAttempt(
+        id,
+        later,
+        nextAttemptAt: retryAt,
+        reason: 'Rate limited by the provider',
+      );
+
+      final memory = (await db.memories.getMemory(id))!;
+      expect(memory.status, ProcessingStatus.captured);
+      expect(memory.attempts, 0);
+      expect(column(id, 'next_attempt_at'), retryAt.millisecondsSinceEpoch);
+      expect(memory.failureReason, 'Rate limited by the provider');
+      expect(await queue.claimNext(later, lease), isNull);
+      expect((await queue.claimNext(retryAt, lease))!.id, id);
+    });
+
     test('markFailed records the reason', () async {
       await queue.markFailed(id, 'The provider refused the image', later);
 

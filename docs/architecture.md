@@ -232,6 +232,7 @@ The calls that finish an item (`markReady`, `markFailed`, `releaseForRetry`, `re
 
 `ProcessingPipeline.processNext()` in `memora_core`:
 
+0. **Check for a rate limit.** A rate limit from an earlier run is remembered under the `queue_rate_limit` setting. While its time has not passed, report `QueueBlocked(RateLimited)` and claim nothing.
 1. **Claim** the next row. Stop if there is none.
 2. **Resolve vision.** If no vision provider is configured, or the selected one is blocked by local-only mode, release the row back to `CAPTURED` without using an attempt and report `QueueBlocked(reason)`. The queue screen shows the reason with a link to settings.
 3. **Analyze.** Send the image to the vision capability and receive a `MemoryUnderstanding` (see 7.4).
@@ -244,9 +245,16 @@ Errors are classified by the provider layer:
 
 | Error kind | Example | What happens |
 |------------|---------|--------------|
-| Transient | timeout, 429, 5xx | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After the fourth attempt, `FAILED`. |
+| Transient | timeout, 5xx, unparseable output | Back to `CAPTURED` with backoff (1 min, 5 min, 30 min). After the fourth attempt, `FAILED`. |
+| Rate limit | 429 | Back to `CAPTURED` with no attempt used, held until the retry time. The whole queue waits and reports `RateLimited`. |
 | Configuration | 401, 403, missing key, model not found | Row goes back to `CAPTURED` with no attempt used. The whole queue pauses with a message like "Check your NVIDIA key". |
 | Content | provider refused the image, unreadable file | `FAILED` right away with the reason. |
+
+A transient error that carries the provider's own `Retry-After` hint is scheduled from that hint rather than from the ladder, shorter or longer, capped at six hours. A provider that knows its own limits is believed.
+
+A rate limit is `AiRateLimitException`, a subtype of `AiTransientException`, so anything that only cares that an error is worth retrying keeps working. The queue treats it as the provider's state rather than a problem with the image: the attempt is given back, the memory is held until the retry time, and the note is saved so the UI isolate can tell the user why nothing is moving. The next success clears it.
+
+`ProcessingPipeline.currentBlock()` returns the same `QueueBlock` without claiming anything or calling a provider, so the UI can ask before every add. Its cases are `NoVisionProvider`, `BlockedByLocalOnly`, `ProviderConfigurationProblem`, `ProviderUnavailable` (the selected provider has no service for the model it is set to) and `RateLimited`.
 
 ### 5.4 Scheduling
 

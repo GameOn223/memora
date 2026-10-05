@@ -209,3 +209,69 @@ final class ProviderConfigurationProblem extends QueueBlock {
   final String providerName;
   final String message;
 }
+
+/// The provider is rate limiting Memora. Nothing is wrong with the settings
+/// or the images, so the queue waits and picks up again by itself.
+final class RateLimited extends QueueBlock {
+  const RateLimited(this.providerName, this.retryAt);
+
+  final String providerName;
+
+  /// When the queue will try the provider again.
+  final DateTime retryAt;
+}
+
+/// A provider is selected but has nothing that can run the capability with
+/// the chosen model, either because the provider cannot do it at all or
+/// because that model id is gone from it.
+final class ProviderUnavailable extends QueueBlock {
+  const ProviderUnavailable(this.providerName, this.modelId);
+
+  final String providerName;
+
+  /// The model the user picked, when there is one.
+  final String? modelId;
+}
+
+/// A rate limit the queue is waiting out.
+///
+/// Saved through the settings store rather than held in memory: the
+/// background worker is what meets the rate limit and the UI isolate is what
+/// asks about it.
+@immutable
+class QueueRateLimit {
+  const QueueRateLimit({required this.providerName, required this.retryAt});
+
+  factory QueueRateLimit.fromJson(Map<String, Object?> json) => QueueRateLimit(
+    providerName: json['provider_name'] as String? ?? '',
+    retryAt: DateTime.fromMillisecondsSinceEpoch(
+      json['retry_at'] as int? ?? 0,
+      isUtc: true,
+    ),
+  );
+
+  final String providerName;
+
+  /// When the queue will try the provider again.
+  final DateTime retryAt;
+
+  /// Whether the wait is still on at [now].
+  bool holdsAt(DateTime now) => retryAt.isAfter(now);
+
+  /// The same thing as a [QueueBlock], for the queue screen.
+  RateLimited get block => RateLimited(providerName, retryAt);
+
+  Map<String, Object?> toJson() => {
+    'provider_name': providerName,
+    'retry_at': retryAt.millisecondsSinceEpoch,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is QueueRateLimit &&
+      other.providerName == providerName &&
+      other.retryAt.isAtSameMomentAs(retryAt);
+
+  @override
+  int get hashCode => Object.hash(providerName, retryAt.millisecondsSinceEpoch);
+}
