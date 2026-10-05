@@ -4,7 +4,6 @@ import 'package:memora_core/memora_core.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'codec.dart';
-import 'fold.dart';
 import 'fts_query.dart';
 import 'rows.dart';
 import 'transactions.dart';
