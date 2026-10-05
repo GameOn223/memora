@@ -117,7 +117,13 @@ abstract interface class ProcessingPipeline {
   /// Rebuilds vectors for memories missing one for the active embedding model.
   Future<int> reindexEmbeddings({required Duration budget});
 
-  /// The reason the queue can't progress right now, or null if it can.
+  /// The reason understanding cannot run right now, or null when it can.
+  ///
+  /// Covers a missing vision provider, one refused by local-only mode, a
+  /// configuration problem such as a missing key, a provider with no service
+  /// for the model it is set to, and a rate limit the queue is waiting out.
+  /// Cheap enough to call before adding images: it reads settings and
+  /// resolves capabilities, makes no provider call and claims no memory.
   Future<QueueBlock?> currentBlock();
 }
 

@@ -208,7 +208,7 @@ void main() {
       expect(records.first.error, 'Rate limited');
     });
 
-    test('a longer retry-after from the provider wins over backoff', () async {
+    test('the provider retry hint replaces the backoff ladder', () async {
       final ai = await AiHarness.create(
         vision: ScriptedVisionService(
           analyze: [
@@ -216,17 +216,162 @@ void main() {
               'Slow down',
               retryAfter: Duration(minutes: 3),
             ),
+            const AiTransientException(
+              'Slow down',
+              retryAfter: Duration(seconds: 10),
+            ),
+            const AiTransientException(
+              'Slow down',
+              retryAfter: Duration(hours: 9),
+            ),
           ],
+        ),
+      );
+      final pipeline = pipelineFor(ai);
+      seedCaptured('m1');
+
+      await pipeline.processNext();
+      expect(
+        db.rows['m1']!.nextAttemptAt,
+        clock.current.add(const Duration(minutes: 3)),
+        reason: 'the ladder would have said one minute',
+      );
+
+      clock.advance(const Duration(minutes: 4));
+      await pipeline.processNext();
+      expect(
+        db.rows['m1']!.nextAttemptAt,
+        clock.current.add(const Duration(seconds: 10)),
+        reason: 'a shorter hint is honoured too, the ladder said five minutes',
+      );
+
+      clock.advance(const Duration(minutes: 1));
+      await pipeline.processNext();
+      expect(
+        db.rows['m1']!.nextAttemptAt,
+        clock.current.add(DefaultProcessingPipeline.maxRetryAfter),
+        reason: 'a hint past the cap is clamped',
+      );
+    });
+
+    test('a rate limit reschedules without spending an attempt', () async {
+      final vision = ScriptedVisionService(
+        analyze: [
+          const AiRateLimitException(
+            'Rate limited by the provider',
+            retryAfter: Duration(minutes: 20),
+          ),
+          _bill,
+        ],
+      );
+      final ai = await AiHarness.create(vision: vision);
+      final pipeline = pipelineFor(ai);
+      seedCaptured('m1');
+      final retryAt = clock.current.add(const Duration(minutes: 20));
+
+      final outcome = await pipeline.processNext();
+
+      expect(
+        outcome,
+        isA<QueueBlocked>().having(
+          (b) => b.block,
+          'block',
+          isA<RateLimited>()
+              .having((r) => r.providerName, 'providerName', 'Fake AI')
+              .having((r) => r.retryAt, 'retryAt', retryAt),
+        ),
+      );
+      final row = db.rows['m1']!;
+      expect(row.status, ProcessingStatus.captured);
+      expect(
+        row.attempts,
+        0,
+        reason: 'a rate limit is not the memory to blame',
+      );
+      expect(row.nextAttemptAt, retryAt);
+      expect(row.failureReason, 'Rate limited by the provider');
+      expect(
+        (await db.getDetails('m1'))!.processing.single.outcome,
+        ProcessingOutcome.failed,
+      );
+
+      expect(
+        await pipeline.currentBlock(),
+        isA<RateLimited>()
+            .having((r) => r.providerName, 'providerName', 'Fake AI')
+            .having(
+              (r) => r.retryAt.millisecondsSinceEpoch,
+              'retryAt',
+              retryAt.millisecondsSinceEpoch,
+            ),
+      );
+
+      // While the limit holds, nothing is claimed and the provider is left
+      // alone.
+      expect(
+        (await pipeline.processNext() as QueueBlocked).block,
+        isA<RateLimited>(),
+      );
+      expect(vision.analyzeRequests, hasLength(1));
+      expect(db.rows['m1']!.attempts, 0);
+
+      clock.advance(const Duration(minutes: 21));
+      expect(await pipeline.currentBlock(), isNull);
+      expect(
+        (await pipeline.processNext() as Processed).status,
+        ProcessingStatus.ready,
+      );
+      expect(db.rows['m1']!.attempts, 1, reason: 'only the real try counts');
+      expect(await pipeline.currentBlock(), isNull);
+      expect(
+        settings.values.containsKey(QueuePolicyRepository.rateLimitKey),
+        isFalse,
+        reason: 'a success clears the note it left behind',
+      );
+    });
+
+    test('a rate limit with no hint falls back to the ladder', () async {
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(
+          analyze: [const AiRateLimitException('Rate limited')],
         ),
       );
       seedCaptured('m1');
 
-      await pipelineFor(ai).processNext();
+      final outcome = await pipelineFor(ai).processNext();
 
+      expect((outcome as QueueBlocked).block, isA<RateLimited>());
       expect(
         db.rows['m1']!.nextAttemptAt,
-        clock.current.add(const Duration(minutes: 3)),
+        clock.current.add(const Duration(minutes: 1)),
       );
+      expect(db.rows['m1']!.attempts, 0);
+    });
+
+    test('a rate limit never uses up the attempt cap', () async {
+      final ai = await AiHarness.create(
+        vision: ScriptedVisionService(
+          analyze: [
+            for (var i = 0; i < DefaultProcessingPipeline.maxAttempts + 2; i++)
+              const AiRateLimitException(
+                'Rate limited',
+                retryAfter: Duration(minutes: 1),
+              ),
+          ],
+        ),
+      );
+      final pipeline = pipelineFor(ai);
+      seedCaptured('m1');
+
+      for (var i = 0; i < DefaultProcessingPipeline.maxAttempts + 2; i++) {
+        expect(
+          (await pipeline.processNext() as QueueBlocked).block,
+          isA<RateLimited>(),
+        );
+        expect(db.rows['m1']!.status, ProcessingStatus.captured);
+        expect(db.rows['m1']!.attempts, 0);
+        clock.advance(const Duration(minutes: 2));
+      }
     });
 
     test(
@@ -466,6 +611,60 @@ void main() {
       final ai = await AiHarness.create();
       expect(await pipelineFor(ai).currentBlock(), isA<NoVisionProvider>());
     });
+
+    test('claims nothing and calls no provider', () async {
+      final vision = ScriptedVisionService(analyze: [_bill]);
+      final ai = await AiHarness.create(vision: vision);
+      seedCaptured('m1');
+
+      expect(await pipelineFor(ai).currentBlock(), isNull);
+
+      expect(vision.analyzeRequests, isEmpty);
+      expect(db.rows['m1']!.status, ProcessingStatus.captured);
+      expect(db.rows['m1']!.attempts, 0);
+    });
+
+    test('reports local-only mode and a missing key', () async {
+      final blocked = await AiHarness.create(
+        vision: ScriptedVisionService(),
+        location: ProviderLocation.cloud,
+        localOnly: true,
+      );
+      expect(
+        await pipelineFor(blocked).currentBlock(),
+        isA<BlockedByLocalOnly>().having(
+          (b) => b.providerName,
+          'providerName',
+          'Fake AI',
+        ),
+      );
+
+      final keyless = await AiHarness.create(
+        vision: ScriptedVisionService(),
+        location: ProviderLocation.cloud,
+        requiresApiKey: true,
+      );
+      expect(
+        await pipelineFor(keyless).currentBlock(),
+        isA<ProviderConfigurationProblem>().having(
+          (b) => b.message,
+          'message',
+          'Add an API key for Fake AI',
+        ),
+      );
+    });
+
+    test('names a selected provider with no service for the model', () async {
+      final ai = await AiHarness.create(vision: ScriptedVisionService());
+      ai.vision = null;
+
+      expect(
+        await pipelineFor(ai).currentBlock(),
+        isA<ProviderUnavailable>()
+            .having((b) => b.providerName, 'providerName', 'Fake AI')
+            .having((b) => b.modelId, 'modelId', 'vision-model'),
+      );
+    });
   });
 
   group('runQueue', () {
@@ -600,6 +799,39 @@ void main() {
       expect(report.processed, 0);
       expect(report.block, isA<NoVisionProvider>());
       expect(report.remaining, isTrue);
+    });
+
+    test('a rate limit stops the run and says when to come back', () async {
+      await policy.save(const QueuePolicy(mode: QueueMode.immediate));
+      final vision = ScriptedVisionService(
+        analyze: [
+          const AiRateLimitException(
+            'Rate limited',
+            retryAfter: Duration(minutes: 20),
+          ),
+          _bill,
+        ],
+      );
+      final ai = await AiHarness.create(vision: vision);
+      seedCaptured('a');
+      seedCaptured('b');
+      final retryAt = clock.current.add(const Duration(minutes: 20));
+
+      final report = await pipelineFor(ai)
+          .runQueue(budget: const Duration(minutes: 9));
+
+      expect(report.processed, 0);
+      expect(
+        report.block,
+        isA<RateLimited>().having((r) => r.retryAt, 'retryAt', retryAt),
+      );
+      expect(report.nextAttemptAt, retryAt);
+      expect(report.remaining, isTrue);
+      expect(
+        vision.analyzeRequests,
+        hasLength(1),
+        reason: 'one rate limit is enough, the whole queue waits',
+      );
     });
   });
 

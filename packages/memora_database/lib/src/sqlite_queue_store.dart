@@ -98,15 +98,30 @@ WHERE id = ? AND status = 'processing' ''',
 
   /// Only affects a memory that is still processing, so a worker can't hand
   /// back an attempt another worker is using.
+  ///
+  /// A null `nextAttemptAt` clears the hold, so the row is claimable as soon
+  /// as the queue is unblocked. A null `reason` keeps whatever reason was
+  /// already there.
   @override
-  Future<void> releaseWithoutAttempt(String id, DateTime now) async {
+  Future<void> releaseWithoutAttempt(
+    String id,
+    DateTime now, {
+    DateTime? nextAttemptAt,
+    String? reason,
+  }) async {
     _db.execute(
       '''
 UPDATE memories
 SET status = 'captured', lease_until = NULL, attempts = MAX(attempts - 1, 0),
+    next_attempt_at = ?, failure_reason = COALESCE(?, failure_reason),
     updated_at = ?
 WHERE id = ? AND status = 'processing' ''',
-      [toMillis(now), id],
+      [
+        nextAttemptAt == null ? null : toMillis(nextAttemptAt),
+        reason,
+        toMillis(now),
+        id,
+      ],
     );
   }
 

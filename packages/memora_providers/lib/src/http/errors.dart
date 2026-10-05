@@ -143,7 +143,9 @@ AiException exceptionForStatus(
         providerId: providerId,
       );
     case 429:
-      return AiTransientException(
+      // Its own subtype, so the queue can wait without charging the memory
+      // an attempt. See docs/architecture.md, section 5.3.
+      return AiRateLimitException(
         withDetail('Rate limited by the provider'),
         providerId: providerId,
         retryAfter: retryAfter,

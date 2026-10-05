@@ -153,6 +153,7 @@ class CapabilityRouter {
         capability,
         UnavailableReason.unsupportedByProvider,
         providerName: descriptor.displayName,
+        modelId: selection.modelId,
       );
     }
     final config = await _configFor(descriptor, settings);
@@ -161,6 +162,7 @@ class CapabilityRouter {
         capability,
         UnavailableReason.blockedByLocalOnly,
         providerName: descriptor.displayName,
+        modelId: selection.modelId,
       );
     }
     if (descriptor.requiresApiKey && (config.apiKey ?? '').isEmpty) {
@@ -168,6 +170,7 @@ class CapabilityRouter {
         capability,
         UnavailableReason.missingApiKey,
         providerName: descriptor.displayName,
+        modelId: selection.modelId,
       );
     }
     final service = pick(_registry.create(config), selection.modelId);
@@ -176,6 +179,7 @@ class CapabilityRouter {
         capability,
         UnavailableReason.unsupportedByProvider,
         providerName: descriptor.displayName,
+        modelId: selection.modelId,
       );
     }
     return Resolved(

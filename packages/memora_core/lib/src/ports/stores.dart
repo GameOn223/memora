@@ -147,8 +147,20 @@ abstract interface class QueueStore {
   });
 
   /// Returns a processing memory to `captured` and gives back the attempt it
-  /// used.
-  Future<void> releaseWithoutAttempt(String id, DateTime now);
+  /// used, for something that was not the memory's fault.
+  ///
+  /// [nextAttemptAt] holds it until then, which is how a rate limit waits
+  /// without spending an attempt. Left out, the memory is claimable again
+  /// right away, which is what a configuration problem wants: the queue is
+  /// blocked anyway and the row should run the moment the user fixes it.
+  /// [reason] fills `failure_reason` so the queue screen can say what
+  /// happened.
+  Future<void> releaseWithoutAttempt(
+    String id,
+    DateTime now, {
+    DateTime? nextAttemptAt,
+    String? reason,
+  });
 
   /// Marks a processing memory as failed with [reason].
   Future<void> markFailed(String id, String reason, DateTime now);

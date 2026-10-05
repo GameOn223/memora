@@ -212,13 +212,30 @@ void main() {
       await expectLater(
         post(),
         throwsA(
-          isA<AiTransientException>()
+          isA<AiRateLimitException>()
               .having(
                 (e) => e.retryAfter,
                 'retryAfter',
                 const Duration(seconds: 17),
               )
               .having((e) => e.message, 'message', contains('Rate limit')),
+        ),
+      );
+    });
+
+    test('429 is a rate limit, other transient statuses are not', () async {
+      http_.reply({'error': 'slow down'}, status: 429);
+      await expectLater(post(), throwsAi<AiRateLimitException>());
+
+      http_.reply({'error': 'busy'}, status: 503);
+      await expectLater(
+        post(),
+        throwsA(
+          isA<AiTransientException>().having(
+            (e) => e is AiRateLimitException,
+            'is a rate limit',
+            isFalse,
+          ),
         ),
       );
     });

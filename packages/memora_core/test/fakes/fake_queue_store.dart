@@ -67,13 +67,20 @@ mixin FakeQueueStore on FakeMemoraState implements QueueStore {
   }
 
   @override
-  Future<void> releaseWithoutAttempt(String id, DateTime now) async {
+  Future<void> releaseWithoutAttempt(
+    String id,
+    DateTime now, {
+    DateTime? nextAttemptAt,
+    String? reason,
+  }) async {
     final row = rows[id];
-    if (row == null) return;
+    if (row == null || row.status != ProcessingStatus.processing) return;
     row
       ..status = ProcessingStatus.captured
       ..leaseUntil = null
       ..attempts = row.attempts > 0 ? row.attempts - 1 : 0
+      ..nextAttemptAt = nextAttemptAt
+      ..failureReason = reason ?? row.failureReason
       ..updatedAt = now;
     touch();
   }
