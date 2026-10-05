@@ -435,9 +435,11 @@ The on-device model is `bge-small-en-v1.5` (384 dimensions, int8 ONNX). It isn't
 
 Changing the embedding model marks existing vectors as stale. Search only compares vectors whose model id and version match the active model. "Reindex embeddings" rebuilds them one memory at a time through the same queue machinery, and memories stay searchable by text and filters while it runs.
 
-### 7.6 A generative model on the phone
+### 7.6 Generating on the device
 
-Chat and vision can run on a Gemma model the user brings. Two ports in `memora_core` cover it, and the platform layer implements both:
+Vision and chat can also run on the phone, from a Gemma model file the user brings in. MediaPipe LLM Inference does the work in Kotlin, in `app/android/.../inference/llm/`.
+
+**The ports.** Two interfaces in `memora_core` are all the Dart side sees:
 
 ```dart
 abstract interface class LocalLlmRuntime {
@@ -456,13 +458,27 @@ abstract interface class LocalLlmFiles {
 }
 ```
 
-`local/model_catalog.dart` describes what settings offers: Gemma 3 1B (about 550 MB, text) and Gemma 3n E2B (about 3 GB, text and images), each with the RAM it realistically needs, the page it comes from and the licence. Memora never downloads one. The Gemma terms are accepted on the model page before the file appears, so the user downloads it and imports it through the system picker.
+**The catalog.** `local/model_catalog.dart` describes what settings offers: Gemma 3 1B (about 550 MB, text) and Gemma 3n E2B (about 3 GB, text and images), each with the RAM it realistically needs, the page it comes from and the licence. Memora never downloads one. The Gemma terms are accepted on the model page before the file appears, so the user downloads it and imports it. A file name says nothing dependable about which build it is, so the catalog id the user picked is recorded beside the path and reconciled with what is on disk.
 
-`DeviceMemory` decides what the settings rows say. A phone whose total RAM is under what the model needs, or one Android marks as low memory, is told plainly that the model will not run there, and no import is offered. A phone with the RAM but little free right now is called tight and the import goes ahead.
+**Getting the file in.** Nothing is bundled and nothing is downloaded for you. Settings opens the system file picker, and the chosen file is copied into `files/models/imported/` through a `.part` file that is renamed once the copy is whole, so a file sitting there under its real name is a complete file. Only `.task`, `.litertlm` and `.bin` are accepted, and only files directly inside that one folder can be loaded or removed. A file of another kind, or too little room to copy it, comes back as a typed refusal that settings turns into a sentence naming the file to look for instead.
 
-The prompt follows the cloud adapters: the same system prompt, the same transcript, the same tool definitions, written as Gemma turns with the system text on the first user turn. Tool definitions go in as one signature line each rather than eleven JSON schemas, which would crowd out the question. Generation is read piece by piece and the stream is cancelled at `<end_of_turn>`, so a model that carries on inventing turns does not spend the battery to do it.
+**One model, one turn.** `GemmaRuntime` keeps a single model loaded for the whole process, the way the embedding session does, because the UI engine and a worker's headless engine share an address space and nothing here is small. Each generation gets a fresh session, so one answer never inherits another's context, while the engine stays up between turns. A mutex serializes loading, generating and unloading, and a second generation while one is running is refused with a `busy` error rather than allowed to corrupt the session.
 
-Vision uses the same `VisionPrompts` and the same lenient JSON reader as every other adapter. A text-only model keeps the OCR path, so selecting one for vision leaves that capability exactly as it was.
+`maxTokens` sizes the kv-cache when the engine is created, so a turn can ask for less than the loaded budget but never for more. Asking for more fails with `max_tokens_too_large` naming the loaded limit, and the caller loads again with a larger budget.
+
+**Memory is the real constraint.** `deviceMemory()` reports `ActivityManager.MemoryInfo.totalMem`, `availMem` and `isLowRamDevice`. A load is refused before the model file is opened when the device is a low-memory one (`low_ram_device`), when the model needs more than 60 percent of total memory (`model_too_large`), or when it does not fit in what is free right now (`not_enough_memory`). The budget is the weights plus 30 percent, with a 256 MB floor, for the kv-cache and the runtime's own buffers. Getting this wrong does not raise an exception. The kernel kills the process and the user watches Memora vanish, so the check is pessimistic on purpose.
+
+The model is freed on memory pressure, and again once the last Flutter engine is torn down. A worker's engine is destroyed when the worker ends, and a model left resident in a background process is exactly what gets an app killed.
+
+The same numbers decide what settings says before anything is downloaded. A phone whose total RAM is under what the entry needs, or one Android marks as low memory, is told plainly that the model will not run there, and its import is not offered. A phone with the RAM but little free right now is called tight, and the import goes ahead because the user can close something before asking a question.
+
+**The prompt.** It follows the cloud adapters: the same system prompt, the same transcript, the same tool definitions, written as Gemma turns with the system text on the first user turn. Tool definitions go in as one signature line each rather than eleven JSON schemas, which would crowd out the question. Generation is read piece by piece and the stream is cancelled at `<end_of_turn>`, which also cancels the request on the Kotlin side, so a model that carries on inventing turns does not spend the battery to do it.
+
+Vision uses the same `VisionPrompts` and the same lenient JSON reader as every other adapter. A text-only model keeps the OCR path, so selecting one for vision leaves that capability exactly as it was. A model this small often cannot work the tools at all, which 9.2 covers.
+
+**Background work.** The headless engine runs in the same process, under a worker with a budget of minutes. Loading a 3 GB model inside that budget is a bad trade: the load alone can take most of it, and a background process is the first thing the system reclaims. The recommendation is to run the small text-only model in a worker and leave the vision-capable one to the foreground, where the user is watching and the process is protected. The Dart side makes that call, with `deviceMemory()` and the typed load errors to make it on.
+
+**What it costs to ship.** MediaPipe's inference engine is a native library, so the arm64 release APK goes from 65.8 MB to 91.3 MB. `libllm_inference_engine_jni.so` is 26.6 MB of that. The `tasks-core` artifact is on the classpath only for the `MPImage` types that hand a bitmap to the model, which are plain Java, so its own native library is excluded in `app/build.gradle.kts` and saves another 10 MB per ABI.
 
 ## 8. Retrieval
 
@@ -576,10 +592,15 @@ The bridge is generated with Pigeon from `app/pigeons/*.dart`. Generated Dart an
 | `SecretHostApi` | Dart to Kotlin | read, write, delete and list secrets |
 | `OcrHostApi` | Dart to Kotlin | recognize text with block and line geometry |
 | `EmbeddingHostApi` | Dart to Kotlin | load an ONNX model, run a batch of token ids, report status |
+| `LlmHostApi` | Dart to Kotlin | load and unload a Gemma model, start and cancel a generation, report device memory |
+| `LlmEvents` | Kotlin to Dart | event channel carrying generated text as it arrives |
+| `ModelImportHostApi` | Dart to Kotlin | pick a model file, list and delete imported models |
 | `FilesHostApi` | Dart to Kotlin | save an export through the Storage Access Framework, storage usage |
 | `BackgroundFlutterApi` | Kotlin to Dart | ingest the inbox, process the queue within a time budget |
 
 Adapters in `app/lib/src/platform/` implement core ports on top of these APIs. Core code never sees Pigeon types.
+
+`LlmEvents.chunks()` is the one event channel on the bridge. An event channel belongs to a single engine, while the model behind it belongs to the process, so a chunk goes to every engine that is listening and each one keeps the request ids it started. Request ids are unique within the process, which is what makes that safe. Pigeon generates `chunks()` as a top-level Dart function that creates a new channel on every call, so call it once and share the broadcast stream.
 
 ### Headless engine
 

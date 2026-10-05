@@ -72,7 +72,7 @@ Short, plain sentences. Say what happened and what the person can do next. No em
 
 ## What cannot be tested on a laptop
 
-Capture through the Quick Settings tile, the accessibility screenshot path, MediaProjection, the share sheet, gallery permissions, WorkManager waking the headless engine, ML Kit OCR, ONNX inference, the Keystore and the system save dialog all need a real device. [docs/testing-on-device.md](docs/testing-on-device.md) is the checklist. If your change touches any of them, say in the pull request what you could not verify.
+Capture through the Quick Settings tile, the accessibility screenshot path, MediaProjection, the share sheet, gallery permissions, WorkManager waking the headless engine, ML Kit OCR, ONNX inference, running a Gemma model through MediaPipe, the Keystore and the system save dialog all need a real device. [docs/testing-on-device.md](docs/testing-on-device.md) is the checklist. If your change touches any of them, say in the pull request what you could not verify.
 
 ## Questions
 

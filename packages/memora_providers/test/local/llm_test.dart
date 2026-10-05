@@ -115,7 +115,7 @@ void main() {
         expect(spec.licence, 'Gemma Terms of Use', reason: spec.id);
         expect(spec.sourceName, isNotEmpty, reason: spec.id);
         expect(spec.sourceUrl, startsWith('https://'), reason: spec.id);
-        expect(spec.fileExtensions, ['.task'], reason: spec.id);
+        expect(spec.fileExtensions, ['.task', '.litertlm'], reason: spec.id);
       }
     });
 
@@ -589,7 +589,7 @@ void main() {
         (events.last as ModelImportDone).model.relativePath,
         'models/gemma-3-1b-it-int4.task',
       );
-      expect(llmFiles.imports.single.extensions, ['.task']);
+      expect(llmFiles.imports.single.extensions, ['.task', '.litertlm']);
     });
 
     test('says plainly when the file is the wrong kind', () async {

@@ -836,6 +836,164 @@ data class TokenBatch (
     return "TokenBatch(inputIds=${inputIds.contentToString()}, attentionMask=${attentionMask.contentToString()}, tokenTypeIds=${tokenTypeIds.contentToString()}, sequenceLength=$sequenceLength)"
   }
 }
+
+/**
+ * What the device has to spare right now. Read before loading a model that
+ * is measured in gigabytes.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class DeviceMemory (
+  val totalBytes: Long,
+  val availableBytes: Long,
+  val lowRamDevice: Boolean
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): DeviceMemory {
+      val totalBytes = pigeonVar_list[0] as Long
+      val availableBytes = pigeonVar_list[1] as Long
+      val lowRamDevice = pigeonVar_list[2] as Boolean
+      return DeviceMemory(totalBytes, availableBytes, lowRamDevice)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      totalBytes,
+      availableBytes,
+      lowRamDevice,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as DeviceMemory
+    return MessagesPigeonUtils.deepEquals(this.totalBytes, other.totalBytes) && MessagesPigeonUtils.deepEquals(this.availableBytes, other.availableBytes) && MessagesPigeonUtils.deepEquals(this.lowRamDevice, other.lowRamDevice)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.totalBytes)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.availableBytes)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.lowRamDevice)
+    return result
+  }
+  override fun toString(): String {
+    return "DeviceMemory(totalBytes=$totalBytes, availableBytes=$availableBytes, lowRamDevice=$lowRamDevice)"
+  }
+}
+
+/**
+ * A model file the user brought in, living under `files/models/imported/`.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class ImportedModel (
+  /**
+   * Relative to the app files dir, for example
+   * `models/imported/gemma-3-1b-it-int4.task`.
+   */
+  val relativePath: String,
+  val fileName: String,
+  val byteSize: Long
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): ImportedModel {
+      val relativePath = pigeonVar_list[0] as String
+      val fileName = pigeonVar_list[1] as String
+      val byteSize = pigeonVar_list[2] as Long
+      return ImportedModel(relativePath, fileName, byteSize)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      relativePath,
+      fileName,
+      byteSize,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as ImportedModel
+    return MessagesPigeonUtils.deepEquals(this.relativePath, other.relativePath) && MessagesPigeonUtils.deepEquals(this.fileName, other.fileName) && MessagesPigeonUtils.deepEquals(this.byteSize, other.byteSize)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.relativePath)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.fileName)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.byteSize)
+    return result
+  }
+  override fun toString(): String {
+    return "ImportedModel(relativePath=$relativePath, fileName=$fileName, byteSize=$byteSize)"
+  }
+}
+
+/**
+ * One piece of a generation. [text] is the new text only, not the whole
+ * answer so far. The last chunk for a request has [done] set, and carries
+ * [error] when the generation failed partway.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class LlmChunk (
+  val requestId: Long,
+  val text: String,
+  val done: Boolean,
+  val error: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): LlmChunk {
+      val requestId = pigeonVar_list[0] as Long
+      val text = pigeonVar_list[1] as String
+      val done = pigeonVar_list[2] as Boolean
+      val error = pigeonVar_list[3] as String?
+      return LlmChunk(requestId, text, done, error)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      requestId,
+      text,
+      done,
+      error,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as LlmChunk
+    return MessagesPigeonUtils.deepEquals(this.requestId, other.requestId) && MessagesPigeonUtils.deepEquals(this.text, other.text) && MessagesPigeonUtils.deepEquals(this.done, other.done) && MessagesPigeonUtils.deepEquals(this.error, other.error)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.requestId)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.text)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.done)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.error)
+    return result
+  }
+  override fun toString(): String {
+    return "LlmChunk(requestId=$requestId, text=$text, done=$done, error=$error)"
+  }
+}
 private open class MessagesPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -904,6 +1062,21 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
           TokenBatch.fromList(it)
         }
       }
+      142.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          DeviceMemory.fromList(it)
+        }
+      }
+      143.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          ImportedModel.fromList(it)
+        }
+      }
+      144.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          LlmChunk.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -961,10 +1134,24 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         stream.write(141)
         writeValue(stream, value.toList())
       }
+      is DeviceMemory -> {
+        stream.write(142)
+        writeValue(stream, value.toList())
+      }
+      is ImportedModel -> {
+        stream.write(143)
+        writeValue(stream, value.toList())
+      }
+      is LlmChunk -> {
+        stream.write(144)
+        writeValue(stream, value.toList())
+      }
       else -> super.writeValue(stream, value)
     }
   }
 }
+
+val MessagesPigeonMethodCodec = StandardMethodCodec(MessagesPigeonCodec())
 
 
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
@@ -1678,6 +1865,288 @@ interface EmbeddingHostApi {
               }
               reply.reply(wrapped)
             }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+    }
+  }
+}
+/** Generated interface from Pigeon that represents a handler of messages from Flutter. */
+interface LlmHostApi {
+  /**
+   * Loads a model file from app storage. Safe to call again with the same
+   * path and settings. Loading a different model unloads the previous one.
+   */
+  suspend fun load(relativeModelPath: String, vision: Boolean, maxTokens: Long)
+  fun isLoaded(): Boolean
+  fun loadedModelPath(): String?
+  suspend fun unload()
+  /**
+   * Starts generation and returns a request id. Text arrives on the event
+   * channel. Images are only accepted when the model was loaded with vision.
+   */
+  suspend fun startGeneration(prompt: String, images: List<ByteArray>, maxTokens: Long): Long
+  fun cancelGeneration(requestId: Long)
+  fun deviceMemory(): DeviceMemory
+
+  companion object {
+    /** The codec used by LlmHostApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      MessagesPigeonCodec()
+    }
+    /** Sets up an instance of `LlmHostApi` to handle messages through the `binaryMessenger`. */
+    @JvmOverloads
+    fun setUp(binaryMessenger: BinaryMessenger, api: LlmHostApi?, messageChannelSuffix: String = "") {
+      val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.LlmHostApi.load$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val relativeModelPathArg = args[0] as String
+            val visionArg = args[1] as Boolean
+            val maxTokensArg = args[2] as Long
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.load(relativeModelPathArg, visionArg, maxTokensArg)
+                listOf(null)
+              } catch (exception: Throwable) {
+                MessagesPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.LlmHostApi.isLoaded$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.isLoaded())
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.LlmHostApi.loadedModelPath$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.loadedModelPath())
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.LlmHostApi.unload$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.unload()
+                listOf(null)
+              } catch (exception: Throwable) {
+                MessagesPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.LlmHostApi.startGeneration$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val promptArg = args[0] as String
+            val imagesArg = args[1] as List<ByteArray>
+            val maxTokensArg = args[2] as Long
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.startGeneration(promptArg, imagesArg, maxTokensArg))
+              } catch (exception: Throwable) {
+                MessagesPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.LlmHostApi.cancelGeneration$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val requestIdArg = args[0] as Long
+            val wrapped: List<Any?> = try {
+              api.cancelGeneration(requestIdArg)
+              listOf(null)
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.LlmHostApi.deviceMemory$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.deviceMemory())
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+    }
+  }
+}
+
+private class MessagesPigeonStreamHandler<T>(
+    val wrapper: MessagesPigeonEventChannelWrapper<T>
+) : EventChannel.StreamHandler {
+  var pigeonSink: PigeonEventSink<T>? = null
+
+  override fun onListen(p0: Any?, sink: EventChannel.EventSink) {
+    pigeonSink = PigeonEventSink<T>(sink)
+    wrapper.onListen(p0, pigeonSink!!)
+  }
+
+  override fun onCancel(p0: Any?) {
+    pigeonSink = null
+    wrapper.onCancel(p0)
+  }
+}
+
+interface MessagesPigeonEventChannelWrapper<T> {
+  open fun onListen(p0: Any?, sink: PigeonEventSink<T>) {}
+
+  open fun onCancel(p0: Any?) {}
+}
+
+class PigeonEventSink<T>(private val sink: EventChannel.EventSink) {
+  fun success(value: T) {
+    sink.success(value)
+  }
+
+  fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+    sink.error(errorCode, errorMessage, errorDetails)
+  }
+
+  fun endOfStream() {
+    sink.endOfStream()
+  }
+}
+      
+abstract class ChunksStreamHandler : MessagesPigeonEventChannelWrapper<LlmChunk> {
+  companion object {
+    fun register(messenger: BinaryMessenger, streamHandler: ChunksStreamHandler, instanceName: String = "") {
+      var channelName: String = "dev.flutter.pigeon.memora.LlmEvents.chunks"
+      if (instanceName.isNotEmpty()) {
+        channelName += ".$instanceName"
+      }
+      val internalStreamHandler = MessagesPigeonStreamHandler<LlmChunk>(streamHandler)
+      EventChannel(messenger, channelName, MessagesPigeonMethodCodec).setStreamHandler(internalStreamHandler)
+    }
+  }
+// Implement methods from MessagesPigeonEventChannelWrapper
+override fun onListen(p0: Any?, sink: PigeonEventSink<LlmChunk>) {}
+
+override fun onCancel(p0: Any?) {}
+}
+      
+/** Generated interface from Pigeon that represents a handler of messages from Flutter. */
+interface ModelImportHostApi {
+  /**
+   * Opens the system file picker for a model file and copies the chosen one
+   * into app storage under models/. Returns null if the user cancels.
+   */
+  suspend fun pickModelFile(): ImportedModel?
+  suspend fun deleteModel(relativePath: String)
+  fun listModels(): List<ImportedModel>
+
+  companion object {
+    /** The codec used by ModelImportHostApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      MessagesPigeonCodec()
+    }
+    /** Sets up an instance of `ModelImportHostApi` to handle messages through the `binaryMessenger`. */
+    @JvmOverloads
+    fun setUp(binaryMessenger: BinaryMessenger, api: ModelImportHostApi?, messageChannelSuffix: String = "") {
+      val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.ModelImportHostApi.pickModelFile$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.pickModelFile())
+              } catch (exception: Throwable) {
+                MessagesPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.ModelImportHostApi.deleteModel$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val relativePathArg = args[0] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.deleteModel(relativePathArg)
+                listOf(null)
+              } catch (exception: Throwable) {
+                MessagesPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.ModelImportHostApi.listModels$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.listModels())
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)

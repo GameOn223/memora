@@ -121,7 +121,7 @@ class LocalLlmSpec {
     required this.sourceName,
     required this.sourceUrl,
     required this.licence,
-    this.fileExtensions = const ['.task'],
+    this.fileExtensions = const ['.task', '.litertlm'],
     this.maxTokens = 4096,
   });
 
@@ -149,8 +149,8 @@ class LocalLlmSpec {
   /// The licence the user accepts on [sourceUrl] before downloading.
   final String licence;
 
-  /// File name endings the model is published with. Anything else is
-  /// refused on import.
+  /// File name endings the model is published with, the common one first.
+  /// The platform picker refuses anything it cannot open.
   final List<String> fileExtensions;
 
   /// Context size the runtime is loaded with, covering prompt and reply.

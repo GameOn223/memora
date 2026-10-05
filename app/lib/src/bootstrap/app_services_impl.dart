@@ -10,6 +10,7 @@ import '../platform/messages.g.dart';
 import '../platform/platform.dart';
 import '../services/app_services.dart';
 import 'app_preferences_impl.dart';
+import 'local_llm_bridge.dart';
 
 /// UUID v4 ids for memories and conversations, as section 6.1 describes.
 class UuidGenerator implements IdGenerator {
@@ -34,13 +35,17 @@ class PlatformHosts {
     SecretHostApi? secrets,
     OcrHostApi? ocr,
     EmbeddingHostApi? embedding,
+    LlmHostApi? llm,
+    ModelImportHostApi? modelImport,
   }) : files = files ?? FilesHostApi(),
        gallery = gallery ?? GalleryHostApi(),
        capture = capture ?? CaptureHostApi(),
        scheduler = scheduler ?? SchedulerHostApi(),
        secrets = secrets ?? SecretHostApi(),
        ocr = ocr ?? OcrHostApi(),
-       embedding = embedding ?? EmbeddingHostApi();
+       embedding = embedding ?? EmbeddingHostApi(),
+       llm = llm ?? LlmHostApi(),
+       modelImport = modelImport ?? ModelImportHostApi();
 
   final FilesHostApi files;
   final GalleryHostApi gallery;
@@ -49,6 +54,8 @@ class PlatformHosts {
   final SecretHostApi secrets;
   final OcrHostApi ocr;
   final EmbeddingHostApi embedding;
+  final LlmHostApi llm;
+  final ModelImportHostApi modelImport;
 }
 
 /// The real [AppServices]: a SQLite database in app storage, the shipped
@@ -80,10 +87,12 @@ class MemoraAppServices implements AppServices {
     );
     localModels = PlatformLocalModelService(modelFiles);
 
-    // The generative runtime comes from the platform layer. Until one is
-    // wired in here, the provider offers no chat, vision stays on the OCR
-    // path and settings leaves the model section out.
-    localLlm = const LocalLlmModels();
+    final llmRuntime = BridgeLocalLlmRuntime(host: hosts.llm);
+    final llmFiles = BridgeLocalLlmFiles(
+      settings: settings,
+      host: hosts.modelImport,
+    );
+    localLlm = LocalLlmModels(runtime: llmRuntime, files: llmFiles);
 
     providers = ProviderRegistry();
     registerBuiltInProviders(
@@ -93,6 +102,8 @@ class MemoraAppServices implements AppServices {
         ocr: PlatformOcrEngine(host: hosts.ocr),
         embeddingRuntime: PlatformEmbeddingRuntime(host: hosts.embedding),
         modelFiles: modelFiles,
+        llm: llmRuntime,
+        llmFiles: llmFiles,
       ),
     );
     aiSettings = AiSettingsRepository(settings);
