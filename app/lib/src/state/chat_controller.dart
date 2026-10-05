@@ -252,7 +252,7 @@ class ChatController extends Notifier<ChatViewState> {
   }
 }
 
-/// Conversations for the history sheet, newest first.
+/// Conversations for the drawer: pinned first, then newest used first.
 final conversationsProvider = FutureProvider<List<Conversation>>((ref) async {
   ref.watch(dataVersionProvider);
   return ref.watch(appServicesProvider).conversations.listConversations();
