@@ -33,11 +33,11 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
     }
+
+    // ABIs are chosen by the Flutter tool, through --split-per-abi for a
+    // release or --target-platform for a one-off build. Setting abiFilters
+    // here as well makes Gradle refuse the split build.
 
     signingConfigs {
         if (hasReleaseKey) {
