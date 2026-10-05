@@ -9,6 +9,10 @@ plugins {
 // Release signing reads android/key.properties when it exists. Without it,
 // release builds fall back to the debug key so local `flutter run --release`
 // still works. See docs/releasing.md.
+// MediaPipe LLM Inference. The newest version published for both tasks-genai
+// and tasks-core, which do not share every release number.
+val mediapipeVersion = "0.10.35"
+
 val keystoreProperties = Properties().apply {
     val file = rootProject.file("key.properties")
     if (file.exists()) file.inputStream().use { load(it) }
@@ -82,6 +86,11 @@ dependencies {
     // Bundled Latin model, so OCR works offline from the first launch.
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.30.0")
+    // Runs a Gemma model file the user brings in. tasks-core carries the
+    // MPImage types the vision path needs; tasks-genai does not bundle them,
+    // and the two are kept on the same version on purpose.
+    implementation("com.google.mediapipe:tasks-genai:$mediapipeVersion")
+    implementation("com.google.mediapipe:tasks-core:$mediapipeVersion")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
