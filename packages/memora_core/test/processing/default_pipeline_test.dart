@@ -164,7 +164,7 @@ void main() {
           const AiTransientException('Timed out'),
           const AiTransientException('Timed out'),
           const AiTransientException('Timed out'),
-          const AiTransientException('Rate limited'),
+          const AiTransientException('The provider is having trouble'),
         ],
       );
       final ai = await AiHarness.create(vision: vision);
@@ -197,7 +197,7 @@ void main() {
       outcome = await pipeline.processNext();
       expect((outcome as Processed).status, ProcessingStatus.failed);
       expect(db.rows['m1']!.status, ProcessingStatus.failed);
-      expect(db.rows['m1']!.failureReason, 'Rate limited');
+      expect(db.rows['m1']!.failureReason, 'The provider is having trouble');
 
       final records = (await db.getDetails('m1'))!.processing;
       expect(records, hasLength(4));
@@ -205,7 +205,7 @@ void main() {
         records.every((r) => r.outcome == ProcessingOutcome.failed),
         isTrue,
       );
-      expect(records.first.error, 'Rate limited');
+      expect(records.first.error, 'The provider is having trouble');
     });
 
     test('the provider retry hint replaces the backoff ladder', () async {
