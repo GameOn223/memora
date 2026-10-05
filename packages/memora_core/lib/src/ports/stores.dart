@@ -248,9 +248,23 @@ abstract interface class ConversationStore {
     DateTime now,
   );
 
+  /// Pinned conversations first, then the rest. Inside each group the
+  /// newest updated comes first, so adding a message moves a conversation to
+  /// the top of its group and renaming or pinning never reorders anything.
   Future<List<Conversation>> listConversations();
 
   Future<Conversation?> getConversation(String id);
+
+  /// Sets the title. [updatedAt] is left alone, so a rename does not move the
+  /// conversation in [listConversations]. [now] is the caller's clock, kept
+  /// for the write's own bookkeeping. Does nothing when [id] is unknown.
+  Future<void> renameConversation(String id, String title, DateTime now);
+
+  /// Pins or unpins a conversation. [updatedAt] is left alone, so pinning
+  /// changes which group a conversation is in and nothing else. [now] is the
+  /// caller's clock, kept for the write's own bookkeeping. Does nothing when
+  /// [id] is unknown.
+  Future<void> setConversationPinned(String id, bool pinned, DateTime now);
 
   Future<List<ChatMessage>> messages(String conversationId);
 
@@ -264,6 +278,9 @@ abstract interface class ConversationStore {
 
   Future<int> conversationsCiting(String memoryId);
 
+  /// Removes the conversation along with its messages, their references and
+  /// its result sets. The cited memories themselves are untouched. Does
+  /// nothing when [id] is unknown.
   Future<void> deleteConversation(String id);
 }
 

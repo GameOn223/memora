@@ -13,7 +13,7 @@ void main() {
     tearDown(() => db.close());
 
     test('runs every migration', () {
-      expect(db.schemaVersion, 1);
+      expect(db.schemaVersion, 2);
       expect(db.schemaVersion, migrations.last.version);
     });
 
@@ -69,6 +69,7 @@ void main() {
           'message_references_memory_id',
           'result_sets_conversation_created_at',
           'processing_metadata_memory_created_at',
+          'conversations_pinned_updated_at',
         ]),
       );
     });
@@ -117,7 +118,7 @@ void main() {
     test('uses WAL and does not re-run migrations on reopen', () {
       final path = tempDatabasePath();
       final first = MemoraDatabase.open(path);
-      expect(first.schemaVersion, 1);
+      expect(first.schemaVersion, migrations.last.version);
       expect(
         first.connection.select('PRAGMA journal_mode').single.columnAt(0),
         'wal',
@@ -129,7 +130,7 @@ void main() {
 
       final second = MemoraDatabase.open(path);
       addTearDown(second.close);
-      expect(second.schemaVersion, 1);
+      expect(second.schemaVersion, migrations.last.version);
       expect(
         second.connection
             .select("SELECT value FROM settings WHERE key = 'theme'")
@@ -242,7 +243,7 @@ void main() {
 
       runMigrations(db.connection, [...migrations, _RebuildMemories()]);
 
-      expect(db.schemaVersion, 2);
+      expect(db.schemaVersion, migrations.length + 1);
       expect(scalar(db, 'SELECT COUNT(*) FROM memories'), 1);
       expect(scalar(db, 'SELECT COUNT(*) FROM entities'), 1);
       expect(scalar(db, 'SELECT COUNT(*) FROM keywords'), 1);
@@ -262,9 +263,59 @@ void main() {
           ),
         ),
       );
-      expect(db.schemaVersion, 1);
+      expect(db.schemaVersion, migrations.length);
       expect(scalar(db, 'SELECT COUNT(*) FROM entities'), 0);
       expect(scalar(db, 'PRAGMA foreign_keys'), 1);
+    });
+
+    test('m0002 leaves conversations from version 1 unpinned', () async {
+      final path = tempDatabasePath();
+      final v1 = sqlite3.open(path);
+      runMigrations(v1, migrations.take(1).toList());
+      expect(v1.userVersion, 1);
+      expect(
+        v1
+            .select("SELECT name FROM pragma_table_info('conversations')")
+            .map((row) => row['name'] as String),
+        isNot(contains('pinned')),
+      );
+      v1.execute(
+        'INSERT INTO conversations (id, title, created_at, updated_at) '
+        'VALUES (?, ?, ?, ?), (?, ?, ?, ?)',
+        ['c1', 'Bills', 10, 20, 'c2', 'Flights', 10, 30],
+      );
+      v1.close();
+
+      final upgraded = MemoraDatabase.open(path);
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 2);
+      final loaded = await upgraded.conversations.listConversations();
+      expect(loaded.map((c) => c.id), ['c2', 'c1']);
+      expect(loaded.map((c) => c.pinned), everyElement(isFalse));
+      expect(loaded.first.title, 'Flights');
+      expect(
+        scalar(upgraded, 'SELECT COUNT(*) FROM conversations WHERE pinned = 0'),
+        2,
+      );
+
+      // The new column still carries its default and its constraint.
+      await upgraded.conversations.createConversation(
+        'c3',
+        'Laptops',
+        DateTime.fromMillisecondsSinceEpoch(40, isUtc: true),
+      );
+      expect(
+        (await upgraded.conversations.getConversation('c3'))!.pinned,
+        isFalse,
+      );
+      expect(
+        () => upgraded.connection.execute(
+          'UPDATE conversations SET pinned = NULL WHERE id = ?',
+          ['c1'],
+        ),
+        throwsA(isA<SqliteException>()),
+      );
     });
 
     test('rejects migrations that are not numbered in order', () {
@@ -296,7 +347,7 @@ class _CountingMigration extends Migration {
 /// table cascades and empties everything that referenced it.
 class _RebuildMemories extends Migration {
   @override
-  int get version => 2;
+  int get version => migrations.length + 1;
 
   @override
   void up(Database db) {
@@ -315,7 +366,7 @@ class _RebuildMemories extends Migration {
 
 class _DanglingRow extends Migration {
   @override
-  int get version => 2;
+  int get version => migrations.length + 1;
 
   @override
   void up(Database db) {

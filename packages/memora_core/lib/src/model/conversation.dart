@@ -7,12 +7,28 @@ class Conversation {
     required this.title,
     required this.createdAt,
     required this.updatedAt,
+    this.pinned = false,
   });
 
   final String id;
   final String title;
   final DateTime createdAt;
+
+  /// Moves forward when a message is added, which is what orders the
+  /// conversation list. Renaming and pinning leave it alone.
   final DateTime updatedAt;
+
+  /// Kept at the top of the conversation list by the user.
+  final bool pinned;
+
+  Conversation copyWith({String? title, DateTime? updatedAt, bool? pinned}) =>
+      Conversation(
+        id: id,
+        title: title ?? this.title,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+        pinned: pinned ?? this.pinned,
+      );
 }
 
 enum MessageRole {

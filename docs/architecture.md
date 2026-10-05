@@ -297,7 +297,7 @@ All timestamps are UTC milliseconds since the epoch. Dates that come from image 
 
 **memories_fts**: FTS5 table with columns `summary`, `extracted_text`, `visual_description`, `keywords`, `entities`, using the `unicode61 remove_diacritics 2 categories 'L* N* Co Mc Mn'` tokenizer. `remove_diacritics 2` means Café is found by cafe. The categories add the combining marks that Indic scripts write vowels with, without which बिजली is indexed as the fragments ब, जल and ल. User text is tokenized the same way before it reaches `MATCH`. Changing these settings later needs a migration that rebuilds the index, so they're worth getting right now. The `rowid` is `memories.seq`, which an explicit `INTEGER PRIMARY KEY` keeps stable across `VACUUM`. The storage layer updates it inside the same transaction that writes AI output, so the index can't drift from the data.
 
-**conversations**: `id`, `title`, `created_at`, `updated_at`.
+**conversations**: `id`, `title`, `created_at`, `updated_at`, `pinned` INTEGER NOT NULL DEFAULT 0 (added by `m0002`). The conversation list reads pinned ones first, then the rest, each group newest updated first, which `conversations_pinned_updated_at` covers. Renaming and pinning leave `updated_at` alone, so neither reorders the list. Adding a message is the only thing that moves a conversation up. Deleting one cascades to its messages, their references and its result sets.
 
 **messages**: `id`, `conversation_id`, `role` (`user`, `assistant`), `content`, `presentation` TEXT NULL (JSON: strip, table, big value, verification note), `tool_trace` TEXT NULL (JSON list of tool calls for "How this was found"), `provider`, `model`, `created_at`.
 

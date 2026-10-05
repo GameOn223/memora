@@ -76,6 +76,77 @@ void main() {
       await conversations.addMessage(message('m1', 'c1', at(3)));
       expect((await conversations.getConversation('c1'))!.updatedAt, at(10));
     });
+
+    test('a new conversation is not pinned', () async {
+      final created = await conversations.createConversation(
+        'c1',
+        'Bills',
+        now,
+      );
+      expect(created.pinned, isFalse);
+      expect((await conversations.getConversation('c1'))!.pinned, isFalse);
+    });
+
+    test('renaming changes the title and leaves the order alone', () async {
+      await conversations.createConversation('c1', 'Bills', now);
+      await conversations.createConversation('c2', 'Flights', at(1));
+
+      await conversations.renameConversation('c1', 'Electricity bills', at(99));
+
+      final renamed = (await conversations.getConversation('c1'))!;
+      expect(renamed.title, 'Electricity bills');
+      expect(renamed.updatedAt, now);
+      expect((await conversations.listConversations()).map((c) => c.id), [
+        'c2',
+        'c1',
+      ]);
+
+      await conversations.renameConversation('missing', 'Nowhere', at(99));
+    });
+
+    test('pinned conversations list first, newest updated in each', () async {
+      await conversations.createConversation('c1', 'Bills', now);
+      await conversations.createConversation('c2', 'Flights', at(1));
+      await conversations.createConversation('c3', 'Laptops', at(2));
+
+      await conversations.setConversationPinned('c1', true, at(99));
+
+      expect((await conversations.listConversations()).map((c) => c.id), [
+        'c1',
+        'c3',
+        'c2',
+      ]);
+      final pinned = (await conversations.getConversation('c1'))!;
+      expect(pinned.pinned, isTrue);
+      expect(pinned.updatedAt, now);
+
+      await conversations.setConversationPinned('c2', true, at(99));
+      expect((await conversations.listConversations()).map((c) => c.id), [
+        'c2',
+        'c1',
+        'c3',
+      ]);
+
+      await conversations.setConversationPinned('c2', false, at(99));
+      expect((await conversations.listConversations()).map((c) => c.id), [
+        'c1',
+        'c3',
+        'c2',
+      ]);
+
+      await conversations.setConversationPinned('missing', true, at(99));
+    });
+
+    test('a pinned conversation stays pinned when a message arrives', () async {
+      await conversations.createConversation('c1', 'Bills', now);
+      await conversations.setConversationPinned('c1', true, at(1));
+
+      await conversations.addMessage(message('m1', 'c1', at(5)));
+
+      final loaded = (await conversations.getConversation('c1'))!;
+      expect(loaded.pinned, isTrue);
+      expect(loaded.updatedAt, at(5));
+    });
   });
 
   group('messages', () {
