@@ -77,6 +77,11 @@
             android:taskAffinity=""
             android:theme="@style/Memora.Translucent" />
 
+        <!-- The Cancel action on the download notification. -->
+        <receiver
+            android:name=".inference.llm.ModelDownloadCancelReceiver"
+            android:exported="false" />
+
         <service
             android:name=".capture.MemoraTileService"
             android:exported="true"

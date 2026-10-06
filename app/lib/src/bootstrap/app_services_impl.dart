@@ -93,7 +93,6 @@ class MemoraAppServices implements AppServices {
       settings: settings,
       filesDir: filesDir,
       host: hosts.modelImport,
-      client: httpClient,
     );
     localLlm = LocalLlmModels(runtime: llmRuntime, files: llmFiles);
 

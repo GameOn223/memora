@@ -3,8 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:memora/src/bootstrap/local_llm_bridge.dart';
 import 'package:memora/src/platform/messages.g.dart' as bridge;
 import 'package:memora_core/memora_core.dart';
@@ -101,6 +99,41 @@ class _FakeImportHost extends bridge.ModelImportHostApi {
 
   @override
   Future<List<bridge.ImportedModel>> listModels() async => [...files];
+
+  final List<
+    ({String modelId, String url, String fileName, String displayName})
+  >
+  downloads = [];
+  final List<String> cancels = [];
+
+  /// Thrown by [startDownload] when set.
+  PlatformException? startError;
+
+  /// What [activeDownload] reports.
+  String? active;
+
+  @override
+  Future<void> startDownload(
+    String modelId,
+    String url,
+    String fileName,
+    String displayName,
+  ) async {
+    if (startError case final error?) throw error;
+    downloads.add((
+      modelId: modelId,
+      url: url,
+      fileName: fileName,
+      displayName: displayName,
+    ));
+  }
+
+  @override
+  Future<void> cancelDownload(String relativePath) async =>
+      cancels.add(relativePath);
+
+  @override
+  Future<String?> activeDownload() async => active;
 }
 
 class _Settings implements SettingsStore {
@@ -529,170 +562,213 @@ void main() {
   group('downloading', () {
     late _FakeImportHost host;
     late _Settings settings;
+    late StreamController<bridge.ModelDownloadEvent> events;
+    late BridgeLocalLlmFiles files;
+    StreamSubscription<ModelImportEvent>? watching;
 
     setUp(() {
       host = _FakeImportHost();
       settings = _Settings();
+      events = StreamController<bridge.ModelDownloadEvent>.broadcast();
+      files = BridgeLocalLlmFiles(
+        settings: settings,
+        filesDir: tempDir.path,
+        host: host,
+        downloads: events.stream,
+      );
     });
 
-    /// A bridge whose downloads are served by [handler].
-    BridgeLocalLlmFiles filesWith(
-      Future<http.StreamedResponse> Function(http.BaseRequest request) handler,
-    ) => BridgeLocalLlmFiles(
-      settings: settings,
-      filesDir: tempDir.path,
-      host: host,
-      client: MockClient.streaming((request, _) => handler(request)),
+    tearDown(() async {
+      await watching?.cancel();
+      watching = null;
+      await events.close();
+    });
+
+    bridge.ModelDownloadEvent step(
+      int copied,
+      int total, {
+      bool done = false,
+      String? error,
+      String modelId = 'gemma-3-1b-it-int4',
+    }) => bridge.ModelDownloadEvent(
+      modelId: modelId,
+      copiedBytes: copied,
+      totalBytes: total,
+      done: done,
+      error: error,
     );
 
-    http.StreamedResponse ok(List<int> body, {int? declared}) =>
-        http.StreamedResponse(
-          Stream.value(body),
-          200,
-          contentLength: declared ?? body.length,
-        );
-
-    test('sends the token as a bearer and keeps the file', () async {
-      final sent = <http.BaseRequest>[];
-      final files = filesWith((request) async {
-        sent.add(request);
-        return ok(List.filled(2048, 7));
-      });
-
-      final events = await files
+    /// Starts a download and collects what it reports.
+    Future<List<ModelImportEvent>> start() async {
+      final seen = <ModelImportEvent>[];
+      watching = files
           .download('gemma-3-1b-it-int4', token: 'hf_secret')
-          .toList();
+          .listen(seen.add);
+      await pumpEventQueue();
+      return seen;
+    }
 
-      expect(sent.single.headers['Authorization'], 'Bearer hf_secret');
+    test('hands the worker the url, file name and display name', () async {
+      await start();
+
+      expect(host.downloads, hasLength(1));
+      final sent = host.downloads.single;
+      expect(sent.modelId, 'gemma-3-1b-it-int4');
       expect(
-        sent.single.url.toString(),
+        sent.url,
         'https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/'
         'gemma3-1b-it-int4.task',
       );
-      final done = events.last as ModelImportDone;
+      expect(sent.fileName, 'gemma3-1b-it-int4.task');
+      expect(
+        sent.displayName,
+        'Gemma 3 1B',
+        reason: 'the notification calls the model something',
+      );
+    });
+
+    test('the token is never handed across', () async {
+      await start();
+
+      expect(
+        host.downloads.single.toString(),
+        isNot(contains('hf_secret')),
+        reason: 'the worker reads it from the secret store itself',
+      );
+    });
+
+    test('turns worker bytes into a fraction, then finishes', () async {
+      final seen = await start();
+
+      events.add(step(100, 400));
+      events.add(step(400, 400));
+      await pumpEventQueue();
+
+      expect(seen.whereType<ModelImportCopying>().map((e) => e.fraction), [
+        0.25,
+        1.0,
+      ]);
+
+      events.add(step(400, 400, done: true));
+      await pumpEventQueue();
+
+      final done = seen.last as ModelImportDone;
       expect(done.model.modelId, 'gemma-3-1b-it-int4');
       expect(done.model.relativePath, 'models/imported/gemma3-1b-it-int4.task');
-      expect(done.model.sizeBytes, 2048);
-      expect(
-        File('${tempDir.path}/models/imported/gemma3-1b-it-int4.task')
-            .existsSync(),
-        isTrue,
-      );
+      expect(done.model.sizeBytes, 400);
       expect(settings.values[BridgeLocalLlmFiles.settingsKey], {
         'gemma-3-1b-it-int4': 'models/imported/gemma3-1b-it-int4.task',
       });
     });
 
-    test('reports progress against the length the server declared', () async {
-      final files = filesWith(
-        (_) async => http.StreamedResponse(
-          Stream.fromIterable([
-            List.filled(30 << 20, 1),
-            List.filled(30 << 20, 2),
-          ]),
-          200,
-          contentLength: 60 << 20,
-        ),
-      );
+    test('events for another model are ignored', () async {
+      final seen = await start();
 
-      final events = await files
-          .download('gemma-3-1b-it-int4', token: 'hf_x')
-          .toList();
+      events.add(step(100, 400, modelId: 'gemma-3n-e2b-it-int4'));
+      events.add(step(400, 400, done: true, modelId: 'something-else'));
+      await pumpEventQueue();
 
-      final fractions = events
-          .whereType<ModelImportCopying>()
-          .map((e) => e.fraction)
-          .toList();
-      expect(fractions, isNotEmpty);
-      expect(fractions.last, 1.0);
-      expect(fractions, fractions.toList()..sort());
-      expect(events.last, isA<ModelImportDone>());
+      expect(seen, isEmpty);
+      expect(settings.values, isEmpty);
     });
 
-    test(
-      'a rejected token says so, and says it is the licence on 403',
-      () async {
-        for (final (status, expected) in [
-          (401, ModelImportRefusal.tokenRejected),
-          (403, ModelImportRefusal.licenceNotAccepted),
-          (404, ModelImportRefusal.licenceNotAccepted),
-          (500, ModelImportRefusal.downloadFailed),
-        ]) {
-          final files = filesWith(
-            (_) async => http.StreamedResponse(const Stream.empty(), status),
-          );
+    test('a worker error becomes the refusal it stands for', () async {
+      for (final (code, expected) in [
+        ('no_token', ModelImportRefusal.tokenRejected),
+        ('unauthorized', ModelImportRefusal.tokenRejected),
+        ('forbidden', ModelImportRefusal.licenceNotAccepted),
+        ('no_space', ModelImportRefusal.notEnoughStorage),
+        ('unsupported_model', ModelImportRefusal.wrongFileType),
+        ('short_download', ModelImportRefusal.downloadFailed),
+        ('anything else', ModelImportRefusal.downloadFailed),
+      ]) {
+        expect(
+          BridgeLocalLlmFiles.refusalForCode(code),
+          expected,
+          reason: code,
+        );
+      }
+    });
 
-          final events = await files
-              .download('gemma-3-1b-it-int4', token: 'hf_x')
-              .toList();
+    test('an error event ends the stream and records nothing', () async {
+      final seen = await start();
 
-          expect(
-            (events.single as ModelImportRefused).reason,
-            expected,
-            reason: 'HTTP $status',
-          );
-          expect(settings.values, isEmpty, reason: 'HTTP $status');
-        }
-      },
-    );
-
-    test('a transfer that stops early keeps nothing', () async {
-      final files = filesWith(
-        (_) async => http.StreamedResponse(
-          Stream.value(List.filled(64, 1)),
-          200,
-          contentLength: 4096,
-        ),
-      );
-
-      final events = await files
-          .download('gemma-3-1b-it-int4', token: 'hf_x')
-          .toList();
+      events.add(step(0, 0, done: true, error: 'forbidden'));
+      await pumpEventQueue();
 
       expect(
-        (events.last as ModelImportRefused).reason,
-        ModelImportRefusal.downloadFailed,
-      );
-      final dir = Directory('${tempDir.path}/models/imported');
-      expect(
-        dir.existsSync() ? dir.listSync() : const <FileSystemEntity>[],
-        isEmpty,
-        reason: 'the part file should go with the failed download',
+        (seen.single as ModelImportRefused).reason,
+        ModelImportRefusal.licenceNotAccepted,
       );
       expect(settings.values, isEmpty);
     });
 
-    test('a request that cannot be sent at all is a failed download', () async {
-      final files = filesWith((_) async => throw const SocketException('down'));
+    test('a worker that refuses to start says why', () async {
+      host.startError = PlatformException(code: 'unsupported_model');
 
-      final events = await files
+      final seen = await files
           .download('gemma-3-1b-it-int4', token: 'hf_x')
           .toList();
 
       expect(
-        (events.single as ModelImportRefused).reason,
-        ModelImportRefusal.downloadFailed,
+        (seen.single as ModelImportRefused).reason,
+        ModelImportRefusal.wrongFileType,
       );
     });
 
-    test('a model that is not in the catalog is refused', () async {
-      final files = filesWith((_) async => ok(const [1, 2, 3]));
+    test(
+      'a model that is not in the catalog never reaches the worker',
+      () async {
+        final seen = await files.download('made-up', token: 'hf_x').toList();
 
-      final events = await files.download('made-up', token: 'hf_x').toList();
+        expect(
+          (seen.single as ModelImportRefused).reason,
+          ModelImportRefusal.unreadable,
+        );
+        expect(host.downloads, isEmpty);
+      },
+    );
+
+    test('watching follows a download without starting one', () async {
+      final seen = <ModelImportEvent>[];
+      watching = files.watchDownload('gemma-3-1b-it-int4').listen(seen.add);
+      await pumpEventQueue();
 
       expect(
-        (events.single as ModelImportRefused).reason,
-        ModelImportRefusal.unreadable,
+        host.downloads,
+        isEmpty,
+        reason: 'opening settings mid-download must not restart it',
       );
+
+      events.add(step(200, 400));
+      await pumpEventQueue();
+      expect(seen.whereType<ModelImportCopying>().single.fraction, 0.5);
+    });
+
+    test('leaving the screen does not cancel the download', () async {
+      await start();
+      await watching!.cancel();
+      watching = null;
+
+      expect(host.cancels, isEmpty);
+    });
+
+    test('cancel and active go through to the worker', () async {
+      host.active = 'gemma-3-1b-it-int4';
+      expect(await files.activeDownload(), 'gemma-3-1b-it-int4');
+
+      await files.cancelDownload();
+      expect(host.cancels, hasLength(1));
     });
 
     test('downloading over an earlier file removes the old one', () async {
       await settings.write(BridgeLocalLlmFiles.settingsKey, {
         'gemma-3-1b-it-int4': 'models/imported/old.task',
       });
-      final files = filesWith((_) async => ok(List.filled(16, 3)));
+      await start();
 
-      await files.download('gemma-3-1b-it-int4', token: 'hf_x').toList();
+      events.add(step(16, 16, done: true));
+      await pumpEventQueue();
 
       expect(host.deletes, ['models/imported/old.task']);
     });

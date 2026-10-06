@@ -1101,6 +1101,77 @@ class ModelImportProgress {
   }
 }
 
+/// One step of a model download running in a background worker.
+///
+/// Carries [modelId] because the download outlives the screen that started
+/// it, and whatever is listening has to know which entry it belongs to.
+class ModelDownloadEvent {
+  ModelDownloadEvent({
+    required this.modelId,
+    required this.copiedBytes,
+    required this.totalBytes,
+    required this.done,
+    this.error,
+  });
+
+  String modelId;
+
+  int copiedBytes;
+
+  /// Zero when the server would not say how large the file is.
+  int totalBytes;
+
+  /// Set on the last event for this download, successful or not.
+  bool done;
+
+  /// Why it stopped, when it stopped badly. Null on success and on cancel.
+  String? error;
+
+  List<Object?> _toList() {
+    return <Object?>[modelId, copiedBytes, totalBytes, done, error];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static ModelDownloadEvent decode(Object result) {
+    result as List<Object?>;
+    return ModelDownloadEvent(
+      modelId: result[0]! as String,
+      copiedBytes: result[1]! as int,
+      totalBytes: result[2]! as int,
+      done: result[3]! as bool,
+      error: result[4] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! ModelDownloadEvent || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(modelId, other.modelId) &&
+        _deepEquals(copiedBytes, other.copiedBytes) &&
+        _deepEquals(totalBytes, other.totalBytes) &&
+        _deepEquals(done, other.done) &&
+        _deepEquals(error, other.error);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'ModelDownloadEvent(modelId: $modelId, copiedBytes: $copiedBytes, totalBytes: $totalBytes, done: $done, error: $error)';
+  }
+}
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -1159,6 +1230,9 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is ModelImportProgress) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
+    } else if (value is ModelDownloadEvent) {
+      buffer.putUint8(146);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -1202,6 +1276,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return LlmChunk.decode(readValue(buffer)!);
       case 145:
         return ModelImportProgress.decode(readValue(buffer)!);
+      case 146:
+        return ModelDownloadEvent.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -2191,6 +2267,25 @@ Stream<ModelImportProgress> importProgress({String instanceName = ''}) {
   });
 }
 
+/// Returns a broadcast [Stream] of events from the `downloadEvents` event channel.
+///
+/// Each call to this method creates a new [EventChannel], so it should
+/// not be called multiple times for the same `instanceName`. To deliver
+/// events to multiple listeners, call this method once and listen to the
+/// returned broadcast stream multiple times instead.
+Stream<ModelDownloadEvent> downloadEvents({String instanceName = ''}) {
+  if (instanceName.isNotEmpty) {
+    instanceName = '.$instanceName';
+  }
+  final EventChannel downloadEventsChannel = EventChannel(
+    'dev.flutter.pigeon.memora.LlmEvents.downloadEvents$instanceName',
+    pigeonMethodCodec,
+  );
+  return downloadEventsChannel.receiveBroadcastStream().map((dynamic event) {
+    return event as ModelDownloadEvent;
+  });
+}
+
 class ModelImportHostApi {
   /// Constructor for [ModelImportHostApi]. The [binaryMessenger] named argument is
   /// available for dependency injection. If it is left null, the default
@@ -2266,6 +2361,79 @@ class ModelImportHostApi {
       isNullValid: false,
     );
     return (pigeonVar_replyValue! as List<Object?>).cast<ImportedModel>();
+  }
+
+  /// Starts downloading [fileName] from [url] as [modelId], in a worker
+  /// that keeps running with Memora in the background and posts a
+  /// notification while it does. [displayName] is what that notification
+  /// calls the model.
+  ///
+  /// The access token is not passed in. The worker reads it from the secret
+  /// store itself, so it never lands in WorkManager's database.
+  Future<void> startDownload(
+    String modelId,
+    String url,
+    String fileName,
+    String displayName,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.ModelImportHostApi.startDownload$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[modelId, url, fileName, displayName],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  Future<void> cancelDownload(String modelId) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.ModelImportHostApi.cancelDownload$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[modelId],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// The model downloading right now, so a screen opened later can pick the
+  /// progress back up. Null when nothing is downloading.
+  Future<String?> activeDownload() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.ModelImportHostApi.activeDownload$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+    return pigeonVar_replyValue as String?;
   }
 }
 

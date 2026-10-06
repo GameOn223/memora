@@ -244,6 +244,19 @@ abstract interface class LocalLlmFiles {
   /// this reports the same events.
   Stream<ModelImportEvent> download(String modelId, {required String token});
 
+  /// Follows a download already running, without starting one.
+  ///
+  /// A download outlives the screen that began it, so settings opened
+  /// while one runs needs to show the progress rather than offer to start
+  /// it again.
+  Stream<ModelImportEvent> watchDownload(String modelId);
+
+  /// The model downloading right now, or null when nothing is.
+  Future<String?> activeDownload();
+
+  /// Stops the running download. Nothing is kept.
+  Future<void> cancelDownload();
+
   Future<void> remove(String modelId);
 }
 

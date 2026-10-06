@@ -219,6 +219,23 @@ class FakeLocalLlmFiles implements LocalLlmFiles {
     yield ModelImportDone(models.last);
   }
 
+  /// What [activeDownload] reports.
+  String? running;
+  var cancelled = false;
+
+  @override
+  Stream<ModelImportEvent> watchDownload(String modelId) =>
+      download(modelId, token: 'watching');
+
+  @override
+  Future<String?> activeDownload() async => running;
+
+  @override
+  Future<void> cancelDownload() async {
+    cancelled = true;
+    running = null;
+  }
+
   @override
   Future<void> remove(String modelId) async {
     removals.add(modelId);

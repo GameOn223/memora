@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:memora_core/memora_core.dart';
@@ -65,10 +67,23 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
     final services = ref.watch(appServicesProvider);
     final models = await services.localLlm.list();
     final token = await services.secrets.read(tokenKey);
+    // A download keeps going with Memora in the background, so settings
+    // opened later picks it back up instead of offering to start it again.
+    final running = await services.localLlm.activeDownload();
+    if (running != null) {
+      unawaited(_follow(services.localLlm.watchDownload(running), running));
+    }
     return LocalLlmView(
       models: models,
+      importing: running,
       hasToken: token != null && token.isNotEmpty,
     );
+  }
+
+  /// Stops the running download.
+  Future<void> cancelDownload() async {
+    await ref.read(appServicesProvider).localLlm.cancelDownload();
+    await _reload();
   }
 
   /// Saves the access token, or clears it when [token] is empty.
@@ -99,18 +114,23 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
     }
     // Nothing transferred yet, so no fraction to show.
     _show(view.models, importing: modelId, hasToken: true);
+    await _follow(services.localLlm.download(modelId, token: token), modelId);
+  }
 
+  /// Turns a download's events into the view, until it ends.
+  ///
+  /// Shared by starting one and by picking up one already running, which
+  /// look the same from here on.
+  Future<void> _follow(Stream<ModelImportEvent> events, String modelId) async {
+    final models = state.value?.models ?? const <LocalLlmStatus>[];
     String? problem;
     ProblemLink? link;
     try {
-      await for (final event in services.localLlm.download(
-        modelId,
-        token: token,
-      )) {
+      await for (final event in events) {
         switch (event) {
           case ModelImportCopying(:final fraction):
             _show(
-              view.models,
+              models,
               importing: modelId,
               progress: fraction,
               hasToken: true,

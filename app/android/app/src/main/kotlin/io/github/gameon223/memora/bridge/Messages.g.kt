@@ -1043,6 +1043,69 @@ data class ModelImportProgress (
     return "ModelImportProgress(copiedBytes=$copiedBytes, totalBytes=$totalBytes)"
   }
 }
+
+/**
+ * One step of a model download running in a background worker.
+ *
+ * Carries [modelId] because the download outlives the screen that started
+ * it, and whatever is listening has to know which entry it belongs to.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class ModelDownloadEvent (
+  val modelId: String,
+  val copiedBytes: Long,
+  /** Zero when the server would not say how large the file is. */
+  val totalBytes: Long,
+  /** Set on the last event for this download, successful or not. */
+  val done: Boolean,
+  /** Why it stopped, when it stopped badly. Null on success and on cancel. */
+  val error: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): ModelDownloadEvent {
+      val modelId = pigeonVar_list[0] as String
+      val copiedBytes = pigeonVar_list[1] as Long
+      val totalBytes = pigeonVar_list[2] as Long
+      val done = pigeonVar_list[3] as Boolean
+      val error = pigeonVar_list[4] as String?
+      return ModelDownloadEvent(modelId, copiedBytes, totalBytes, done, error)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      modelId,
+      copiedBytes,
+      totalBytes,
+      done,
+      error,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as ModelDownloadEvent
+    return MessagesPigeonUtils.deepEquals(this.modelId, other.modelId) && MessagesPigeonUtils.deepEquals(this.copiedBytes, other.copiedBytes) && MessagesPigeonUtils.deepEquals(this.totalBytes, other.totalBytes) && MessagesPigeonUtils.deepEquals(this.done, other.done) && MessagesPigeonUtils.deepEquals(this.error, other.error)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.modelId)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.copiedBytes)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.totalBytes)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.done)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.error)
+    return result
+  }
+  override fun toString(): String {
+    return "ModelDownloadEvent(modelId=$modelId, copiedBytes=$copiedBytes, totalBytes=$totalBytes, done=$done, error=$error)"
+  }
+}
 private open class MessagesPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -1131,6 +1194,11 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
           ModelImportProgress.fromList(it)
         }
       }
+      146.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          ModelDownloadEvent.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -1202,6 +1270,10 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
       }
       is ModelImportProgress -> {
         stream.write(145)
+        writeValue(stream, value.toList())
+      }
+      is ModelDownloadEvent -> {
+        stream.write(146)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -2156,6 +2228,23 @@ override fun onListen(p0: Any?, sink: PigeonEventSink<ModelImportProgress>) {}
 override fun onCancel(p0: Any?) {}
 }
       
+abstract class DownloadEventsStreamHandler : MessagesPigeonEventChannelWrapper<ModelDownloadEvent> {
+  companion object {
+    fun register(messenger: BinaryMessenger, streamHandler: DownloadEventsStreamHandler, instanceName: String = "") {
+      var channelName: String = "dev.flutter.pigeon.memora.LlmEvents.downloadEvents"
+      if (instanceName.isNotEmpty()) {
+        channelName += ".$instanceName"
+      }
+      val internalStreamHandler = MessagesPigeonStreamHandler<ModelDownloadEvent>(streamHandler)
+      EventChannel(messenger, channelName, MessagesPigeonMethodCodec).setStreamHandler(internalStreamHandler)
+    }
+  }
+// Implement methods from MessagesPigeonEventChannelWrapper
+override fun onListen(p0: Any?, sink: PigeonEventSink<ModelDownloadEvent>) {}
+
+override fun onCancel(p0: Any?) {}
+}
+      
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface ModelImportHostApi {
   /**
@@ -2165,6 +2254,22 @@ interface ModelImportHostApi {
   suspend fun pickModelFile(): ImportedModel?
   suspend fun deleteModel(relativePath: String)
   fun listModels(): List<ImportedModel>
+  /**
+   * Starts downloading [fileName] from [url] as [modelId], in a worker
+   * that keeps running with Memora in the background and posts a
+   * notification while it does. [displayName] is what that notification
+   * calls the model.
+   *
+   * The access token is not passed in. The worker reads it from the secret
+   * store itself, so it never lands in WorkManager's database.
+   */
+  suspend fun startDownload(modelId: String, url: String, fileName: String, displayName: String)
+  fun cancelDownload(modelId: String)
+  /**
+   * The model downloading right now, so a screen opened later can pick the
+   * progress back up. Null when nothing is downloading.
+   */
+  fun activeDownload(): String?
 
   companion object {
     /** The codec used by ModelImportHostApi. */
@@ -2218,6 +2323,62 @@ interface ModelImportHostApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.listModels())
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.ModelImportHostApi.startDownload$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val modelIdArg = args[0] as String
+            val urlArg = args[1] as String
+            val fileNameArg = args[2] as String
+            val displayNameArg = args[3] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                api.startDownload(modelIdArg, urlArg, fileNameArg, displayNameArg)
+                listOf(null)
+              } catch (exception: Throwable) {
+                MessagesPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.ModelImportHostApi.cancelDownload$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val modelIdArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              api.cancelDownload(modelIdArg)
+              listOf(null)
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.memora.ModelImportHostApi.activeDownload$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.activeDownload())
             } catch (exception: Throwable) {
               MessagesPigeonUtils.wrapError(exception)
             }

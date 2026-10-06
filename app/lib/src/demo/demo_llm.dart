@@ -143,6 +143,19 @@ class DemoLlmFiles implements LocalLlmFiles {
     yield ModelImportDone(model);
   }
 
+  /// The download a demo build pretends is already running.
+  String? running;
+
+  @override
+  Stream<ModelImportEvent> watchDownload(String modelId) =>
+      download(modelId, token: 'demo');
+
+  @override
+  Future<String?> activeDownload() async => running;
+
+  @override
+  Future<void> cancelDownload() async => running = null;
+
   @override
   Future<void> remove(String modelId) async =>
       models.removeWhere((model) => model.modelId == modelId);

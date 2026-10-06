@@ -79,6 +79,7 @@ class OnDeviceLlmSection extends ConsumerWidget {
                       unawaited(controller.download(model.spec.id)),
                   onImport: () => unawaited(controller.import(model.spec.id)),
                   onRemove: () => unawaited(controller.remove(model.spec.id)),
+                  onCancel: () => unawaited(controller.cancelDownload()),
                 ),
               if (view.models.any((model) => model.canImport))
                 _TokenRow(
@@ -116,6 +117,7 @@ class _LlmRow extends StatelessWidget {
     required this.onDownload,
     required this.onImport,
     required this.onRemove,
+    required this.onCancel,
   });
 
   final LocalLlmStatus model;
@@ -129,13 +131,17 @@ class _LlmRow extends StatelessWidget {
   final VoidCallback onImport;
   final VoidCallback onRemove;
 
+  /// Stops a running download. The notification offers this too, since the
+  /// download carries on with Memora closed.
+  final VoidCallback onCancel;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final spec = model.spec;
     final size = byteSize(model.installed?.sizeBytes ?? spec.approximateBytes);
     final (String state, Widget trailing, VoidCallback? onTap) = busy
-        ? ('Fetching', const Tag('Working', tone: TagTone.dim), null)
+        ? ('Downloading', const Tag('Cancel', tone: TagTone.dim), onCancel)
         : model.isInstalled
         ? ('installed', const Tag('Remove'), enabled ? onRemove : null)
         : model.canImport
