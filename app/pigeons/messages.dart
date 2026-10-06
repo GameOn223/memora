@@ -338,6 +338,112 @@ abstract class EmbeddingHostApi {
 }
 
 // ---------------------------------------------------------------------------
+// On-device generative models
+// ---------------------------------------------------------------------------
+
+/// What the device has to spare right now. Read before loading a model that
+/// is measured in gigabytes.
+class DeviceMemory {
+  DeviceMemory({
+    required this.totalBytes,
+    required this.availableBytes,
+    required this.lowRamDevice,
+  });
+
+  int totalBytes;
+  int availableBytes;
+  bool lowRamDevice;
+}
+
+/// A model file the user brought in, living under `files/models/imported/`.
+class ImportedModel {
+  ImportedModel({
+    required this.relativePath,
+    required this.fileName,
+    required this.byteSize,
+  });
+
+  /// Relative to the app files dir, for example
+  /// `models/imported/gemma-3-1b-it-int4.task`.
+  String relativePath;
+  String fileName;
+  int byteSize;
+}
+
+/// One piece of a generation. [text] is the new text only, not the whole
+/// answer so far. The last chunk for a request has [done] set, and carries
+/// [error] when the generation failed partway.
+class LlmChunk {
+  LlmChunk({
+    required this.requestId,
+    required this.text,
+    required this.done,
+    this.error,
+  });
+
+  int requestId;
+  String text;
+  bool done;
+  String? error;
+}
+
+@HostApi()
+abstract class LlmHostApi {
+  /// Loads a model file from app storage. Safe to call again with the same
+  /// path and settings. Loading a different model unloads the previous one.
+  @async
+  void load(String relativeModelPath, bool vision, int maxTokens);
+
+  bool isLoaded();
+
+  String? loadedModelPath();
+
+  @async
+  void unload();
+
+  /// Starts generation and returns a request id. Text arrives on the event
+  /// channel. Images are only accepted when the model was loaded with vision.
+  @async
+  int startGeneration(String prompt, List<Uint8List> images, int maxTokens);
+
+  void cancelGeneration(int requestId);
+
+  DeviceMemory deviceMemory();
+}
+
+/// How far the copy behind [ModelImportHostApi.pickModelFile] has got.
+///
+/// [totalBytes] is the size the picked file claims, and zero when the source
+/// would not say. A model is measured in gigabytes and the copy runs for
+/// minutes, so this is what keeps the import from looking stuck.
+class ModelImportProgress {
+  ModelImportProgress({required this.copiedBytes, required this.totalBytes});
+
+  int copiedBytes;
+  int totalBytes;
+}
+
+@EventChannelApi()
+abstract class LlmEvents {
+  LlmChunk chunks();
+
+  ModelImportProgress importProgress();
+}
+
+@HostApi()
+abstract class ModelImportHostApi {
+  /// Opens the system file picker for a model file and copies the chosen one
+  /// into app storage under models/. Returns null if the user cancels.
+  @async
+  ImportedModel? pickModelFile();
+
+  @async
+  void deleteModel(String relativePath);
+
+  List<ImportedModel> listModels();
+}
+
+// ---------------------------------------------------------------------------
 // Files
 // ---------------------------------------------------------------------------
 @HostApi()

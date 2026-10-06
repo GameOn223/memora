@@ -64,6 +64,47 @@ Record the device model and Android version with your results. Where behavior di
 - [ ] Select the on-device vision provider and process an image with text. The extracted text matches the screenshot.
 - [ ] Remove the model. Semantic search stops being offered, and text search still works.
 
+## Generative models on the device
+
+Needs a Gemma model file on the phone. Get them from Hugging Face, accept the Gemma terms there, and push them with `adb push`:
+
+```bash
+# Text only, about 550 MB
+adb push gemma-3-1b-it-int4.task /sdcard/Download/
+# Text and images, about 3 GB
+adb push gemma-3n-E2B-it-int4.litertlm /sdcard/Download/
+```
+
+Bringing a file in:
+
+- [ ] Settings, on-device models: import a model. The system file picker opens, and the chosen file ends up listed with its real size.
+- [ ] Import from Google Drive rather than Downloads. The copy still succeeds, which is the whole point of going through the picker.
+- [ ] Pick something that isn't a model (a photo, a `.gguf`, a zip). Memora names the three extensions it accepts and copies nothing.
+- [ ] Import the same file twice. The second copy is listed under a counted name, not silently replacing the first.
+- [ ] Kill the app during a 3 GB copy (`adb shell am force-stop io.github.gameon223.memora`). `adb shell run-as io.github.gameon223.memora ls files/models/imported` shows only a `.part` file, the model is not offered, and importing again works.
+- [ ] Fill the phone's storage to under the model's size, then import. Memora says how much room is needed and how much is free, and leaves nothing behind.
+- [ ] Remove an imported model while it is loaded. It unloads, the file is gone, and generating afterwards asks for a model instead of crashing.
+
+Generating:
+
+- [ ] Select the on-device provider for chat and ask a question. Text streams in rather than appearing all at once.
+- [ ] Ask a second question. The answer does not refer back to the first one, because each turn gets a fresh session.
+- [ ] Cancel mid-answer. The text stops within a second or two, and the next question works.
+- [ ] Send a question while one is still generating. The second one is refused with a clear message and the first keeps streaming.
+- [ ] With the vision-capable model loaded, process a screenshot with text. The summary and extracted facts come from the image, not from OCR alone.
+- [ ] With the text-only model loaded, try the vision capability. It is reported as unavailable instead of sending images to a model that can't read them.
+- [ ] The image path in particular. `libmediapipe_tasks_jni.so` is excluded from the APK because nothing on this path loads it. An `UnsatisfiedLinkError` in `adb logcat` when an image is sent means that call was wrong and the exclusion in `app/build.gradle.kts` has to come out.
+
+Memory and lifetime, which is where this breaks if it breaks:
+
+- [ ] On a phone with 8 GB or more, load the 3 GB model. It loads, and `adb shell dumpsys meminfo io.github.gameon223.memora` shows the growth outside the Java heap.
+- [ ] On a phone with 4 GB, try the 3 GB model. Memora refuses it with a message naming the device's memory, and the process stays alive. This is the failure that matters: a crash here means the headroom check is too generous.
+- [ ] Load a model, open ten heavy apps, then come back. Memora has freed the model and loads it again on the next question.
+- [ ] Load a model, press home, and watch `adb logcat` for the trim callback. The model is released.
+- [ ] Run a background processing batch with the on-device vision provider selected and the small model. It finishes inside the worker's budget. Then try it with the 3 GB model and record what happens, since that is the combination the architecture advises against.
+- [ ] After a worker finishes, `adb shell dumpsys meminfo` shows the model is no longer resident, because the worker's engine was the last one.
+- [ ] Rotate the screen mid-generation. The stream keeps going and lands in the right conversation.
+
 ## Export and deletion
 
 - [ ] Settings, export: the system save dialog appears. Save to Downloads and open the zip. It has `manifest.json`, `memories.jsonl`, `conversations.jsonl` and an `images/` folder.

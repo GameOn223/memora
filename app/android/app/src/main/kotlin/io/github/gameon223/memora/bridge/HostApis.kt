@@ -9,6 +9,11 @@ import io.github.gameon223.memora.files.FilesHostApiImpl
 import io.github.gameon223.memora.gallery.GalleryHostApiImpl
 import io.github.gameon223.memora.inference.MlKitOcr
 import io.github.gameon223.memora.inference.OnnxEmbedder
+import io.github.gameon223.memora.inference.llm.GemmaRuntime
+import io.github.gameon223.memora.inference.llm.LlmChunks
+import io.github.gameon223.memora.inference.llm.LlmHostApiImpl
+import io.github.gameon223.memora.inference.llm.ModelImportEvents
+import io.github.gameon223.memora.inference.llm.ModelImportHostApiImpl
 import io.github.gameon223.memora.secure.KeystoreSecretStore
 
 /** Wires every Dart-to-Kotlin API onto one engine. */
@@ -24,6 +29,10 @@ object HostApis {
         SecretHostApi.setUp(messenger, KeystoreSecretStore.get(app))
         OcrHostApi.setUp(messenger, MlKitOcr.get(app))
         EmbeddingHostApi.setUp(messenger, OnnxEmbedder)
+        LlmHostApi.setUp(messenger, LlmHostApiImpl(app))
+        ModelImportHostApi.setUp(messenger, ModelImportHostApiImpl(app, activity))
+        LlmChunks.register(messenger)
+        ModelImportEvents.register(messenger)
         FilesHostApi.setUp(messenger, FilesHostApiImpl(app, activity))
     }
 
@@ -34,6 +43,14 @@ object HostApis {
         SecretHostApi.setUp(messenger, null)
         OcrHostApi.setUp(messenger, null)
         EmbeddingHostApi.setUp(messenger, null)
+        LlmHostApi.setUp(messenger, null)
+        ModelImportHostApi.setUp(messenger, null)
+        LlmChunks.unregister(messenger)
+        ModelImportEvents.unregister(messenger)
+        // A worker's engine is destroyed when the worker ends. With no engine
+        // left there is nobody to generate for, and a model that stays
+        // resident in a background process is what gets Memora killed.
+        if (!LlmChunks.hasEngines()) GemmaRuntime.requestUnload()
         FilesHostApi.setUp(messenger, null)
     }
 }

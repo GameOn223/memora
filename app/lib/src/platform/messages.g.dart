@@ -875,6 +875,232 @@ class TokenBatch {
   }
 }
 
+/// What the device has to spare right now. Read before loading a model that
+/// is measured in gigabytes.
+class DeviceMemory {
+  DeviceMemory({
+    required this.totalBytes,
+    required this.availableBytes,
+    required this.lowRamDevice,
+  });
+
+  int totalBytes;
+
+  int availableBytes;
+
+  bool lowRamDevice;
+
+  List<Object?> _toList() {
+    return <Object?>[totalBytes, availableBytes, lowRamDevice];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static DeviceMemory decode(Object result) {
+    result as List<Object?>;
+    return DeviceMemory(
+      totalBytes: result[0]! as int,
+      availableBytes: result[1]! as int,
+      lowRamDevice: result[2]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! DeviceMemory || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(totalBytes, other.totalBytes) &&
+        _deepEquals(availableBytes, other.availableBytes) &&
+        _deepEquals(lowRamDevice, other.lowRamDevice);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'DeviceMemory(totalBytes: $totalBytes, availableBytes: $availableBytes, lowRamDevice: $lowRamDevice)';
+  }
+}
+
+/// A model file the user brought in, living under `files/models/imported/`.
+class ImportedModel {
+  ImportedModel({
+    required this.relativePath,
+    required this.fileName,
+    required this.byteSize,
+  });
+
+  /// Relative to the app files dir, for example
+  /// `models/imported/gemma-3-1b-it-int4.task`.
+  String relativePath;
+
+  String fileName;
+
+  int byteSize;
+
+  List<Object?> _toList() {
+    return <Object?>[relativePath, fileName, byteSize];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static ImportedModel decode(Object result) {
+    result as List<Object?>;
+    return ImportedModel(
+      relativePath: result[0]! as String,
+      fileName: result[1]! as String,
+      byteSize: result[2]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! ImportedModel || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(relativePath, other.relativePath) &&
+        _deepEquals(fileName, other.fileName) &&
+        _deepEquals(byteSize, other.byteSize);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'ImportedModel(relativePath: $relativePath, fileName: $fileName, byteSize: $byteSize)';
+  }
+}
+
+/// One piece of a generation. [text] is the new text only, not the whole
+/// answer so far. The last chunk for a request has [done] set, and carries
+/// [error] when the generation failed partway.
+class LlmChunk {
+  LlmChunk({
+    required this.requestId,
+    required this.text,
+    required this.done,
+    this.error,
+  });
+
+  int requestId;
+
+  String text;
+
+  bool done;
+
+  String? error;
+
+  List<Object?> _toList() {
+    return <Object?>[requestId, text, done, error];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static LlmChunk decode(Object result) {
+    result as List<Object?>;
+    return LlmChunk(
+      requestId: result[0]! as int,
+      text: result[1]! as String,
+      done: result[2]! as bool,
+      error: result[3] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! LlmChunk || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(requestId, other.requestId) &&
+        _deepEquals(text, other.text) &&
+        _deepEquals(done, other.done) &&
+        _deepEquals(error, other.error);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'LlmChunk(requestId: $requestId, text: $text, done: $done, error: $error)';
+  }
+}
+
+/// How far the copy behind [ModelImportHostApi.pickModelFile] has got.
+///
+/// [totalBytes] is the size the picked file claims, and zero when the source
+/// would not say. A model is measured in gigabytes and the copy runs for
+/// minutes, so this is what keeps the import from looking stuck.
+class ModelImportProgress {
+  ModelImportProgress({required this.copiedBytes, required this.totalBytes});
+
+  int copiedBytes;
+
+  int totalBytes;
+
+  List<Object?> _toList() {
+    return <Object?>[copiedBytes, totalBytes];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static ModelImportProgress decode(Object result) {
+    result as List<Object?>;
+    return ModelImportProgress(
+      copiedBytes: result[0]! as int,
+      totalBytes: result[1]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! ModelImportProgress || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(copiedBytes, other.copiedBytes) &&
+        _deepEquals(totalBytes, other.totalBytes);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'ModelImportProgress(copiedBytes: $copiedBytes, totalBytes: $totalBytes)';
+  }
+}
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -921,6 +1147,18 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is TokenBatch) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
+    } else if (value is DeviceMemory) {
+      buffer.putUint8(142);
+      writeValue(buffer, value.encode());
+    } else if (value is ImportedModel) {
+      buffer.putUint8(143);
+      writeValue(buffer, value.encode());
+    } else if (value is LlmChunk) {
+      buffer.putUint8(144);
+      writeValue(buffer, value.encode());
+    } else if (value is ModelImportProgress) {
+      buffer.putUint8(145);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -956,11 +1194,23 @@ class _PigeonCodec extends StandardMessageCodec {
         return OcrBlockMessage.decode(readValue(buffer)!);
       case 141:
         return TokenBatch.decode(readValue(buffer)!);
+      case 142:
+        return DeviceMemory.decode(readValue(buffer)!);
+      case 143:
+        return ImportedModel.decode(readValue(buffer)!);
+      case 144:
+        return LlmChunk.decode(readValue(buffer)!);
+      case 145:
+        return ModelImportProgress.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
   }
 }
+
+const StandardMethodCodec pigeonMethodCodec = StandardMethodCodec(
+  _PigeonCodec(),
+);
 
 class GalleryHostApi {
   /// Constructor for [GalleryHostApi]. The [binaryMessenger] named argument is
@@ -1734,6 +1984,288 @@ class EmbeddingHostApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as Float64List;
+  }
+}
+
+class LlmHostApi {
+  /// Constructor for [LlmHostApi]. The [binaryMessenger] named argument is
+  /// available for dependency injection. If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  LlmHostApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
+
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  /// Loads a model file from app storage. Safe to call again with the same
+  /// path and settings. Loading a different model unloads the previous one.
+  Future<void> load(
+    String relativeModelPath,
+    bool vision,
+    int maxTokens,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.LlmHostApi.load$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[relativeModelPath, vision, maxTokens],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  Future<bool> isLoaded() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.LlmHostApi.isLoaded$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as bool;
+  }
+
+  Future<String?> loadedModelPath() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.LlmHostApi.loadedModelPath$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+    return pigeonVar_replyValue as String?;
+  }
+
+  Future<void> unload() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.LlmHostApi.unload$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// Starts generation and returns a request id. Text arrives on the event
+  /// channel. Images are only accepted when the model was loaded with vision.
+  Future<int> startGeneration(
+    String prompt,
+    List<Uint8List> images,
+    int maxTokens,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.LlmHostApi.startGeneration$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[prompt, images, maxTokens],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as int;
+  }
+
+  Future<void> cancelGeneration(int requestId) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.LlmHostApi.cancelGeneration$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[requestId],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  Future<DeviceMemory> deviceMemory() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.LlmHostApi.deviceMemory$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as DeviceMemory;
+  }
+}
+
+/// Returns a broadcast [Stream] of events from the `chunks` event channel.
+///
+/// Each call to this method creates a new [EventChannel], so it should
+/// not be called multiple times for the same `instanceName`. To deliver
+/// events to multiple listeners, call this method once and listen to the
+/// returned broadcast stream multiple times instead.
+Stream<LlmChunk> chunks({String instanceName = ''}) {
+  if (instanceName.isNotEmpty) {
+    instanceName = '.$instanceName';
+  }
+  final EventChannel chunksChannel = EventChannel(
+    'dev.flutter.pigeon.memora.LlmEvents.chunks$instanceName',
+    pigeonMethodCodec,
+  );
+  return chunksChannel.receiveBroadcastStream().map((dynamic event) {
+    return event as LlmChunk;
+  });
+}
+
+/// Returns a broadcast [Stream] of events from the `importProgress` event channel.
+///
+/// Each call to this method creates a new [EventChannel], so it should
+/// not be called multiple times for the same `instanceName`. To deliver
+/// events to multiple listeners, call this method once and listen to the
+/// returned broadcast stream multiple times instead.
+Stream<ModelImportProgress> importProgress({String instanceName = ''}) {
+  if (instanceName.isNotEmpty) {
+    instanceName = '.$instanceName';
+  }
+  final EventChannel importProgressChannel = EventChannel(
+    'dev.flutter.pigeon.memora.LlmEvents.importProgress$instanceName',
+    pigeonMethodCodec,
+  );
+  return importProgressChannel.receiveBroadcastStream().map((dynamic event) {
+    return event as ModelImportProgress;
+  });
+}
+
+class ModelImportHostApi {
+  /// Constructor for [ModelImportHostApi]. The [binaryMessenger] named argument is
+  /// available for dependency injection. If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  ModelImportHostApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
+
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  /// Opens the system file picker for a model file and copies the chosen one
+  /// into app storage under models/. Returns null if the user cancels.
+  Future<ImportedModel?> pickModelFile() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.ModelImportHostApi.pickModelFile$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+    return pigeonVar_replyValue as ImportedModel?;
+  }
+
+  Future<void> deleteModel(String relativePath) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.ModelImportHostApi.deleteModel$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[relativePath],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  Future<List<ImportedModel>> listModels() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.memora.ModelImportHostApi.listModels$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return (pigeonVar_replyValue! as List<Object?>).cast<ImportedModel>();
   }
 }
 
