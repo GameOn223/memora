@@ -295,4 +295,47 @@ void main() {
       }
     });
   });
+
+  group('HomeFilter', () {
+    HomeFilter filter() {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(homeFilterProvider);
+      return container.read(homeFilterProvider.notifier);
+    }
+
+    test('All in a replacement means everything, and does not throw', () {
+      final home = filter();
+      home.replace({'Bills', 'Travel'});
+      expect(home.state, {'Bills', 'Travel'});
+
+      // The const empty set is unmodifiable, so a cascade that lands on it
+      // throws. It is only reachable through this argument.
+      home.replace({allCategoriesLabel, 'Bills'});
+      expect(home.state, isEmpty);
+    });
+
+    test('toggle adds and drops without disturbing the rest', () {
+      final home = filter();
+      home.toggle('Bills');
+      home.toggle('Travel');
+      expect(home.state, {'Bills', 'Travel'});
+
+      home.toggle('Bills');
+      expect(home.state, {'Travel'});
+
+      home.toggle(allCategoriesLabel);
+      expect(home.state, isEmpty);
+    });
+
+    test('select narrows to one, and All clears', () {
+      final home = filter();
+      home.replace({'Bills', 'Travel'});
+      home.select('Work');
+      expect(home.state, {'Work'});
+
+      home.select(allCategoriesLabel);
+      expect(home.state, isEmpty);
+    });
+  });
 }

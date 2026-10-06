@@ -37,10 +37,18 @@ class HomeFilter extends Notifier<Set<String>> {
   }
 
   /// Takes a whole selection, as the picker hands one over.
-  void replace(Set<String> labels) =>
-      state = labels.contains(allCategoriesLabel)
-      ? const {}
-      : {...labels}..remove(allCategoriesLabel);
+  ///
+  /// `All` in the set means everything, so it wins and the rest goes. This
+  /// is deliberately statements and not an expression: written as a ternary
+  /// with a cascade, the cascade binds to the whole ternary and tries to
+  /// remove from the const empty set.
+  void replace(Set<String> labels) {
+    if (labels.contains(allCategoriesLabel)) {
+      state = const {};
+      return;
+    }
+    state = {...labels};
+  }
 }
 
 /// What the last add produced: the counts, and the reason nothing will be
