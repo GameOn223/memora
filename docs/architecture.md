@@ -460,7 +460,7 @@ abstract interface class LocalLlmFiles {
 
 **The catalog.** `local/model_catalog.dart` describes what settings offers: Gemma 3 1B (about 550 MB, text) and Gemma 3n E2B (about 3 GB, text and images), each with the RAM it realistically needs, the page it comes from and the licence. Memora never downloads one. The Gemma terms are accepted on the model page before the file appears, so the user downloads it and imports it. A file name says nothing dependable about which build it is, so the catalog id the user picked is recorded beside the path and reconciled with what is on disk.
 
-**Getting the file in.** Nothing is bundled and nothing is downloaded for you. Settings opens the system file picker, and the chosen file is copied into `files/models/imported/` through a `.part` file that is renamed once the copy is whole, so a file sitting there under its real name is a complete file. Only `.task`, `.litertlm` and `.bin` are accepted, and only files directly inside that one folder can be loaded or removed. A file of another kind, or too little room to copy it, comes back as a typed refusal that settings turns into a sentence naming the file to look for instead.
+**Getting the file in.** Nothing is bundled and nothing is downloaded for you. Settings opens the system file picker, and the chosen file is copied into `files/models/imported/` through a `.part` file that is renamed once the copy is whole, so a file sitting there under its real name is a complete file. Only `.task`, `.litertlm` and `.bin` are accepted, and only files directly inside that one folder can be loaded or removed. A file of another kind, or too little room to copy it, comes back as a typed refusal that settings turns into a sentence naming the file to look for instead. Copying three gigabytes takes minutes, so the copy reports its byte count on an event channel as it goes and the row shows a real bar. Reports are spaced out by 8 MB, or by a hundredth of the file when that is larger, which keeps one import to about a hundred events. A source that will not say how large it is gets a bar with no end rather than a made-up fraction.
 
 **One model, one turn.** `GemmaRuntime` keeps a single model loaded for the whole process, the way the embedding session does, because the UI engine and a worker's headless engine share an address space and nothing here is small. Each generation gets a fresh session, so one answer never inherits another's context, while the engine stays up between turns. A mutex serializes loading, generating and unloading, and a second generation while one is running is refused with a `busy` error rather than allowed to corrupt the session.
 
@@ -593,14 +593,14 @@ The bridge is generated with Pigeon from `app/pigeons/*.dart`. Generated Dart an
 | `OcrHostApi` | Dart to Kotlin | recognize text with block and line geometry |
 | `EmbeddingHostApi` | Dart to Kotlin | load an ONNX model, run a batch of token ids, report status |
 | `LlmHostApi` | Dart to Kotlin | load and unload a Gemma model, start and cancel a generation, report device memory |
-| `LlmEvents` | Kotlin to Dart | event channel carrying generated text as it arrives |
+| `LlmEvents` | Kotlin to Dart | event channels carrying generated text as it arrives, and copy progress during a model import |
 | `ModelImportHostApi` | Dart to Kotlin | pick a model file, list and delete imported models |
 | `FilesHostApi` | Dart to Kotlin | save an export through the Storage Access Framework, storage usage |
 | `BackgroundFlutterApi` | Kotlin to Dart | ingest the inbox, process the queue within a time budget |
 
 Adapters in `app/lib/src/platform/` implement core ports on top of these APIs. Core code never sees Pigeon types.
 
-`LlmEvents.chunks()` is the one event channel on the bridge. An event channel belongs to a single engine, while the model behind it belongs to the process, so a chunk goes to every engine that is listening and each one keeps the request ids it started. Request ids are unique within the process, which is what makes that safe. Pigeon generates `chunks()` as a top-level Dart function that creates a new channel on every call, so call it once and share the broadcast stream.
+`LlmEvents` holds the event channels on the bridge: `chunks()` for generated text and `importProgress()` for a model copy. An event channel belongs to a single engine, while the model behind it belongs to the process, so a chunk goes to every engine that is listening and each one keeps the request ids it started. Request ids are unique within the process, which is what makes that safe. Progress goes out the same way, and an engine that started no import simply has nothing to match it to. Pigeon generates each of these as a top-level Dart function that creates a new channel on every call, so call it once and share the broadcast stream. `EngineStreams` on the Kotlin side holds the fan-out both of them sit on.
 
 ### Headless engine
 

@@ -182,13 +182,16 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
   BridgeLocalLlmFiles({
     required this._settings,
     bridge.ModelImportHostApi? host,
-  }) : _host = host ?? bridge.ModelImportHostApi();
+    Stream<bridge.ModelImportProgress>? progress,
+  }) : _host = host ?? bridge.ModelImportHostApi(),
+       _progress = progress ?? bridge.importProgress();
 
   /// Settings key holding `{model id: relative path}`.
   static const settingsKey = 'local_llm.imported';
 
   final SettingsStore _settings;
   final bridge.ModelImportHostApi _host;
+  final Stream<bridge.ModelImportProgress> _progress;
 
   @override
   Future<List<InstalledLlmModel>> installed() async {
@@ -215,22 +218,51 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
     return result;
   }
 
+  /// Opens the picker, copies the file in and reports how far the copy has
+  /// got on the way.
+  ///
+  /// The call that starts the copy only returns once the file is whole, so
+  /// progress has to come from the event channel while that call is still
+  /// outstanding. A source that would not say how large it is reports no
+  /// fraction, and the UI shows a bar with no end rather than a wrong one.
   @override
   Stream<ModelImportEvent> import(
     String modelId, {
     required List<String> extensions,
-  }) async* {
+  }) {
+    final out = StreamController<ModelImportEvent>();
+    final watching = _progress.listen((report) {
+      if (out.isClosed || report.totalBytes <= 0) return;
+      final fraction = report.copiedBytes / report.totalBytes;
+      out.add(ModelImportCopying(fraction.clamp(0.0, 1.0)));
+    }, onError: (Object _) {});
+
+    unawaited(
+      _pickAndRecord(modelId)
+          .then((event) {
+            if (!out.isClosed) out.add(event);
+          })
+          .onError<Object>((error, stack) {
+            if (!out.isClosed) out.addError(error, stack);
+          })
+          .whenComplete(() async {
+            await watching.cancel();
+            await out.close();
+          }),
+    );
+    out.onCancel = watching.cancel;
+    return out.stream;
+  }
+
+  /// The import itself, which ends in exactly one event.
+  Future<ModelImportEvent> _pickAndRecord(String modelId) async {
     bridge.ImportedModel? picked;
     try {
       picked = await _host.pickModelFile();
     } on PlatformException catch (error) {
-      yield ModelImportRefused(refusalFor(error.code));
-      return;
+      return ModelImportRefused(refusalFor(error.code));
     }
-    if (picked == null) {
-      yield const ModelImportCancelled();
-      return;
-    }
+    if (picked == null) return const ModelImportCancelled();
     final record = await _record();
     // Importing over an earlier file for the same entry leaves the old one
     // behind, and a spare three gigabytes is not something to keep quietly.
@@ -243,7 +275,7 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
       }
     }
     await _write({...record, modelId: picked.relativePath});
-    yield ModelImportDone(
+    return ModelImportDone(
       InstalledLlmModel(
         modelId: modelId,
         relativePath: picked.relativePath,

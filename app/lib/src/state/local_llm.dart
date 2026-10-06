@@ -56,7 +56,9 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
     final view = state.value;
     if (view == null || view.busy) return;
     final services = ref.read(appServicesProvider);
-    _show(view.models, importing: modelId, progress: 0);
+    // No fraction yet: the picker is still open, and until the copy says
+    // something a bar with no end is the honest one.
+    _show(view.models, importing: modelId);
 
     String? problem;
     try {

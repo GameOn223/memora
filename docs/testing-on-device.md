@@ -79,6 +79,8 @@ Bringing a file in:
 
 - [ ] Settings, on-device models: import a model. The system file picker opens, and the chosen file ends up listed with its real size.
 - [ ] Import from Google Drive rather than Downloads. The copy still succeeds, which is the whole point of going through the picker.
+- [ ] Watch the bar during a 3 GB copy. It moves the whole way through, reaches the end, and the row then reads as installed.
+- [ ] Import from a source that reports no size (some cloud providers do this). The bar runs with no end instead of sitting at zero, and the import still finishes.
 - [ ] Pick something that isn't a model (a photo, a `.gguf`, a zip). Memora names the three extensions it accepts and copies nothing.
 - [ ] Import the same file twice. The second copy is listed under a counted name, not silently replacing the first.
 - [ ] Kill the app during a 3 GB copy (`adb shell am force-stop io.github.gameon223.memora`). `adb shell run-as io.github.gameon223.memora ls files/models/imported` shows only a `.part` file, the model is not offered, and importing again works.

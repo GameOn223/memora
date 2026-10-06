@@ -78,9 +78,13 @@ class _FakeImportHost extends bridge.ModelImportHostApi {
   /// Thrown by [pickModelFile] when set.
   PlatformException? pickError;
 
+  /// Holds [pickModelFile] open, standing in for a copy still running.
+  Completer<void>? hold;
+
   @override
   Future<bridge.ImportedModel?> pickModelFile() async {
     if (pickError case final error?) throw error;
+    await hold?.future;
     final model = picked;
     if (model != null) files.add(model);
     return model;
@@ -387,6 +391,123 @@ void main() {
     test('removing something that was never imported does nothing', () async {
       await files.remove('gemma-3n-e2b-it-int4');
       expect(host.deletes, isEmpty);
+    });
+  });
+
+  group('import progress', () {
+    late _FakeImportHost host;
+    late StreamController<bridge.ModelImportProgress> reports;
+    late BridgeLocalLlmFiles files;
+    StreamSubscription<ModelImportEvent>? watching;
+
+    setUp(() {
+      host = _FakeImportHost();
+      reports = StreamController<bridge.ModelImportProgress>.broadcast();
+      files = BridgeLocalLlmFiles(
+        settings: _Settings(),
+        host: host,
+        progress: reports.stream,
+      );
+    });
+
+    tearDown(() async {
+      await watching?.cancel();
+      watching = null;
+      await reports.close();
+    });
+
+    /// Starts an import that will not finish until [_FakeImportHost.hold] is
+    /// completed, and collects what it emits.
+    Future<List<ModelImportEvent>> startHeld() async {
+      host.hold = Completer<void>();
+      final events = <ModelImportEvent>[];
+      watching = files
+          .import('gemma-3-1b-it-int4', extensions: const ['.task'])
+          .listen(events.add);
+      await pumpEventQueue();
+      return events;
+    }
+
+    test('turns reported bytes into a fraction while the copy runs', () async {
+      host.picked = _file('gemma.task', size: 400);
+      final events = await startHeld();
+
+      reports.add(
+        bridge.ModelImportProgress(copiedBytes: 100, totalBytes: 400),
+      );
+      reports.add(
+        bridge.ModelImportProgress(copiedBytes: 400, totalBytes: 400),
+      );
+      await pumpEventQueue();
+
+      expect(events.whereType<ModelImportCopying>().map((e) => e.fraction), [
+        0.25,
+        1.0,
+      ]);
+      // Still running: the closing event only comes when the copy returns.
+      expect(events.whereType<ModelImportDone>(), isEmpty);
+
+      host.hold!.complete();
+      await pumpEventQueue();
+
+      expect(events.last, isA<ModelImportDone>());
+    });
+
+    test('a source that will not say its size reports no fraction', () async {
+      host.picked = _file('gemma.task');
+      final events = await startHeld();
+
+      reports.add(
+        bridge.ModelImportProgress(copiedBytes: 8 << 20, totalBytes: 0),
+      );
+      await pumpEventQueue();
+
+      expect(events.whereType<ModelImportCopying>(), isEmpty);
+
+      host.hold!.complete();
+      await pumpEventQueue();
+      expect(events.single, isA<ModelImportDone>());
+    });
+
+    test('a count past the total still reads as finished, not more', () async {
+      host.picked = _file('gemma.task', size: 400);
+      final events = await startHeld();
+
+      reports.add(
+        bridge.ModelImportProgress(copiedBytes: 500, totalBytes: 400),
+      );
+      await pumpEventQueue();
+
+      expect(events.whereType<ModelImportCopying>().single.fraction, 1.0);
+      host.hold!.complete();
+      await pumpEventQueue();
+    });
+
+    test('stops listening for progress once the import ends', () async {
+      host.picked = _file('gemma.task', size: 400);
+      final events = await startHeld();
+      expect(reports.hasListener, isTrue);
+
+      host.hold!.complete();
+      await pumpEventQueue();
+
+      expect(reports.hasListener, isFalse);
+      reports.add(
+        bridge.ModelImportProgress(copiedBytes: 400, totalBytes: 400),
+      );
+      await pumpEventQueue();
+      expect(events.whereType<ModelImportCopying>(), isEmpty);
+    });
+
+    test('a refused file still closes the progress stream', () async {
+      host.pickError = PlatformException(code: 'no_space');
+
+      final events = await files
+          .import('gemma-3-1b-it-int4', extensions: const ['.task'])
+          .toList();
+
+      expect(events.single, isA<ModelImportRefused>());
+      expect(reports.hasListener, isFalse);
     });
   });
 }
