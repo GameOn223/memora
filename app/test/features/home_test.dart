@@ -1,10 +1,12 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:memora/src/features/home/category_filter.dart';
 import 'package:memora/src/features/home/home_screen.dart';
 import 'package:memora/src/services/app_services.dart';
 import 'package:memora/src/state/queue.dart';
 import 'package:memora/src/state/ui_state.dart';
+import 'package:memora/src/widgets/chip_bar.dart';
 import 'package:memora/src/widgets/memory_tile.dart';
 import 'package:memora_core/memora_core.dart';
 
@@ -114,5 +116,183 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  group('the category row', () {
+    testWidgets('never grows past All, two chips and the button', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+
+      // The whole point: thirty categories must not make this row scroll.
+      expect(
+        find.byType(SelectChip),
+        findsNWidgets(CategoryFilter.visibleChips + 1),
+      );
+      expect(find.bySemanticsLabel('All categories'), findsOneWidget);
+    });
+
+    testWidgets('the button opens a picker that can be searched', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+
+      await tester.tap(find.bySemanticsLabel('All categories'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('CATEGORIES'), findsOneWidget);
+      final before = find.byType(TextField);
+      expect(before, findsOneWidget);
+      expect(find.text('Bills'), findsWidgets);
+
+      await tester.enterText(before, 'shop');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Shopping'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ListView),
+          matching: find.text('Bills'),
+        ),
+        findsNothing,
+      );
+
+      await tester.enterText(before, 'nothing like this');
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Nothing called "nothing like this"'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('two categories picked shows both, not neither', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+
+      await tester.tap(find.bySemanticsLabel('All categories'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel(RegExp(r'^Bills, \d+ memories$')));
+      await tester.tap(
+        find.bySemanticsLabel(RegExp(r'^Shopping, \d+ memories$')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Show 2 categories'), findsOneWidget);
+      await tester.tap(find.text('Show 2 categories'));
+      await tester.pumpAndSettle();
+
+      // A union. Picking two groups is not an impossible intersection.
+      expect(
+        find.text('Reliance electricity bill for September 2026'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('MacBook Air M4 vs ThinkPad X1 comparison'),
+        findsOneWidget,
+      );
+      // Two picked fit in two chips, so there is nothing left to count.
+      expect(find.bySemanticsLabel('All categories'), findsOneWidget);
+    });
+
+    testWidgets('All clears a selection made in the picker', (tester) async {
+      await pumpApp(tester);
+
+      await tester.tap(find.bySemanticsLabel('All categories'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel(RegExp(r'^Bills, \d+ memories$')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Show '));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('MacBook Air M4 vs ThinkPad X1 comparison'),
+        findsNothing,
+      );
+
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('MacBook Air M4 vs ThinkPad X1 comparison'),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('All categories'), findsOneWidget);
+    });
+
+    testWidgets('Clear empties the picker without leaving it', (tester) async {
+      await pumpApp(tester);
+
+      await tester.tap(find.bySemanticsLabel('All categories'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel(RegExp(r'^Bills, \d+ memories$')));
+      await tester.pumpAndSettle();
+      expect(find.text('Clear'), findsOneWidget);
+
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Show everything'), findsOneWidget);
+      expect(find.text('Clear'), findsNothing);
+    });
+  });
+
+  group('the chip row rule', () {
+    // The case this whole row exists for.
+    final thirty = [
+      allCategoriesLabel,
+      for (var i = 1; i <= 30; i++) 'Category $i',
+    ];
+
+    test('with nothing picked it is All and the two most common', () {
+      expect(CategoryFilter.chipsFor(thirty, const {}), [
+        'All',
+        'Category 1',
+        'Category 2',
+      ]);
+      expect(
+        CategoryFilter.hiddenCount(
+          CategoryFilter.chipsFor(thirty, const {}),
+          const {},
+        ),
+        0,
+      );
+    });
+
+    test('a pick from the far end of the list takes a chip', () {
+      final shown = CategoryFilter.chipsFor(thirty, const {'Category 28'});
+      expect(shown, ['All', 'Category 28', 'Category 1']);
+      expect(
+        CategoryFilter.hiddenCount(shown, const {'Category 28'}),
+        0,
+        reason: 'it is on screen, so there is nothing to count',
+      );
+    });
+
+    test('more picks than chips puts the rest on the button', () {
+      const picked = {'Category 3', 'Category 9', 'Category 17', 'Category 29'};
+      final shown = CategoryFilter.chipsFor(thirty, picked);
+
+      expect(
+        shown.length,
+        CategoryFilter.visibleChips + 1,
+        reason: 'thirty categories must not make the row any longer',
+      );
+      expect(shown.first, 'All');
+      expect(CategoryFilter.hiddenCount(shown, picked), 2);
+    });
+
+    test('All is always first and never duplicated', () {
+      for (final picked in [
+        const <String>{},
+        const {'Category 1'},
+        const {'Category 1', 'Category 2', 'Category 3'},
+      ]) {
+        final shown = CategoryFilter.chipsFor(thirty, picked);
+        expect(shown.first, allCategoriesLabel);
+        expect(shown.where((l) => l == allCategoriesLabel).length, 1);
+        expect(shown.toSet().length, shown.length, reason: 'no repeats');
+      }
+    });
   });
 }

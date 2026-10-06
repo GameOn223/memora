@@ -4,14 +4,43 @@ import 'package:memora_core/memora_core.dart';
 
 import '../services/app_services.dart';
 
+/// Label of the everything option, which cannot be combined with others.
+const allCategoriesLabel = 'All';
+
 /// Category filter chosen on the home screen, by chip label.
-final homeFilterProvider = NotifierProvider<HomeFilter, String>(HomeFilter.new);
+final homeFilterProvider = NotifierProvider<HomeFilter, Set<String>>(
+  HomeFilter.new,
+);
 
-class HomeFilter extends Notifier<String> {
+/// Which category labels the memories grid is narrowed to.
+///
+/// Empty means everything, which is what the `All` chip stands for. Several
+/// labels are a union: Bills and Travel shows both, not the memories that
+/// are somehow in each at once.
+class HomeFilter extends Notifier<Set<String>> {
   @override
-  String build() => 'All';
+  Set<String> build() => const {};
 
-  void select(String label) => state = label;
+  /// Narrows to just [label], or back to everything for `All`.
+  void select(String label) =>
+      state = label == allCategoriesLabel ? const {} : {label};
+
+  /// Adds or drops [label] and leaves the rest alone.
+  void toggle(String label) {
+    if (label == allCategoriesLabel) {
+      state = const {};
+      return;
+    }
+    state = state.contains(label)
+        ? ({...state}..remove(label))
+        : {...state, label};
+  }
+
+  /// Takes a whole selection, as the picker hands one over.
+  void replace(Set<String> labels) =>
+      state = labels.contains(allCategoriesLabel)
+      ? const {}
+      : {...labels}..remove(allCategoriesLabel);
 }
 
 /// What the last add produced: the counts, and the reason nothing will be
