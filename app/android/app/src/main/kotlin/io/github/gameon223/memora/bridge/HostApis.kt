@@ -34,6 +34,7 @@ object HostApis {
         LlmChunks.register(messenger)
         ModelImportEvents.register(messenger)
         FilesHostApi.setUp(messenger, FilesHostApiImpl(app, activity))
+        LinksHostApi.setUp(messenger, LinksHostApiImpl(app))
     }
 
     fun unregister(messenger: BinaryMessenger) {
@@ -52,5 +53,6 @@ object HostApis {
         // resident in a background process is what gets Memora killed.
         if (!LlmChunks.hasEngines()) GemmaRuntime.requestUnload()
         FilesHostApi.setUp(messenger, null)
+        LinksHostApi.setUp(messenger, null)
     }
 }

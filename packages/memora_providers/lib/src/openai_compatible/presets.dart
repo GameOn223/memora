@@ -14,6 +14,7 @@ const openAiDescriptor = ProviderDescriptor(
   },
   requiresApiKey: true,
   apiKeyHint: 'sk-...',
+  apiKeyUrl: 'https://platform.openai.com/api-keys',
   defaultBaseUrl: 'https://api.openai.com/v1',
   homepage: 'https://platform.openai.com',
 );
@@ -29,6 +30,7 @@ const groqDescriptor = ProviderDescriptor(
   },
   requiresApiKey: true,
   apiKeyHint: 'gsk_...',
+  apiKeyUrl: 'https://console.groq.com/keys',
   defaultBaseUrl: 'https://api.groq.com/openai/v1',
   homepage: 'https://console.groq.com',
 );
@@ -51,6 +53,7 @@ const nvidiaDescriptor = ProviderDescriptor(
   },
   requiresApiKey: true,
   apiKeyHint: 'nvapi-...',
+  apiKeyUrl: 'https://build.nvidia.com/settings/api-keys',
   defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
   homepage: 'https://build.nvidia.com',
 );
@@ -66,6 +69,7 @@ const openRouterDescriptor = ProviderDescriptor(
   },
   requiresApiKey: true,
   apiKeyHint: 'sk-or-...',
+  apiKeyUrl: 'https://openrouter.ai/settings/keys',
   defaultBaseUrl: 'https://openrouter.ai/api/v1',
   homepage: 'https://openrouter.ai',
 );

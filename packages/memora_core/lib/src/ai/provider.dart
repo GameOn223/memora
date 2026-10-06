@@ -29,6 +29,7 @@ class ProviderDescriptor {
     this.defaultBaseUrl,
     this.baseUrlEditable = false,
     this.apiKeyHint,
+    this.apiKeyUrl,
     this.homepage,
   });
 
@@ -50,6 +51,11 @@ class ProviderDescriptor {
 
   /// Placeholder for the key field, for example `gsk_...`.
   final String? apiKeyHint;
+
+  /// The exact page where this provider's keys are made, so the key screen
+  /// can send someone straight there instead of to a home page they then
+  /// have to navigate. Null when the provider needs no key.
+  final String? apiKeyUrl;
   final String? homepage;
 
   bool supports(Capability capability) => capabilities.contains(capability);

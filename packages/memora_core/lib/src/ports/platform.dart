@@ -247,6 +247,13 @@ abstract interface class LocalLlmFiles {
   Future<void> remove(String modelId);
 }
 
+/// Opens a web page outside Memora.
+abstract interface class Links {
+  /// Opens [url] in whatever handles web links. Returns false when nothing
+  /// on the phone can, so the caller can say so rather than look broken.
+  Future<bool> open(String url);
+}
+
 /// State of an on-device model download.
 enum LocalModelState { notDownloaded, downloading, ready, failed }
 

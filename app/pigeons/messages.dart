@@ -444,6 +444,20 @@ abstract class ModelImportHostApi {
 }
 
 // ---------------------------------------------------------------------------
+// Links
+// ---------------------------------------------------------------------------
+@HostApi()
+abstract class LinksHostApi {
+  /// Opens [url] in whatever handles web links. Only http and https are
+  /// accepted: every link Memora opens is a page it names itself, and any
+  /// other scheme would be a way to start an arbitrary activity.
+  ///
+  /// Returns false when nothing on the phone can open it.
+  @async
+  bool openUrl(String url);
+}
+
+// ---------------------------------------------------------------------------
 // Files
 // ---------------------------------------------------------------------------
 @HostApi()

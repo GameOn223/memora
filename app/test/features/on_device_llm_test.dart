@@ -6,6 +6,7 @@ import 'package:memora/src/features/settings/settings_screen.dart';
 import 'package:memora/src/routing/router.dart';
 import 'package:memora/src/state/local_llm.dart';
 import 'package:memora_core/memora_core.dart';
+import 'package:memora_providers/memora_providers.dart';
 
 import '../helpers/pump_app.dart';
 
@@ -439,6 +440,161 @@ void main() {
       );
       expect(automatic, contains('Gemma Terms of Use'));
       expect(automatic, contains('Accept it on the model page'));
+    });
+  });
+
+  group('problems interrupt', () {
+    testWidgets('a rejected token is a dialog, with the token page on it', (
+      tester,
+    ) async {
+      final services = llmServices();
+      services.secrets.values[LocalLlmController.tokenKey] = 'hf_wrong';
+      services.llmFiles.refuseNext = ModelImportRefusal.tokenRejected;
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await openModels(tester);
+      await tester.tap(inSection(find.text('DOWNLOAD')));
+      await tester.pumpAndSettle(const Duration(milliseconds: 50));
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('That did not work'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.textContaining('would not take that token'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Get a token'));
+      await tester.pumpAndSettle();
+
+      expect(services.links.opened, [LocalLlmController.tokensUrl]);
+      expect(
+        find.byType(AlertDialog),
+        findsNothing,
+        reason: 'opening the page closes the dialog, nothing left to say',
+      );
+    });
+
+    testWidgets('a licence refusal points at the model page', (tester) async {
+      final services = llmServices();
+      services.secrets.values[LocalLlmController.tokenKey] = 'hf_ok';
+      services.llmFiles.refuseNext = ModelImportRefusal.licenceNotAccepted;
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await openModels(tester);
+      await tester.tap(inSection(find.text('DOWNLOAD')));
+      await tester.pumpAndSettle(const Duration(milliseconds: 50));
+
+      await tester.tap(find.text('Open the model page'));
+      await tester.pumpAndSettle();
+
+      expect(services.links.opened, [gemma3_1b.sourceUrl]);
+    });
+
+    testWidgets('a problem with no page to open just closes', (tester) async {
+      final services = llmServices();
+      services.llmFiles.refuseNext = ModelImportRefusal.notEnoughStorage;
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await openModels(tester);
+      await tester.tap(find.text('IMPORT A MODEL FILE'));
+      await tester.pumpAndSettle(const Duration(milliseconds: 50));
+
+      expect(find.textContaining('not enough free space'), findsOneWidget);
+      expect(find.text('Get a token'), findsNothing);
+      expect(find.text('Open the model page'), findsNothing);
+
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+
+    testWidgets('the same problem does not reopen on every rebuild', (
+      tester,
+    ) async {
+      final services = llmServices();
+      services.llmFiles.refuseNext = ModelImportRefusal.notEnoughStorage;
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await openModels(tester);
+      await tester.tap(find.text('IMPORT A MODEL FILE'));
+      await tester.pumpAndSettle(const Duration(milliseconds: 50));
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      // A rebuild with the problem still on the view must not bring it back.
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+  });
+
+  group('the licence links', () {
+    testWidgets('the token row links to the token page and both licences', (
+      tester,
+    ) async {
+      final services = llmServices();
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await scrollTo(tester, find.text('Make a read token'));
+      await tester.tap(find.text('Make a read token'));
+      await tester.pumpAndSettle();
+      expect(services.links.opened, [LocalLlmController.tokensUrl]);
+
+      await scrollTo(
+        tester,
+        find.text('Accept the licence for ${gemma3_1b.displayName}'),
+      );
+      await tester.tap(
+        find.text('Accept the licence for ${gemma3_1b.displayName}'),
+      );
+      await tester.pumpAndSettle();
+      expect(services.links.opened.last, gemma3_1b.sourceUrl);
+
+      // The manually gated one says what it actually needs.
+      expect(
+        find.text('Request access to ${gemma3nE2b.displayName}'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a link nothing can open shows the address instead', (
+      tester,
+    ) async {
+      final services = llmServices();
+      services.links.handled = false;
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await scrollTo(tester, find.text('Make a read token'));
+      await tester.tap(find.text('Make a read token'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(LocalLlmController.tokensUrl), findsOneWidget);
     });
   });
 }

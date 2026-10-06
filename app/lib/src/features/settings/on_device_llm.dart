@@ -12,8 +12,10 @@ import '../../theme/text_styles.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/bordered_list.dart';
 import '../../widgets/caps_label.dart';
+import '../../widgets/external_link.dart';
 import '../../widgets/memory_labels.dart';
 import '../../widgets/outline_action.dart';
+import '../../widgets/problem_dialog.dart';
 import '../../widgets/tags.dart';
 import 'settings_rows.dart';
 
@@ -36,6 +38,21 @@ class OnDeviceLlmSection extends ConsumerWidget {
     if (!ref.watch(appServicesProvider).localLlm.supported) {
       return const SizedBox.shrink();
     }
+    // A refusal interrupts. It used to be small print under the section,
+    // which is easy to miss right after tapping a button and watching
+    // nothing happen.
+    ref.listen(localLlmProvider, (previous, next) {
+      final problem = next.value?.problem;
+      if (problem == null || problem == previous?.value?.problem) return;
+      unawaited(
+        showProblem(
+          context,
+          title: 'That did not work',
+          message: problem,
+          link: next.value?.problemLink,
+        ),
+      );
+    });
     final view = ref.watch(localLlmProvider).value;
     if (view == null || view.models.isEmpty) return const SizedBox.shrink();
     final controller = ref.read(localLlmProvider.notifier);
@@ -46,8 +63,7 @@ class OnDeviceLlmSection extends ConsumerWidget {
         const SizedBox(height: Space.s8),
         SettingsSection(
           label: 'Chat and vision on this device',
-          footnote: view.problem ?? _footnote(view),
-          footnoteIsError: view.problem != null,
+          footnote: _footnote(view),
           child: BorderedList(
             children: [
               for (final model in view.models)
@@ -281,12 +297,27 @@ class _TokenRowState extends State<_TokenRow> {
           ),
           const SizedBox(height: Space.s3),
           Text(
-            'A read token from huggingface.co/settings/tokens, needed once. '
-            'Accept the model licence on its own page with the same account, '
-            'or the download comes back refused.',
+            'Needed once. Make a read token, and accept the licence on the '
+            'model page with the same account, or the download comes back '
+            'refused.',
             style: MemoraText.style(11.5, height: 1.5, color: c.dim),
           ),
           const SizedBox(height: Space.s3),
+          const ExternalLink(
+            label: 'Make a read token',
+            url: LocalLlmController.tokensUrl,
+          ),
+          const SizedBox(height: Space.s2),
+          for (final spec in localLlmCatalog) ...[
+            ExternalLink(
+              label: spec.gate == ModelGate.manual
+                  ? 'Request access to ${spec.displayName}'
+                  : 'Accept the licence for ${spec.displayName}',
+              url: spec.sourceUrl,
+            ),
+            const SizedBox(height: Space.s2),
+          ],
+          const SizedBox(height: Space.s2),
           OutlineAction(
             label: _saving ? 'Saving…' : 'Save token',
             icon: MemoraIcons.checkCircle,

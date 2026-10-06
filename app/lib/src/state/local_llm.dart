@@ -4,6 +4,7 @@ import 'package:memora_core/memora_core.dart';
 import 'package:memora_providers/memora_providers.dart';
 
 import '../widgets/memory_labels.dart';
+import '../widgets/problem_dialog.dart';
 import 'services.dart';
 import 'settings.dart';
 
@@ -16,6 +17,7 @@ class LocalLlmView {
     this.importing,
     this.progress,
     this.problem,
+    this.problemLink,
     this.hasToken = false,
   });
 
@@ -29,6 +31,9 @@ class LocalLlmView {
 
   /// What went wrong last time, in words a person can act on.
   final String? problem;
+
+  /// The page that settles [problem], when there is one to open.
+  final ProblemLink? problemLink;
 
   /// Whether an access token is saved. Without one there is nothing to
   /// download with, so the row asks for one first.
@@ -96,6 +101,7 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
     _show(view.models, importing: modelId, hasToken: true);
 
     String? problem;
+    ProblemLink? link;
     try {
       await for (final event in services.localLlm.download(
         modelId,
@@ -119,12 +125,13 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
               modelId: modelId,
               fileName: fileName,
             );
+            link = refusalLink(reason, modelId: modelId);
         }
       }
     } on Object {
       problem = 'That download could not be finished. Try again.';
     }
-    await _reload(problem: problem);
+    await _reload(problem: problem, problemLink: link);
   }
 
   /// Opens the picker, copies the file in and refreshes the list.
@@ -137,6 +144,7 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
     _show(view.models, importing: modelId);
 
     String? problem;
+    ProblemLink? link;
     try {
       await for (final event in services.localLlm.import(modelId)) {
         switch (event) {
@@ -152,12 +160,13 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
               modelId: modelId,
               fileName: fileName,
             );
+            link = refusalLink(reason, modelId: modelId);
         }
       }
     } on Object {
       problem = 'That file could not be imported. Try again.';
     }
-    await _reload(problem: problem);
+    await _reload(problem: problem, problemLink: link);
   }
 
   Future<void> remove(String modelId) async {
@@ -207,11 +216,41 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
     };
   }
 
+  /// The page that settles a refusal, when opening one would help.
+  ///
+  /// A rejected token is settled on the token page, a licence on the
+  /// model page. Running out of space or a broken transfer have no page
+  /// worth sending anyone to.
+  static ProblemLink? refusalLink(
+    ModelImportRefusal reason, {
+    required String modelId,
+  }) {
+    final spec = localLlmSpec(modelId);
+    return switch (reason) {
+      ModelImportRefusal.tokenRejected => const ProblemLink(
+        label: 'Get a token',
+        url: tokensUrl,
+      ),
+      ModelImportRefusal.licenceNotAccepted ||
+      ModelImportRefusal.wrongFileType when spec != null => ProblemLink(
+        label: spec.gate == ModelGate.manual
+            ? 'Request access'
+            : 'Open the model page',
+        url: spec.sourceUrl,
+      ),
+      _ => null,
+    };
+  }
+
+  /// Where Hugging Face read tokens are made.
+  static const tokensUrl = 'https://huggingface.co/settings/tokens';
+
   void _show(
     List<LocalLlmStatus> models, {
     String? importing,
     double? progress,
     String? problem,
+    ProblemLink? problemLink,
     bool? hasToken,
   }) {
     state = AsyncData(
@@ -220,18 +259,20 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
         importing: importing,
         progress: progress,
         problem: problem,
+        problemLink: problemLink,
         hasToken: hasToken ?? state.value?.hasToken ?? false,
       ),
     );
   }
 
-  Future<void> _reload({String? problem}) async {
+  Future<void> _reload({String? problem, ProblemLink? problemLink}) async {
     final services = ref.read(appServicesProvider);
     final models = await services.localLlm.list();
     final token = await services.secrets.read(tokenKey);
     _show(
       models,
       problem: problem,
+      problemLink: problemLink,
       hasToken: token != null && token.isNotEmpty,
     );
     // Installing or deleting a model changes what chat and vision can do.
