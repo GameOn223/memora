@@ -95,10 +95,15 @@ void main() {
       expect(localDescriptor.requiresApiKey, isFalse);
       expect(localDescriptor.capabilities, {
         Capability.vision,
+        Capability.chat,
         Capability.embeddings,
         Capability.reranking,
       });
       expect(localDescriptor.defaultModel(Capability.vision), 'ocr-rules');
+      expect(
+        localDescriptor.defaultModel(Capability.chat),
+        'gemma-3-1b-it-int4',
+      );
       expect(
         localDescriptor.defaultModel(Capability.embeddings),
         'bge-small-en-v1.5',

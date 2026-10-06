@@ -49,7 +49,13 @@ const anthropicModels = ['claude-sonnet-5-5', 'claude-haiku-4-5'];
 
 /// On-device model ids. The catalog in `local/model_catalog.dart` pins the
 /// files themselves.
-const localVisionModels = ['ocr-rules'];
+///
+/// The generative ids are Gemma builds the user downloads and imports, so
+/// they go stale differently from the rest of this file: a new Gemma release
+/// is a new entry in the catalog, and an old one keeps working as long as
+/// the file is still on the phone.
+const localVisionModels = ['ocr-rules', 'gemma-3n-e2b-it-int4'];
+const localChatModels = ['gemma-3-1b-it-int4', 'gemma-3n-e2b-it-int4'];
 const localEmbeddingModels = ['bge-small-en-v1.5'];
 const localRerankModels = ['score-fusion'];
 
@@ -73,6 +79,7 @@ final verifiedModelIds = <String>{
   ...geminiEmbeddingModels,
   ...anthropicModels,
   ...localVisionModels,
+  ...localChatModels,
   ...localEmbeddingModels,
   ...localRerankModels,
 };

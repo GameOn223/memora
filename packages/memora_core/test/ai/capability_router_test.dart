@@ -18,11 +18,18 @@ class _Vision implements VisionService {
 }
 
 class _Client implements ProviderClient {
-  _Client(this.descriptor, this.config);
+  _Client(this.descriptor, this.config, {this.missingModels = const {}});
 
   @override
   final ProviderDescriptor descriptor;
   final ProviderConfig config;
+
+  /// Model ids whose file is not on the phone yet.
+  final Set<String> missingModels;
+
+  @override
+  Future<bool> isModelReady(Capability capability, String modelId) async =>
+      !missingModels.contains(modelId);
 
   @override
   VisionService? vision(String modelId) =>
@@ -79,14 +86,16 @@ void main() {
   late InMemorySecretStore secrets;
   late CapabilityRouter router;
   final created = <ProviderConfig>[];
+  final missingModels = <String>{};
 
   setUp(() {
     created.clear();
+    missingModels.clear();
     registry = ProviderRegistry();
     for (final d in [_cloud, _ollama, _local]) {
       registry.register(d, (config) {
         created.add(config);
-        return _Client(d, config);
+        return _Client(d, config, missingModels: missingModels);
       });
     }
     settings = InMemorySettingsStore();
@@ -220,6 +229,33 @@ void main() {
     await select(Capability.embeddings, 'local', 'bge');
     final providers = await router.offDeviceProviders();
     expect(providers.map((p) => p.id), ['nvidia']);
+  });
+
+  test('a model whose file is missing is unavailable, not broken', () async {
+    await select(Capability.vision, 'local', 'gemma-3n-e2b-it-int4');
+    missingModels.add('gemma-3n-e2b-it-int4');
+
+    await expectLater(
+      router.vision(),
+      throwsA(
+        isA<CapabilityUnavailableException>()
+            .having(
+              (e) => e.reason,
+              'reason',
+              UnavailableReason.modelNotDownloaded,
+            )
+            .having((e) => e.modelId, 'modelId', 'gemma-3n-e2b-it-int4'),
+      ),
+    );
+    final statuses = await router.statuses();
+    expect(statuses[Capability.vision]!.available, isFalse);
+    expect(
+      statuses[Capability.vision]!.reason,
+      UnavailableReason.modelNotDownloaded,
+    );
+
+    missingModels.clear();
+    expect((await router.vision()).modelId, 'gemma-3n-e2b-it-int4');
   });
 
   test('unsupported capability is reported', () async {

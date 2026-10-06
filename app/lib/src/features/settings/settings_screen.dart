@@ -25,6 +25,7 @@ import '../../widgets/segmented.dart';
 import '../../widgets/tags.dart';
 import '../../widgets/tap_area.dart';
 import '../../widgets/toggle_card.dart';
+import 'on_device_llm.dart';
 import 'settings_rows.dart';
 
 /// AI and privacy: what runs where, which keys are stored, and what the
@@ -236,13 +237,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   bodyGap: 4,
                   alignTop: true,
                   offColor: c.surface,
-                  body: settings.localOnly
-                      ? 'On. Vision runs on this device. Chat needs a model '
-                            'you run yourself, and anything the device '
-                            'cannot do is shown as unavailable rather than '
-                            'sent away.'
-                      : 'Off. Cloud providers handle vision and chat. Turn '
-                            'on to keep every image on device.',
+                  body: localOnlyBody(
+                    localOnly: settings.localOnly,
+                    chat: statuses[Capability.chat],
+                  ),
                   onChanged: (value) => unawaited(
                     _toggleLocalOnly(
                       value: value,
@@ -376,6 +374,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                   ),
                 ),
+                const OnDeviceLlmSection(),
                 if (models.isNotEmpty) ...[
                   const SizedBox(height: Space.s8),
                   SettingsSection(
@@ -591,6 +590,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
+/// What local-only mode means right now.
+///
+/// With a generative model imported and selected, chat answers on the phone
+/// like everything else, so the old line about needing a model you run
+/// yourself would be wrong.
+String localOnlyBody({
+  required bool localOnly,
+  required CapabilityStatus? chat,
+}) {
+  if (!localOnly) {
+    return 'Off. Cloud providers handle vision and chat. Turn on to keep '
+        'every image on device.';
+  }
+  final onDevice =
+      chat != null &&
+      chat.available &&
+      chat.provider?.location == ProviderLocation.onDevice;
+  if (onDevice) {
+    return 'On. Vision, chat and search all run here, on '
+        '${chat.modelId}. Nothing leaves the phone.';
+  }
+  return 'On. Vision runs on this device, and Ask answers from search. For '
+      'chat in your own words, import a model below or point Memora at a '
+      'server on your network.';
+}
+
 class _CapabilityRow extends StatelessWidget {
   const _CapabilityRow({
     required this.capability,
@@ -619,7 +644,7 @@ class _CapabilityRow extends StatelessWidget {
       UnavailableReason.notConfigured => 'Not configured',
       UnavailableReason.missingApiKey => '${selection?.modelId} · needs a key',
       UnavailableReason.modelNotDownloaded =>
-        '${selection?.modelId} · not downloaded',
+        '${selection?.modelId} · model not on this phone',
       UnavailableReason.unsupportedByProvider =>
         '${provider?.displayName ?? 'This provider'} cannot do this',
       UnavailableReason.blockedByLocalOnly =>

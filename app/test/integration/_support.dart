@@ -237,7 +237,7 @@ class AxisEmbeddingService implements EmbeddingService {
 
 /// The one provider this test registers. It hands out whichever scripted
 /// service the harness holds.
-class ScriptedProviderClient implements ProviderClient {
+class ScriptedProviderClient with ModelsAlwaysReady implements ProviderClient {
   ScriptedProviderClient({
     required this.descriptor,
     required this._vision,

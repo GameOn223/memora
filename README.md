@@ -73,14 +73,14 @@ Adding is instant and never waits on AI. Understanding happens in the background
 | Telemetry | None. No analytics SDK. |
 | API keys | Encrypted with AES-256-GCM under an Android Keystore key, never in the database, logs or exports. |
 | Cloud use | Only the providers you choose, disclosed before you enable one. |
-| Local-only mode | Blocks every request to a public host. A model on your own machine or LAN still works, and anything the device can't do is shown as unavailable rather than quietly sent away. |
+| Local-only mode | Blocks every request to a public host. A model on the phone or on your own machine still works, and anything the device can't do is shown as unavailable rather than quietly sent away. |
 | Your data | Export everything as a documented zip, and delete it for good whenever you like. |
 
 ## AI providers
 
 | Provider | Vision | Chat | Embeddings | Reranking | Needs a key |
 |---|:---:|:---:|:---:|:---:|:---:|
-| On this device | yes | | yes | yes | no |
+| On this device | yes | yes | yes | yes | no |
 | Ollama or LM Studio | yes | yes | yes | | no |
 | OpenAI | yes | yes | yes | | yes |
 | Groq | yes | yes | | | yes |
@@ -91,6 +91,8 @@ Adding is instant and never waits on AI. Understanding happens in the background
 | Any OpenAI-compatible URL | yes | yes | yes | | optional |
 
 On-device vision reads text with ML Kit and pulls out amounts, dates and reference numbers with rules. It's deliberately basic, and it works with no network and no key. On-device semantic search uses bge-small-en-v1.5 (34 MB), downloaded once from settings and checked against a pinned hash.
+
+On-device chat needs a model you bring. Settings lists Gemma 3 1B (about 550 MB) and Gemma 3n E2B (about 3 GB, which also reads images), says whether your phone has the memory for each, and imports the file you downloaded. Memora can't fetch them: the Gemma licence is accepted on the model's own page. A model here is slower than a cloud one and it uses battery, and nothing leaves the phone.
 
 Adding a provider is a descriptor, a client and a few tests. See [docs/providers.md](docs/providers.md).
 

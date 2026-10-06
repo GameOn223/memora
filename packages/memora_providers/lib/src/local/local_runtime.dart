@@ -8,6 +8,8 @@ class LocalRuntime {
     required this.embeddingRuntime,
     required this.modelFiles,
     this.extractor = const RuleBasedExtractor(),
+    this.llm,
+    this.llmFiles,
   });
 
   final OcrEngine ocr;
@@ -16,4 +18,15 @@ class LocalRuntime {
   final OcrUnderstandingExtractor extractor;
   final EmbeddingRuntime embeddingRuntime;
   final LocalModelFiles modelFiles;
+
+  /// Runs a generative model the user imported. Null on a build with no
+  /// native runtime behind it, and then the provider offers no chat and
+  /// vision stays on the OCR path.
+  final LocalLlmRuntime? llm;
+
+  /// The imported model files [llm] loads from.
+  final LocalLlmFiles? llmFiles;
+
+  /// Whether this build can run a generative model at all.
+  bool get hasLlm => llm != null && llmFiles != null;
 }

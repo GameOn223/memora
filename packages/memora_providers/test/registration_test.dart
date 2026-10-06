@@ -8,10 +8,12 @@ import 'support/scripted_http.dart';
 void main() {
   late ProviderRegistry registry;
   late ScriptedHttp http;
+  late FakeLocalLlmFiles llmFiles;
 
   setUp(() {
     http = ScriptedHttp();
     registry = ProviderRegistry();
+    llmFiles = FakeLocalLlmFiles();
     registerBuiltInProviders(
       registry,
       httpClient: http.client,
@@ -19,6 +21,8 @@ void main() {
         ocr: FakeOcrEngine(),
         embeddingRuntime: FakeEmbeddingRuntime(),
         modelFiles: FakeLocalModelFiles(),
+        llm: ScriptedLlmRuntime(),
+        llmFiles: llmFiles,
       ),
     );
   });
@@ -83,6 +87,47 @@ void main() {
 
     Future<void> save(AiSettings value) =>
         AiSettingsRepository(settings).save(value);
+
+    test('an on-device model answers chat in local-only mode', () async {
+      llmFiles.install('gemma-3-1b-it-int4');
+      await save(
+        const AiSettings(
+          localOnly: true,
+          selections: {
+            Capability.chat: CapabilitySelection('local', 'gemma-3-1b-it-int4'),
+          },
+        ),
+      );
+
+      final chat = await router.chat();
+
+      expect(chat.provider.id, 'local');
+      expect(chat.modelId, 'gemma-3-1b-it-int4');
+      expect(chat.service, isA<LocalLlmChatService>());
+      expect(http.requests, isEmpty);
+    });
+
+    test('the same model without its file is unavailable', () async {
+      await save(
+        const AiSettings(
+          localOnly: true,
+          selections: {
+            Capability.chat: CapabilitySelection('local', 'gemma-3-1b-it-int4'),
+          },
+        ),
+      );
+
+      await expectLater(
+        router.chat(),
+        throwsA(
+          isA<CapabilityUnavailableException>().having(
+            (e) => e.reason,
+            'reason',
+            UnavailableReason.modelNotDownloaded,
+          ),
+        ),
+      );
+    });
 
     test('local-only mode allows on-device and LAN servers only', () async {
       await save(

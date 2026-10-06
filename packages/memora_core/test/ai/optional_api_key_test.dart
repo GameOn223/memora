@@ -8,7 +8,7 @@ class _Chat implements ChatService {
   Future<ChatTurn> complete(ChatRequest request) => throw UnimplementedError();
 }
 
-class _Client implements ProviderClient {
+class _Client with ModelsAlwaysReady implements ProviderClient {
   _Client(this.descriptor);
 
   @override

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:memora_core/memora_core.dart';
+import 'package:memora_providers/memora_providers.dart';
 
 import '../bootstrap/app_preferences_impl.dart';
 import '../services/app_services.dart';
@@ -9,6 +10,7 @@ import 'demo_ai.dart';
 import 'demo_chat.dart';
 import 'demo_data.dart';
 import 'demo_images.dart';
+import 'demo_llm.dart';
 import 'demo_stores.dart';
 
 /// In-memory [AppServices] filled with the design's sample data. Used by
@@ -25,11 +27,14 @@ class DemoAppServices implements AppServices {
   }) : clock = clock ?? const SystemClock() {
     db = DemoDatabase(this.clock);
     renderer = DemoImageRenderer();
+    localLlm = LocalLlmModels(runtime: llmRuntime, files: llmFiles);
     memories = DemoMemoryStore(db);
     queue = DemoQueueStore(db);
     conversations = DemoConversationStore(db);
     images = DemoImageFiles(db, renderer);
-    providers = buildDemoRegistry();
+    providers = buildDemoRegistry(
+      installed: () => {for (final model in llmFiles.models) model.modelId},
+    );
     aiSettings = AiSettingsRepository(settings);
     router = CapabilityRouter(
       registry: providers,
@@ -118,6 +123,13 @@ class DemoAppServices implements AppServices {
   late final DemoQueueScheduler scheduler;
   @override
   final DemoLocalModelService localModels = DemoLocalModelService();
+
+  /// The generative runtime and the files behind [localLlm], reachable so a
+  /// test can change what the phone reports or refuse the next import.
+  final DemoLlmRuntime llmRuntime = DemoLlmRuntime();
+  final DemoLlmFiles llmFiles = DemoLlmFiles();
+  @override
+  late final LocalLlmModels localLlm;
   @override
   final DemoExportService export = DemoExportService();
   @override

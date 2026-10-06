@@ -138,11 +138,15 @@ class AgentChatEngine implements ChatEngine {
     return !parsed.query.hasFilters && parsed.query.text == null;
   }
 
+  /// Answers from hybrid search alone. Used when no chat model is available
+  /// and when one gave up on tools, which [provider] and [model] record.
   Stream<ChatProgress> _searchOnly(
     String conversationId,
     String question,
-    String? focusMemoryId,
-  ) async* {
+    String? focusMemoryId, {
+    String? provider,
+    String? model,
+  }) async* {
     Set<String>? within;
     if (focusMemoryId != null) {
       within = {focusMemoryId};
@@ -197,6 +201,8 @@ class AgentChatEngine implements ChatEngine {
       ],
       toolTrace: answer.trace,
       presentation: answer.presentation,
+      provider: provider,
+      model: model,
     );
     await _conversations.addMessage(message);
     yield ChatAnswered(message);
@@ -383,6 +389,18 @@ class AgentChatEngine implements ChatEngine {
         model: chat.modelId,
       );
       await _conversations.addMessage(answered);
+    } on ToolCallingUnavailableException {
+      // The model was offered tools and could not call one, so nothing was
+      // looked up. The deterministic answer is grounded in the memories;
+      // whatever the model wrote instead is not.
+      yield* _searchOnly(
+        conversationId,
+        question,
+        focusMemoryId,
+        provider: chat.provider.id,
+        model: chat.modelId,
+      );
+      return;
     } on AiException catch (e) {
       yield ChatFailed(
         _friendlyFailure(e, chat.provider.displayName),

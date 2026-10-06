@@ -173,11 +173,20 @@ class CapabilityRouter {
         modelId: selection.modelId,
       );
     }
-    final service = pick(_registry.create(config), selection.modelId);
+    final client = _registry.create(config);
+    final service = pick(client, selection.modelId);
     if (service == null) {
       throw CapabilityUnavailableException(
         capability,
         UnavailableReason.unsupportedByProvider,
+        providerName: descriptor.displayName,
+        modelId: selection.modelId,
+      );
+    }
+    if (!await client.isModelReady(capability, selection.modelId)) {
+      throw CapabilityUnavailableException(
+        capability,
+        UnavailableReason.modelNotDownloaded,
         providerName: descriptor.displayName,
         modelId: selection.modelId,
       );

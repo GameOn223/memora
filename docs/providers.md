@@ -41,6 +41,10 @@ registerBuiltInProviders(
     ocr: mlKitOcr,
     embeddingRuntime: onnxRuntime,
     modelFiles: modelDownloads,
+    // Optional. Without them the provider offers no chat and vision stays
+    // on the OCR path.
+    llm: localLlmRuntime,
+    llmFiles: importedModels,
   ),
 );
 final router = CapabilityRouter(
@@ -70,7 +74,7 @@ The split matters because a content error fails that memory for good, while a co
 
 | Id | Name | Location | API key | Default base URL | Capabilities |
 |----|------|----------|---------|------------------|--------------|
-| `local` | On this device | on device | none | none | vision, embeddings, reranking |
+| `local` | On this device | on device | none | none | vision, chat, embeddings, reranking |
 | `openai` | OpenAI | cloud | required, `sk-...` | `https://api.openai.com/v1` | vision, chat, embeddings |
 | `groq` | Groq | cloud | required, `gsk_...` | `https://api.groq.com/openai/v1` | vision, chat |
 | `nvidia` | NVIDIA | cloud | required, `nvapi-...` | `https://integrate.api.nvidia.com/v1` | vision, chat, embeddings, reranking |
@@ -101,6 +105,21 @@ The local provider's embedding model isn't bundled. `model_catalog.dart` pins it
 | | `vocab.txt` | 231,508 bytes | Git blob SHA-1 `fb140275c155a9c7c5a3b3e0e77a9e839594a938` |
 
 The app downloads the files through `LocalModelFiles` and must verify them before reporting `LocalModelState.ready`. Until then `OnnxEmbeddingService.embed` throws `CapabilityUnavailableException` with `modelNotDownloaded`.
+
+### Generative models the user brings
+
+Chat and on-device vision run on a Gemma model the user imports. `localLlmCatalog` describes the two settings offers:
+
+| Entry | Id | About | Vision | Memory it needs | From |
+|-------|----|-------|--------|-----------------|------|
+| `gemma3_1b` | `gemma-3-1b-it-int4` | 550 MB | no | 2 GB | [litert-community/Gemma3-1B-IT](https://huggingface.co/litert-community/Gemma3-1B-IT) |
+| `gemma3nE2b` | `gemma-3n-e2b-it-int4` | 3 GB | yes | 4 GB | [google/gemma-3n-E2B-it-litert-preview](https://huggingface.co/google/gemma-3n-E2B-it-litert-preview) |
+
+**Memora cannot download these.** Both are published under the Gemma Terms of Use, which you accept on the model page before the download link appears, so the entries carry no weights URL and no checksum. Settings names the page, the licence and the `.task` file to look for, and imports whatever the user picks through `LocalLlmFiles`. Sizes are approximate on purpose: the published builds are refreshed from time to time, and the figure is there to set expectations before a long download rather than to verify anything.
+
+`requiredMemoryBytes` is the RAM the model needs while loaded, which is what settings compares against `DeviceMemory`. A phone with less total RAM than that, or one with Android's low-memory flag set, is told the model will not run there and is not offered the import. A phone with the RAM but little free right now is called tight and the import goes ahead, since the user can close something before asking a question.
+
+`isModelReady` returns false until the file is in app storage, so a selected model with no file is reported as `modelNotDownloaded` instead of failing on the first question. `listModels` leaves the generative ids out entirely on a build with no runtime behind them.
 
 ## 3. How the adapters behave
 
@@ -150,9 +169,23 @@ Ask sends a window of recent messages, so a request can start partway through an
 - Reranking returns core's `FusionReranker`.
 - `testConnection` always succeeds and says whether the embedding model is ready.
 
+#### The generative model
+
+`LocalLlmPrompt` writes one string for the runtime. Gemma has no system role, so the system text and the tool block ride on the first user turn, each turn is wrapped in `<start_of_turn>` and `<end_of_turn>`, and the prompt ends with an open model turn. Assistant tool calls go back in as the same JSON the prompt asks for, and a tool result becomes a user turn clipped to 1,200 characters.
+
+Tools are listed as signature lines, `search_by_entity(value: string, type?: string)`, with `?` on the optional arguments. Eleven JSON schemas would fill the context a small model has left for the question.
+
+`LocalLlmSession` loads the imported file (and reloads it if the runtime lost it), collects the generated pieces and stops at `<end_of_turn>`, cancelling the stream. It also stops at a character budget derived from `maxOutputTokens`, so a model that will not stop talking cannot run the battery down. Anything the native runtime throws becomes `AiTransientException`: it ran out of memory or the engine died, and neither says the image or the question was wrong.
+
+`LocalLlmChatService` reads the reply with `parseLocalToolCall`, which accepts JSON in a fenced block or wrapped in prose and takes the arguments from `arguments`, `args`, `parameters` or `input`. The name has to be one of the tools that were offered. When tools were offered, no tool result is in the transcript yet and no usable call came back, it throws `ToolCallingUnavailableException` and `AgentChatEngine` answers from `DeterministicAnswerer` instead, keeping the provider and model on the saved message. Once a tool result is there, plain text is the answer.
+
+`LocalLlmVisionService` sends `VisionPrompts.analyzeInstructions` with the image bytes and reads the reply with `extractJsonObject`, like the cloud adapters, and a reply with no JSON in it is a content error for that image. For a catalog entry with `vision: false` it delegates to `OcrVisionService` instead, so picking a text-only model for vision changes nothing about that capability.
+
 ## 4. Local-only mode
 
 When local-only mode is on, `CapabilityRouter` runs `LocalOnlyPolicy` before it builds any client. The decision depends only on the descriptor's `location` and, for self-hosted providers, the base URL the user saved.
+
+With a generative model imported and selected for chat, every capability Memora needs can be served on the phone, so local-only mode is complete rather than partial: Ask answers in sentences instead of listing search results, and the chat header names the on-device model.
 
 | Location | Providers | Allowed in local-only mode |
 |----------|-----------|----------------------------|
@@ -191,6 +224,7 @@ For a provider with its own protocol, create a folder under `lib/src/<provider>/
 `client.dart` implements `ProviderClient`. Build a `ProviderEndpoint` from `lib/src/shared/endpoint.dart` with the provider id, `config.baseUrl ?? descriptor.defaultBaseUrl`, the key, a `JsonClient` and a function that turns the key into headers. Then:
 
 - return a service from each capability method the provider supports, and `null` from the rest
+- mix in `ModelsAlwaysReady`, unless the model is a file on the phone, in which case `isModelReady` says whether it is there yet
 - make `listModels` fall back to the descriptor's suggestions when listing fails
 - make `testConnection` return `ConnectionCheck.failed` with the exception message rather than throwing
 

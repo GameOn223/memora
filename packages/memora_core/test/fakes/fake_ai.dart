@@ -147,7 +147,7 @@ class ReversingReranker implements RerankService {
   }
 }
 
-class _HarnessClient implements ProviderClient {
+class _HarnessClient with ModelsAlwaysReady implements ProviderClient {
   _HarnessClient(this.descriptor, this.harness);
 
   @override

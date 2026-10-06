@@ -54,6 +54,21 @@ final class AiContentException extends AiException {
   const AiContentException(super.message, {super.providerId});
 }
 
+/// The chat model was offered tools and could not produce a usable call, so
+/// nothing was searched and there is nothing grounded to answer from.
+///
+/// Small on-device models raise this. Ask answers from search instead of
+/// letting the model write something it did not look up.
+final class ToolCallingUnavailableException implements Exception {
+  const ToolCallingUnavailableException({this.providerId, this.modelId});
+
+  final String? providerId;
+  final String? modelId;
+
+  @override
+  String toString() => 'ToolCallingUnavailableException($providerId, $modelId)';
+}
+
 /// Why a capability can't be used right now.
 enum UnavailableReason {
   notConfigured,

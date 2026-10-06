@@ -11,11 +11,13 @@ const demoProviderDescriptors = <ProviderDescriptor>[
     location: ProviderLocation.onDevice,
     capabilities: {
       Capability.vision,
+      Capability.chat,
       Capability.embeddings,
       Capability.reranking,
     },
     suggestedModels: {
-      Capability.vision: ['ocr-rules'],
+      Capability.vision: ['ocr-rules', 'gemma-3n-e2b-it-int4'],
+      Capability.chat: ['gemma-3-1b-it-int4', 'gemma-3n-e2b-it-int4'],
       Capability.embeddings: ['bge-small-en-v1.5'],
       Capability.reranking: ['score-fusion'],
     },
@@ -118,12 +120,14 @@ const demoProviderDescriptors = <ProviderDescriptor>[
   ),
 ];
 
-ProviderRegistry buildDemoRegistry() {
+/// [installed] names the on-device model files the demo pretends to hold,
+/// which decides whether the local provider can serve chat.
+ProviderRegistry buildDemoRegistry({Set<String> Function()? installed}) {
   final registry = ProviderRegistry();
   for (final descriptor in demoProviderDescriptors) {
     registry.register(
       descriptor,
-      (config) => DemoProviderClient(descriptor, config),
+      (config) => DemoProviderClient(descriptor, config, installed: installed),
     );
   }
   return registry;
@@ -132,11 +136,20 @@ ProviderRegistry buildDemoRegistry() {
 /// A provider client that answers from canned data and never touches the
 /// network.
 class DemoProviderClient implements ProviderClient {
-  DemoProviderClient(this.descriptor, this.config);
+  DemoProviderClient(this.descriptor, this.config, {this.installed});
+
+  /// On-device model files the demo holds, for [isModelReady].
+  final Set<String> Function()? installed;
 
   @override
   final ProviderDescriptor descriptor;
   final ProviderConfig config;
+
+  @override
+  Future<bool> isModelReady(Capability capability, String modelId) async {
+    if (!modelId.startsWith('gemma')) return true;
+    return installed?.call().contains(modelId) ?? false;
+  }
 
   @override
   VisionService? vision(String modelId) =>

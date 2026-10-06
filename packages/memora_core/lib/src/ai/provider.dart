@@ -99,7 +99,23 @@ abstract interface class ProviderClient {
   /// suggested list when the provider has no listing endpoint.
   Future<List<String>> listModels(Capability capability);
 
+  /// Whether [modelId] can serve [capability] right now.
+  ///
+  /// A provider whose model is a file on this phone answers false until the
+  /// file is there, and the router reports that as
+  /// [UnavailableReason.modelNotDownloaded] rather than handing out a
+  /// service that would fail on first use. Anything reached over the network
+  /// mixes in [ModelsAlwaysReady].
+  Future<bool> isModelReady(Capability capability, String modelId);
+
   Future<ConnectionCheck> testConnection();
+}
+
+/// [ProviderClient.isModelReady] for providers that need nothing on this
+/// phone before a request.
+mixin ModelsAlwaysReady {
+  Future<bool> isModelReady(Capability capability, String modelId) async =>
+      true;
 }
 
 typedef ProviderFactory = ProviderClient Function(ProviderConfig config);
