@@ -9,6 +9,7 @@ import io.github.gameon223.memora.bridge.ActivityHolder
 import io.github.gameon223.memora.bridge.FlutterError
 import io.github.gameon223.memora.bridge.ImportedModel
 import io.github.gameon223.memora.bridge.ModelImportHostApi
+import io.github.gameon223.memora.bridge.ModelImportProgress
 import io.github.gameon223.memora.bridge.awaitActivityResult
 import java.io.File
 import java.io.IOException
@@ -101,7 +102,13 @@ class ModelImportHostApiImpl(
         try {
             resolver.openInputStream(uri).use { input ->
                 if (input == null) throw IOException("Couldn't open the file you picked")
-                part.outputStream().use { output -> copied = input.copyTo(output, BUFFER_BYTES) }
+                part.outputStream().use { output ->
+                    copied = ModelCopy.copy(input, output, expected ?: 0L) { soFar ->
+                        ModelImportEvents.send(
+                            ModelImportProgress(copiedBytes = soFar, totalBytes = expected ?: 0L),
+                        )
+                    }
+                }
             }
             if (copied <= 0L) throw IOException("The file you picked is empty")
             if (expected != null && copied != expected) {
@@ -152,7 +159,6 @@ class ModelImportHostApiImpl(
     }
 
     private companion object {
-        const val BUFFER_BYTES = 1 shl 20
         const val MB = 1024 * 1024
     }
 }
