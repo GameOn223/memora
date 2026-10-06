@@ -994,6 +994,55 @@ data class LlmChunk (
     return "LlmChunk(requestId=$requestId, text=$text, done=$done, error=$error)"
   }
 }
+
+/**
+ * How far the copy behind [ModelImportHostApi.pickModelFile] has got.
+ *
+ * [totalBytes] is the size the picked file claims, and zero when the source
+ * would not say. A model is measured in gigabytes and the copy runs for
+ * minutes, so this is what keeps the import from looking stuck.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class ModelImportProgress (
+  val copiedBytes: Long,
+  val totalBytes: Long
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): ModelImportProgress {
+      val copiedBytes = pigeonVar_list[0] as Long
+      val totalBytes = pigeonVar_list[1] as Long
+      return ModelImportProgress(copiedBytes, totalBytes)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      copiedBytes,
+      totalBytes,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as ModelImportProgress
+    return MessagesPigeonUtils.deepEquals(this.copiedBytes, other.copiedBytes) && MessagesPigeonUtils.deepEquals(this.totalBytes, other.totalBytes)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.copiedBytes)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.totalBytes)
+    return result
+  }
+  override fun toString(): String {
+    return "ModelImportProgress(copiedBytes=$copiedBytes, totalBytes=$totalBytes)"
+  }
+}
 private open class MessagesPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -1077,6 +1126,11 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
           LlmChunk.fromList(it)
         }
       }
+      145.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          ModelImportProgress.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -1144,6 +1198,10 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
       }
       is LlmChunk -> {
         stream.write(144)
+        writeValue(stream, value.toList())
+      }
+      is ModelImportProgress -> {
+        stream.write(145)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -2077,6 +2135,23 @@ abstract class ChunksStreamHandler : MessagesPigeonEventChannelWrapper<LlmChunk>
   }
 // Implement methods from MessagesPigeonEventChannelWrapper
 override fun onListen(p0: Any?, sink: PigeonEventSink<LlmChunk>) {}
+
+override fun onCancel(p0: Any?) {}
+}
+      
+abstract class ImportProgressStreamHandler : MessagesPigeonEventChannelWrapper<ModelImportProgress> {
+  companion object {
+    fun register(messenger: BinaryMessenger, streamHandler: ImportProgressStreamHandler, instanceName: String = "") {
+      var channelName: String = "dev.flutter.pigeon.memora.LlmEvents.importProgress"
+      if (instanceName.isNotEmpty()) {
+        channelName += ".$instanceName"
+      }
+      val internalStreamHandler = MessagesPigeonStreamHandler<ModelImportProgress>(streamHandler)
+      EventChannel(messenger, channelName, MessagesPigeonMethodCodec).setStreamHandler(internalStreamHandler)
+    }
+  }
+// Implement methods from MessagesPigeonEventChannelWrapper
+override fun onListen(p0: Any?, sink: PigeonEventSink<ModelImportProgress>) {}
 
 override fun onCancel(p0: Any?) {}
 }

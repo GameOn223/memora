@@ -411,9 +411,23 @@ abstract class LlmHostApi {
   DeviceMemory deviceMemory();
 }
 
+/// How far the copy behind [ModelImportHostApi.pickModelFile] has got.
+///
+/// [totalBytes] is the size the picked file claims, and zero when the source
+/// would not say. A model is measured in gigabytes and the copy runs for
+/// minutes, so this is what keeps the import from looking stuck.
+class ModelImportProgress {
+  ModelImportProgress({required this.copiedBytes, required this.totalBytes});
+
+  int copiedBytes;
+  int totalBytes;
+}
+
 @EventChannelApi()
 abstract class LlmEvents {
   LlmChunk chunks();
+
+  ModelImportProgress importProgress();
 }
 
 @HostApi()

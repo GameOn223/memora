@@ -1050,6 +1050,57 @@ class LlmChunk {
   }
 }
 
+/// How far the copy behind [ModelImportHostApi.pickModelFile] has got.
+///
+/// [totalBytes] is the size the picked file claims, and zero when the source
+/// would not say. A model is measured in gigabytes and the copy runs for
+/// minutes, so this is what keeps the import from looking stuck.
+class ModelImportProgress {
+  ModelImportProgress({required this.copiedBytes, required this.totalBytes});
+
+  int copiedBytes;
+
+  int totalBytes;
+
+  List<Object?> _toList() {
+    return <Object?>[copiedBytes, totalBytes];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static ModelImportProgress decode(Object result) {
+    result as List<Object?>;
+    return ModelImportProgress(
+      copiedBytes: result[0]! as int,
+      totalBytes: result[1]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! ModelImportProgress || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(copiedBytes, other.copiedBytes) &&
+        _deepEquals(totalBytes, other.totalBytes);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'ModelImportProgress(copiedBytes: $copiedBytes, totalBytes: $totalBytes)';
+  }
+}
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -1105,6 +1156,9 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is LlmChunk) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
+    } else if (value is ModelImportProgress) {
+      buffer.putUint8(145);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -1146,6 +1200,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return ImportedModel.decode(readValue(buffer)!);
       case 144:
         return LlmChunk.decode(readValue(buffer)!);
+      case 145:
+        return ModelImportProgress.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -2113,6 +2169,25 @@ Stream<LlmChunk> chunks({String instanceName = ''}) {
   );
   return chunksChannel.receiveBroadcastStream().map((dynamic event) {
     return event as LlmChunk;
+  });
+}
+
+/// Returns a broadcast [Stream] of events from the `importProgress` event channel.
+///
+/// Each call to this method creates a new [EventChannel], so it should
+/// not be called multiple times for the same `instanceName`. To deliver
+/// events to multiple listeners, call this method once and listen to the
+/// returned broadcast stream multiple times instead.
+Stream<ModelImportProgress> importProgress({String instanceName = ''}) {
+  if (instanceName.isNotEmpty) {
+    instanceName = '.$instanceName';
+  }
+  final EventChannel importProgressChannel = EventChannel(
+    'dev.flutter.pigeon.memora.LlmEvents.importProgress$instanceName',
+    pigeonMethodCodec,
+  );
+  return importProgressChannel.receiveBroadcastStream().map((dynamic event) {
+    return event as ModelImportProgress;
   });
 }
 
