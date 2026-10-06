@@ -89,6 +89,14 @@ jobs:
       - name: Resolve workspace
         run: flutter pub get
 
+      # The Kotlin layer has its own tests, and until now they only ever ran
+      # on someone's laptop. They need the Flutter plugin on the path, which
+      # pub get and the build both arrange, so they go here rather than in
+      # the Dart job.
+      - name: Test the Android layer
+        working-directory: app/android
+        run: ./gradlew :app:testDebugUnitTest
+
       - name: Build
         working-directory: app
         run: flutter build apk --debug

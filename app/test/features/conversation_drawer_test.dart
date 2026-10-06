@@ -49,6 +49,28 @@ List<String> _rowOrder(WidgetTester tester, List<String> titles) {
 }
 
 void main() {
+  testWidgets('drawer text inherits a real style, not the fallback', (
+    tester,
+  ) async {
+    await _openDrawer(tester);
+
+    // A route has no Material above it unless something provides one, and
+    // text without one falls back to the engine default: yellow, double
+    // underlined. It looks fine in a test and broken on a phone, so pin the
+    // ancestor and the resulting style here.
+    expect(
+      find.ancestor(
+        of: find.text('New conversation'),
+        matching: find.byType(Material),
+      ),
+      findsWidgets,
+    );
+    final style = DefaultTextStyle.of(
+      tester.element(find.text('New conversation')),
+    ).style;
+    expect(style.decoration ?? TextDecoration.none, TextDecoration.none);
+  });
+
   testWidgets('lists conversations, marks the current one and dates them', (
     tester,
   ) async {
