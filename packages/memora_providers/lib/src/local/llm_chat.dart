@@ -59,7 +59,13 @@ class LocalLlmChatService implements ChatService {
         stopReason: ChatStopReason.toolUse,
       );
     }
-    if (offered.isNotEmpty && !_hasSearched(request.entries)) {
+    // Tools were offered and none was called. For a question about their
+    // own memories that is the model failing to search rather than choosing
+    // not to, and the two look identical from here, so the question decides.
+    // A plainly general question gets the plain answer it asked for.
+    if (offered.isNotEmpty &&
+        !_hasSearched(request.entries) &&
+        QuestionKind.needsMemories(_lastQuestion(request.entries))) {
       throw ToolCallingUnavailableException(
         providerId: providerId,
         modelId: spec.id,
@@ -70,6 +76,15 @@ class LocalLlmChatService implements ChatService {
       toolCalls: const [],
       stopReason: ChatStopReason.endTurn,
     );
+  }
+
+  /// The question this turn is answering, which is the last thing the user
+  /// said. Empty when there is nothing to go on, which reads as general.
+  static String _lastQuestion(List<ChatEntry> entries) {
+    for (final entry in entries.reversed) {
+      if (entry is UserEntry) return entry.text;
+    }
+    return '';
   }
 
   static bool _hasSearched(List<ChatEntry> entries) =>

@@ -20,6 +20,7 @@ export 'src/chat/deterministic_answerer.dart';
 export 'src/chat/presentation_builder.dart';
 export 'src/chat/query_labels.dart';
 export 'src/chat/query_parser.dart';
+export 'src/chat/question_kind.dart';
 export 'src/chat/system_prompt.dart';
 export 'src/chat/tools/result_set_tools.dart';
 export 'src/chat/tools/search_tools.dart';
