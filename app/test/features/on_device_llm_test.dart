@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/demo/demo_app_services.dart';
+import 'package:memora/src/features/settings/on_device_llm.dart';
 import 'package:memora/src/features/settings/settings_screen.dart';
 import 'package:memora/src/routing/router.dart';
 import 'package:memora/src/state/local_llm.dart';
@@ -21,6 +22,11 @@ Future<void> openModels(WidgetTester tester) =>
 
 /// The import bar. Nothing else on this screen is downloading in the demo.
 final barFinder = find.byType(LinearProgressIndicator);
+
+/// Scoped to the generative models section, because the embedding model has
+/// a Download of its own further up the screen.
+Finder inSection(Finder matching) =>
+    find.descendant(of: find.byType(OnDeviceLlmSection), matching: matching);
 
 void main() {
   testWidgets('lists what each model adds and what the phone can hold', (
@@ -316,6 +322,123 @@ void main() {
         ),
         contains('could not read that file'),
       );
+    });
+  });
+
+  group('the access token', () {
+    testWidgets('without one the row imports and the field asks for it', (
+      tester,
+    ) async {
+      await pumpApp(
+        tester,
+        services: llmServices(),
+        initialLocation: Routes.settings,
+      );
+
+      await openModels(tester);
+
+      expect(find.text('IMPORT A MODEL FILE'), findsOneWidget);
+      expect(inSection(find.text('DOWNLOAD')), findsNothing);
+      await scrollTo(tester, find.text('HUGGING FACE TOKEN'));
+      expect(find.text('HUGGING FACE TOKEN'), findsOneWidget);
+      expect(
+        find.textContaining('there is no link that works without one'),
+        findsNothing,
+        reason: 'that line is for a failed attempt, not the resting state',
+      );
+      expect(find.textContaining('Paste a read token below'), findsOneWidget);
+    });
+
+    testWidgets('saving a token turns the row into a download', (tester) async {
+      final services = llmServices();
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await scrollTo(tester, find.text('HUGGING FACE TOKEN'));
+      await tester.enterText(find.byType(TextField).last, 'hf_from_the_user');
+      await tester.pumpAndSettle();
+      await scrollTo(tester, find.text('Save token'));
+      await tester.tap(find.text('Save token'));
+      await tester.pumpAndSettle();
+
+      expect(
+        services.secrets.values[LocalLlmController.tokenKey],
+        'hf_from_the_user',
+      );
+      await openModels(tester);
+      expect(inSection(find.text('DOWNLOAD')), findsOneWidget);
+      expect(find.text('IMPORT A MODEL FILE'), findsNothing);
+      expect(
+        find.textContaining('Already downloaded it?'),
+        findsOneWidget,
+        reason: 'importing should still be reachable, just out of the way',
+      );
+    });
+
+    testWidgets('downloading hands the saved token to the fetch', (
+      tester,
+    ) async {
+      final services = llmServices();
+      services.secrets.values[LocalLlmController.tokenKey] = 'hf_saved';
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await openModels(tester);
+      await tester.tap(inSection(find.text('DOWNLOAD')));
+      await tester.pumpAndSettle(const Duration(milliseconds: 50));
+
+      expect(services.llmFiles.tokensSeen, ['hf_saved']);
+      expect(services.llmFiles.models.single.modelId, 'gemma-3-1b-it-int4');
+      await openModels(tester);
+      expect(find.text('REMOVE'), findsOneWidget);
+    });
+
+    testWidgets('a token the server refuses says to check the token', (
+      tester,
+    ) async {
+      final services = llmServices();
+      services.secrets.values[LocalLlmController.tokenKey] = 'hf_wrong';
+      services.llmFiles.refuseNext = ModelImportRefusal.tokenRejected;
+      await pumpApp(
+        tester,
+        services: services,
+        initialLocation: Routes.settings,
+      );
+
+      await openModels(tester);
+      await tester.tap(inSection(find.text('DOWNLOAD')));
+      await tester.pumpAndSettle(const Duration(milliseconds: 50));
+
+      await openModels(tester);
+      expect(find.textContaining('would not take that token'), findsOneWidget);
+      expect(services.llmFiles.models, isEmpty);
+    });
+
+    test('a model granted by hand says to request access, not to retry', () {
+      // Google grants this one by hand, so a token that works elsewhere is
+      // still refused here until the request goes through. Saying "try
+      // again" would send someone round a loop.
+      final message = LocalLlmController.refusalMessage(
+        ModelImportRefusal.licenceNotAccepted,
+        modelId: 'gemma-3n-e2b-it-int4',
+      );
+      expect(message, contains('granted by hand'));
+      expect(message, contains('Request access on its page'));
+
+      // The 1B repository grants on acceptance, so that one does say to
+      // accept the licence and come back.
+      final automatic = LocalLlmController.refusalMessage(
+        ModelImportRefusal.licenceNotAccepted,
+        modelId: 'gemma-3-1b-it-int4',
+      );
+      expect(automatic, contains('Gemma Terms of Use'));
+      expect(automatic, contains('Accept it on the model page'));
     });
   });
 }

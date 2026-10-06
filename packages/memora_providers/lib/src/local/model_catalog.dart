@@ -99,17 +99,31 @@ LocalModelSpec? localModelSpec(String id) {
   return null;
 }
 
-/// A generative model the user brings themselves.
+/// How a repository decides who may download its files.
+enum ModelGate {
+  /// Granted the moment the licence is accepted on the page.
+  automatic,
+
+  /// Requested on the page and granted by the publisher afterwards, so
+  /// accepting the terms is not the end of it.
+  manual,
+}
+
+/// A generative model, fetched with the user's own access token or imported
+/// from a file they already have.
 ///
-/// Gemma is published under terms you accept on the model's own page before
-/// the download link appears, so Memora cannot fetch one of these files for
-/// the user the way it fetches the embedding model. Settings links to
-/// [sourceUrl] and imports the file the user downloaded, which is why these
-/// entries carry no URL to a weights file and no checksum.
+/// Gemma is published under terms accepted on the model's own page, and the
+/// repositories are gated: an unauthenticated request for the weights is
+/// refused. So Memora cannot fetch one of these the way it fetches the
+/// embedding model, from a pinned revision with a known hash. It downloads
+/// [fileName] out of [repo] using a token the user pastes in once, and
+/// importing a file stays as the other way in.
 ///
-/// Sizes are approximate: the published files are rebuilt from time to time
-/// and the figure is here to set expectations before a long download, not to
-/// verify anything.
+/// There is no checksum to pin, for the same reason the sizes here are
+/// approximate: these files are rebuilt from time to time. A transfer is
+/// checked against the length the server declares, which catches one that
+/// broke partway, and the runtime refusing to load a file is what catches
+/// something that is not a model at all.
 class LocalLlmSpec {
   const LocalLlmSpec({
     required this.id,
@@ -121,6 +135,9 @@ class LocalLlmSpec {
     required this.sourceName,
     required this.sourceUrl,
     required this.licence,
+    required this.repo,
+    required this.fileName,
+    required this.gate,
     this.fileExtensions = const ['.task', '.litertlm'],
     this.maxTokens = 4096,
   });
@@ -149,6 +166,25 @@ class LocalLlmSpec {
   /// The licence the user accepts on [sourceUrl] before downloading.
   final String licence;
 
+  /// Hugging Face repository, as `owner/name`.
+  final String repo;
+
+  /// The one file to fetch out of [repo].
+  ///
+  /// Named rather than guessed. These repositories also publish builds for
+  /// the web and builds tied to a particular NPU, and picking by extension
+  /// would sooner or later hand the phone one of those.
+  final String fileName;
+
+  /// How access to [repo] is granted, which decides what to tell someone
+  /// whose token is good but who is still refused.
+  final ModelGate gate;
+
+  /// Where the weights come from, at the repository's current revision.
+  /// Gated, so a request without a token is refused.
+  Uri get downloadUrl =>
+      Uri.https('huggingface.co', '/$repo/resolve/main/$fileName');
+
   /// File name endings the model is published with, the common one first.
   /// The platform picker refuses anything it cannot open.
   final List<String> fileExtensions;
@@ -169,6 +205,9 @@ const gemma3_1b = LocalLlmSpec(
   sourceName: 'Hugging Face',
   sourceUrl: 'https://huggingface.co/litert-community/Gemma3-1B-IT',
   licence: 'Gemma Terms of Use',
+  repo: 'litert-community/Gemma3-1B-IT',
+  fileName: 'gemma3-1b-it-int4.task',
+  gate: ModelGate.automatic,
 );
 
 /// Gemma 3n E2B, 4-bit, text and images. Large enough to replace the OCR
@@ -183,6 +222,11 @@ const gemma3nE2b = LocalLlmSpec(
   sourceName: 'Hugging Face',
   sourceUrl: 'https://huggingface.co/google/gemma-3n-E2B-it-litert-preview',
   licence: 'Gemma Terms of Use',
+  repo: 'google/gemma-3n-E2B-it-litert-preview',
+  fileName: 'gemma-3n-E2B-it-int4.task',
+  // Google grants this one by hand, so a token that works everywhere else
+  // is still refused here until the request goes through.
+  gate: ModelGate.manual,
 );
 
 /// Generative models settings offers, smallest first.

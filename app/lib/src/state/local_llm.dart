@@ -16,18 +16,23 @@ class LocalLlmView {
     this.importing,
     this.progress,
     this.problem,
+    this.hasToken = false,
   });
 
   final List<LocalLlmStatus> models;
 
-  /// Model id being imported right now.
+  /// Model id being fetched right now, whether downloaded or imported.
   final String? importing;
 
-  /// Copy progress from 0 to 1, when the picker reported any.
+  /// Progress from 0 to 1, when the transfer reported any.
   final double? progress;
 
-  /// What went wrong with the last import, in words a person can act on.
+  /// What went wrong last time, in words a person can act on.
   final String? problem;
+
+  /// Whether an access token is saved. Without one there is nothing to
+  /// download with, so the row asks for one first.
+  final bool hasToken;
 
   bool get busy => importing != null;
 
@@ -45,10 +50,81 @@ final localLlmProvider =
     );
 
 class LocalLlmController extends AsyncNotifier<LocalLlmView> {
+  /// Secret store key holding the Hugging Face read token. It sits with the
+  /// provider API keys, under the same Keystore key, and never goes in the
+  /// database or an export.
+  static const tokenKey = 'huggingface.token';
+
   @override
   Future<LocalLlmView> build() async {
-    final models = await ref.watch(appServicesProvider).localLlm.list();
-    return LocalLlmView(models: models);
+    final services = ref.watch(appServicesProvider);
+    final models = await services.localLlm.list();
+    final token = await services.secrets.read(tokenKey);
+    return LocalLlmView(
+      models: models,
+      hasToken: token != null && token.isNotEmpty,
+    );
+  }
+
+  /// Saves the access token, or clears it when [token] is empty.
+  Future<void> saveToken(String token) async {
+    final trimmed = token.trim();
+    final secrets = ref.read(appServicesProvider).secrets;
+    if (trimmed.isEmpty) {
+      await secrets.delete(tokenKey);
+    } else {
+      await secrets.write(tokenKey, trimmed);
+    }
+    await _reload();
+  }
+
+  /// Downloads the model from its repository using the saved token.
+  Future<void> download(String modelId) async {
+    final view = state.value;
+    if (view == null || view.busy) return;
+    final services = ref.read(appServicesProvider);
+    final token = await services.secrets.read(tokenKey);
+    if (token == null || token.isEmpty) {
+      await _reload(
+        problem:
+            'Paste a Hugging Face read token first. The weights are behind '
+            'a licence, so there is no link that works without one.',
+      );
+      return;
+    }
+    // Nothing transferred yet, so no fraction to show.
+    _show(view.models, importing: modelId, hasToken: true);
+
+    String? problem;
+    try {
+      await for (final event in services.localLlm.download(
+        modelId,
+        token: token,
+      )) {
+        switch (event) {
+          case ModelImportCopying(:final fraction):
+            _show(
+              view.models,
+              importing: modelId,
+              progress: fraction,
+              hasToken: true,
+            );
+          case ModelImportDone():
+            problem = null;
+          case ModelImportCancelled():
+            break;
+          case ModelImportRefused(:final reason, :final fileName):
+            problem = refusalMessage(
+              reason,
+              modelId: modelId,
+              fileName: fileName,
+            );
+        }
+      }
+    } on Object {
+      problem = 'That download could not be finished. Try again.';
+    }
+    await _reload(problem: problem);
   }
 
   /// Opens the picker, copies the file in and refreshes the list.
@@ -112,6 +188,22 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
       ModelImportRefusal.unreadable =>
         'Memora could not read ${named ?? 'that file'}. Copy it to this '
             'phone first, then import it.',
+      ModelImportRefusal.tokenRejected =>
+        'Hugging Face would not take that token. Check you pasted a read '
+            'token, all of it, then try again.',
+      ModelImportRefusal.licenceNotAccepted => switch (spec?.gate) {
+        ModelGate.manual =>
+          'The token works, but ${spec?.displayName ?? 'this model'} is '
+              'granted by hand. Request access on its page, then download '
+              'once that comes through.',
+        _ =>
+          'The token works, but this account has not accepted the '
+              '${spec?.licence ?? 'licence'}. Accept it on the model page, '
+              'then try again.',
+      },
+      ModelImportRefusal.downloadFailed =>
+        'The download stopped before it was finished. Nothing was kept, so '
+            'trying again starts clean.',
     };
   }
 
@@ -120,6 +212,7 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
     String? importing,
     double? progress,
     String? problem,
+    bool? hasToken,
   }) {
     state = AsyncData(
       LocalLlmView(
@@ -127,13 +220,20 @@ class LocalLlmController extends AsyncNotifier<LocalLlmView> {
         importing: importing,
         progress: progress,
         problem: problem,
+        hasToken: hasToken ?? state.value?.hasToken ?? false,
       ),
     );
   }
 
   Future<void> _reload({String? problem}) async {
-    final models = await ref.read(appServicesProvider).localLlm.list();
-    _show(models, problem: problem);
+    final services = ref.read(appServicesProvider);
+    final models = await services.localLlm.list();
+    final token = await services.secrets.read(tokenKey);
+    _show(
+      models,
+      problem: problem,
+      hasToken: token != null && token.isNotEmpty,
+    );
     // Installing or deleting a model changes what chat and vision can do.
     ref.invalidate(capabilityStatusesProvider);
     ref.invalidate(chatAvailabilityProvider);

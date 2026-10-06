@@ -92,7 +92,7 @@ Adding is instant and never waits on AI. Understanding happens in the background
 
 On-device vision reads text with ML Kit and pulls out amounts, dates and reference numbers with rules. It's deliberately basic, and it works with no network and no key. On-device semantic search uses bge-small-en-v1.5 (34 MB), downloaded once from settings and checked against a pinned hash.
 
-On-device chat needs a model you bring. Settings lists Gemma 3 1B (about 550 MB) and Gemma 3n E2B (about 3 GB, which also reads images), says whether your phone has the memory for each, and imports the file you downloaded. Memora can't fetch them: the Gemma licence is accepted on the model's own page. A model here is slower than a cloud one and it uses battery, and nothing leaves the phone.
+On-device chat needs a model. Settings lists Gemma 3 1B (about 550 MB) and Gemma 3n E2B (about 3 GB, which also reads images), and says whether your phone has the memory for each. The weights are behind the Gemma licence, which you accept once on the model's own page, so Memora needs a Hugging Face read token to fetch them. Paste one in and it downloads the file itself. If you already have the file, import it instead. A model here is slower than a cloud one and it uses battery, and nothing leaves the phone.
 
 Adding a provider is a descriptor, a client and a few tests. See [docs/providers.md](docs/providers.md).
 
