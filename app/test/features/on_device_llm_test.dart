@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/demo/demo_app_services.dart';
 import 'package:memora/src/features/settings/settings_screen.dart';
@@ -17,6 +18,9 @@ DemoAppServices llmServices() {
 
 Future<void> openModels(WidgetTester tester) =>
     scrollTo(tester, find.text('Gemma 3 1B'));
+
+/// The import bar. Nothing else on this screen is downloading in the demo.
+final barFinder = find.byType(LinearProgressIndicator);
 
 void main() {
   testWidgets('lists what each model adds and what the phone can hold', (
@@ -85,6 +89,40 @@ void main() {
     expect(services.llmFiles.models, isEmpty);
     await openModels(tester);
     expect(find.text('IMPORT A MODEL FILE'), findsOneWidget);
+  });
+
+  testWidgets('the bar waits with no end, then follows the copy', (
+    tester,
+  ) async {
+    final services = demoServices();
+    // Slow enough to see the states a real import passes through.
+    services.llmFiles.step = const Duration(milliseconds: 100);
+    services.llmRuntime.step = Duration.zero;
+    await pumpApp(tester, services: services, initialLocation: Routes.settings);
+
+    await openModels(tester);
+    await tester.tap(find.text('IMPORT A MODEL FILE'));
+    await tester.pump();
+
+    expect(
+      tester.widget<LinearProgressIndicator>(barFinder).value,
+      isNull,
+      reason:
+          'the picker is still open and nothing has been copied, so a bar '
+          'with no end is the only honest one',
+    );
+
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(tester.widget<LinearProgressIndicator>(barFinder).value, 0.25);
+
+    for (var step = 0; step < 4; step++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(barFinder, findsNothing);
+    await openModels(tester);
+    expect(find.text('REMOVE'), findsOneWidget);
   });
 
   testWidgets('says what to do about the wrong kind of file', (tester) async {
