@@ -1,7 +1,7 @@
 name: memora
 description: Memora, an open-source visual memory for Android.
 publish_to: none
-version: 0.2.0+3
+version: 0.2.1+4
 
 environment:
   sdk: ^3.13.0
