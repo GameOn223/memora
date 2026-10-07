@@ -99,6 +99,9 @@ class DemoAppServices implements AppServices {
   final DemoSettingsStore settings = DemoSettingsStore();
   @override
   final DemoSecretStore secrets = DemoSecretStore();
+
+  @override
+  final DemoLinks links = DemoLinks();
   @override
   late final DemoImageFiles images;
   @override

@@ -44,6 +44,7 @@ const demoProviderDescriptors = <ProviderDescriptor>[
     requiresApiKey: true,
     defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
     apiKeyHint: 'nvapi-...',
+    apiKeyUrl: 'https://build.nvidia.com/settings/api-keys',
     homepage: 'https://build.nvidia.com',
   ),
   ProviderDescriptor(
@@ -58,6 +59,7 @@ const demoProviderDescriptors = <ProviderDescriptor>[
     requiresApiKey: true,
     defaultBaseUrl: 'https://api.groq.com/openai/v1',
     apiKeyHint: 'gsk_...',
+    apiKeyUrl: 'https://console.groq.com/keys',
     homepage: 'https://console.groq.com',
   ),
   ProviderDescriptor(
@@ -73,6 +75,7 @@ const demoProviderDescriptors = <ProviderDescriptor>[
     requiresApiKey: true,
     defaultBaseUrl: 'https://api.openai.com/v1',
     apiKeyHint: 'sk-...',
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
     homepage: 'https://platform.openai.com',
   ),
   ProviderDescriptor(
@@ -88,6 +91,7 @@ const demoProviderDescriptors = <ProviderDescriptor>[
     requiresApiKey: true,
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     apiKeyHint: 'AIza...',
+    apiKeyUrl: 'https://aistudio.google.com/apikey',
     homepage: 'https://aistudio.google.com',
   ),
   ProviderDescriptor(
@@ -102,6 +106,7 @@ const demoProviderDescriptors = <ProviderDescriptor>[
     requiresApiKey: true,
     defaultBaseUrl: 'https://api.anthropic.com/v1',
     apiKeyHint: 'sk-ant-...',
+    apiKeyUrl: 'https://platform.claude.com/settings/keys',
     homepage: 'https://console.anthropic.com',
   ),
   ProviderDescriptor(

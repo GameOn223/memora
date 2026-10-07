@@ -26,6 +26,8 @@ object Notifications {
     const val ID_PROCESSING = 1001
     const val ID_INGEST = 1002
     const val ID_PROJECTION = 1003
+    const val ID_DOWNLOAD = 1005
+    const val ID_DOWNLOAD_ENDED = 1006
     private const val ID_CAPTURE_FAILED = 1004
 
     private const val PREFS = "memora_capture_notifications"
@@ -161,6 +163,103 @@ object Notifications {
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
+
+    /**
+     * Ongoing, with a bar, for a model download. A model runs to three
+     * gigabytes and the download outlives the screen that started it, so
+     * this is the only place that says what is happening while Memora is in
+     * the background.
+     *
+     * [totalBytes] of zero means the server would not say how large the file
+     * is, and the bar runs with no end rather than showing a made-up
+     * fraction.
+     */
+    fun downloading(
+        context: Context,
+        displayName: String,
+        copiedBytes: Long,
+        totalBytes: Long,
+        cancelIntent: PendingIntent,
+    ): Notification {
+        val known = totalBytes > 0
+        val percent = if (known) ((copiedBytes * 100) / totalBytes).toInt() else 0
+        val text = if (known) {
+            context.getString(
+                R.string.downloading_model_percent,
+                percent,
+                readableBytes(totalBytes),
+            )
+        } else {
+            context.getString(R.string.downloading_model_unknown, readableBytes(copiedBytes))
+        }
+        return NotificationCompat.Builder(context, CHANNEL_PROCESSING)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.downloading_model, displayName))
+            .setContentText(text)
+            .setProgress(100, percent, !known)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openApp(context))
+            .addAction(0, context.getString(R.string.download_cancel), cancelIntent)
+            .build()
+    }
+
+    /**
+     * Updates the ongoing download notification in place.
+     *
+     * The worker promotes itself to the foreground once, then refreshes the
+     * same notification id as bytes arrive. setForeground is a suspending
+     * call and the copy reports from a plain callback, so this is what the
+     * progress goes through.
+     */
+    fun postDownloading(
+        context: Context,
+        displayName: String,
+        copiedBytes: Long,
+        totalBytes: Long,
+        cancelIntent: PendingIntent,
+    ) {
+        post(
+            context,
+            ID_DOWNLOAD,
+            downloading(context, displayName, copiedBytes, totalBytes, cancelIntent),
+        )
+    }
+
+    /** Posted once a download ends, so a glance at the shade tells you. */
+    fun downloadEnded(context: Context, displayName: String, failed: Boolean) {
+        val message = if (failed) {
+            context.getString(R.string.download_failed, displayName)
+        } else {
+            context.getString(R.string.download_done, displayName)
+        }
+        val posted = post(
+            context,
+            ID_DOWNLOAD_ENDED,
+            NotificationCompat.Builder(context, CHANNEL_PROCESSING)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(
+                    if (failed) context.getString(R.string.download_failed_title) else message,
+                )
+                .setContentText(if (failed) message else null)
+                .setContentIntent(openApp(context))
+                .setAutoCancel(true)
+                .build(),
+        )
+        if (!posted) toast(context, message)
+    }
+
+    /** Short, for a notification line: 550 MB, 3.0 GB. */
+    internal fun readableBytes(bytes: Long): String {
+        val mb = bytes / (1024.0 * 1024.0)
+        return if (mb >= 1024) {
+            String.format(java.util.Locale.US, "%.1f GB", mb / 1024)
+        } else {
+            String.format(java.util.Locale.US, "%.0f MB", mb)
+        }
+    }
 
     private fun openApp(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)

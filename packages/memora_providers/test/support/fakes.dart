@@ -198,6 +198,44 @@ class FakeLocalLlmFiles implements LocalLlmFiles {
     yield ModelImportDone(models.last);
   }
 
+  /// Events the next [download] emits. The default accepts the file.
+  List<ModelImportEvent>? downloadScript;
+  final List<({String modelId, String token})> downloads = [];
+
+  @override
+  Stream<ModelImportEvent> download(
+    String modelId, {
+    required String token,
+  }) async* {
+    downloads.add((modelId: modelId, token: token));
+    final script = downloadScript;
+    if (script != null) {
+      downloadScript = null;
+      yield* Stream.fromIterable(script);
+      return;
+    }
+    yield const ModelImportCopying(0.5);
+    install(modelId);
+    yield ModelImportDone(models.last);
+  }
+
+  /// What [activeDownload] reports.
+  String? running;
+  var cancelled = false;
+
+  @override
+  Stream<ModelImportEvent> watchDownload(String modelId) =>
+      download(modelId, token: 'watching');
+
+  @override
+  Future<String?> activeDownload() async => running;
+
+  @override
+  Future<void> cancelDownload() async {
+    cancelled = true;
+    running = null;
+  }
+
   @override
   Future<void> remove(String modelId) async {
     removals.add(modelId);

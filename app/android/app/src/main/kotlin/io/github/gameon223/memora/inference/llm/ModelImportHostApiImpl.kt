@@ -127,6 +127,26 @@ class ModelImportHostApiImpl(
         )
     }
 
+    override suspend fun startDownload(
+        modelId: String,
+        url: String,
+        fileName: String,
+        displayName: String,
+    ) {
+        try {
+            ModelFileNames.requireSupported(fileName)
+        } catch (error: IllegalArgumentException) {
+            throw FlutterError("unsupported_model", error.message, null)
+        }
+        ModelDownloads.start(context, modelId, url, fileName, displayName)
+    }
+
+    override fun cancelDownload(relativePath: String) {
+        ModelDownloads.cancelAll(context)
+    }
+
+    override fun activeDownload(): String? = ModelDownloads.active(context)
+
     private fun importedFile(relativePath: String): File {
         if (!ModelFileNames.isImportedPath(relativePath)) {
             throw FlutterError(

@@ -423,11 +423,39 @@ class ModelImportProgress {
   int totalBytes;
 }
 
+/// One step of a model download running in a background worker.
+///
+/// Carries [modelId] because the download outlives the screen that started
+/// it, and whatever is listening has to know which entry it belongs to.
+class ModelDownloadEvent {
+  ModelDownloadEvent({
+    required this.modelId,
+    required this.copiedBytes,
+    required this.totalBytes,
+    required this.done,
+    this.error,
+  });
+
+  String modelId;
+  int copiedBytes;
+
+  /// Zero when the server would not say how large the file is.
+  int totalBytes;
+
+  /// Set on the last event for this download, successful or not.
+  bool done;
+
+  /// Why it stopped, when it stopped badly. Null on success and on cancel.
+  String? error;
+}
+
 @EventChannelApi()
 abstract class LlmEvents {
   LlmChunk chunks();
 
   ModelImportProgress importProgress();
+
+  ModelDownloadEvent downloadEvents();
 }
 
 @HostApi()
@@ -441,6 +469,41 @@ abstract class ModelImportHostApi {
   void deleteModel(String relativePath);
 
   List<ImportedModel> listModels();
+
+  /// Starts downloading [fileName] from [url] as [modelId], in a worker
+  /// that keeps running with Memora in the background and posts a
+  /// notification while it does. [displayName] is what that notification
+  /// calls the model.
+  ///
+  /// The access token is not passed in. The worker reads it from the secret
+  /// store itself, so it never lands in WorkManager's database.
+  @async
+  void startDownload(
+    String modelId,
+    String url,
+    String fileName,
+    String displayName,
+  );
+
+  void cancelDownload(String modelId);
+
+  /// The model downloading right now, so a screen opened later can pick the
+  /// progress back up. Null when nothing is downloading.
+  String? activeDownload();
+}
+
+// ---------------------------------------------------------------------------
+// Links
+// ---------------------------------------------------------------------------
+@HostApi()
+abstract class LinksHostApi {
+  /// Opens [url] in whatever handles web links. Only http and https are
+  /// accepted: every link Memora opens is a page it names itself, and any
+  /// other scheme would be a way to start an arbitrary activity.
+  ///
+  /// Returns false when nothing on the phone can open it.
+  @async
+  bool openUrl(String url);
 }
 
 // ---------------------------------------------------------------------------

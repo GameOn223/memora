@@ -193,9 +193,24 @@ final class ModelImportCancelled extends ModelImportEvent {
   const ModelImportCancelled();
 }
 
-/// Why a picked file cannot be used. Picking the same file again would end
+/// Why a model file cannot be used. Trying the same thing again would end
 /// the same way, so the UI says what to do instead of offering a retry.
-enum ModelImportRefusal { wrongFileType, notEnoughStorage, unreadable }
+/// [downloadFailed] is the exception and does offer one.
+enum ModelImportRefusal {
+  wrongFileType,
+  notEnoughStorage,
+  unreadable,
+
+  /// No access token saved, or the one saved was rejected.
+  tokenRejected,
+
+  /// The token is good, but the account behind it has not been granted
+  /// access to this repository's files.
+  licenceNotAccepted,
+
+  /// Hugging Face could not be reached, or the transfer broke partway.
+  downloadFailed,
+}
 
 final class ModelImportRefused extends ModelImportEvent {
   const ModelImportRefused(this.reason, {this.fileName});
@@ -220,7 +235,36 @@ abstract interface class LocalLlmFiles {
     required List<String> extensions,
   });
 
+  /// Downloads [modelId] straight from the repository it is published in,
+  /// authenticating with [token].
+  ///
+  /// The weights are behind a licence the user accepts on the model's own
+  /// page, so there is no link that works without a token. What lands in app
+  /// storage is the same file an import would have produced, which is why
+  /// this reports the same events.
+  Stream<ModelImportEvent> download(String modelId, {required String token});
+
+  /// Follows a download already running, without starting one.
+  ///
+  /// A download outlives the screen that began it, so settings opened
+  /// while one runs needs to show the progress rather than offer to start
+  /// it again.
+  Stream<ModelImportEvent> watchDownload(String modelId);
+
+  /// The model downloading right now, or null when nothing is.
+  Future<String?> activeDownload();
+
+  /// Stops the running download. Nothing is kept.
+  Future<void> cancelDownload();
+
   Future<void> remove(String modelId);
+}
+
+/// Opens a web page outside Memora.
+abstract interface class Links {
+  /// Opens [url] in whatever handles web links. Returns false when nothing
+  /// on the phone can, so the caller can say so rather than look broken.
+  Future<bool> open(String url);
 }
 
 /// State of an on-device model download.

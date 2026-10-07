@@ -6,6 +6,7 @@ import 'package:memora_database/memora_database.dart';
 import 'package:memora_providers/memora_providers.dart';
 import 'package:uuid/uuid.dart';
 
+import '../platform/links.dart';
 import '../platform/messages.g.dart';
 import '../platform/platform.dart';
 import '../services/app_services.dart';
@@ -90,6 +91,7 @@ class MemoraAppServices implements AppServices {
     final llmRuntime = BridgeLocalLlmRuntime(host: hosts.llm);
     final llmFiles = BridgeLocalLlmFiles(
       settings: settings,
+      filesDir: filesDir,
       host: hosts.modelImport,
     );
     localLlm = LocalLlmModels(runtime: llmRuntime, files: llmFiles);
@@ -275,6 +277,9 @@ class MemoraAppServices implements AppServices {
   late final ExportService export;
   @override
   late final AppPreferences preferences;
+
+  @override
+  final Links links = PlatformLinks();
 
   bool _disposed = false;
 
