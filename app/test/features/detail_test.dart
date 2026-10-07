@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/features/detail/memory_facts.dart';
 import 'package:memora/src/features/queue/queue_screen.dart';
 import 'package:memora/src/widgets/caps_label.dart';
+import 'package:memora/src/widgets/memory_image.dart';
 import 'package:memora/src/widgets/tags.dart';
 import 'package:memora_core/memora_core.dart';
 
@@ -141,5 +142,36 @@ void main() {
     expect(find.byType(CapsLabel), findsWidgets);
     expect(find.text('IN QUEUE'), findsOneWidget);
     expect(find.text('Reprocess'), findsNothing);
+  });
+
+  testWidgets('the opened image fills the screen and sits in the middle', (
+    tester,
+  ) async {
+    await pumpApp(tester, initialLocation: '/memory/m9');
+
+    await tester.tap(find.bySemanticsLabel('Open the original image'));
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Close image'), findsWidgets);
+    expect(
+      tester.getRect(find.byType(InteractiveViewer)),
+      tester.getRect(find.byType(MaterialApp)),
+      reason: 'the viewer should be the whole screen, system bars and all',
+    );
+    expect(
+      tester
+          .widget<MemoryImageView>(
+            find.descendant(
+              of: find.byType(InteractiveViewer),
+              matching: find.byType(MemoryImageView),
+            ),
+          )
+          .alignment,
+      Alignment.center,
+      reason:
+          'the grid wants images against their top edge, but an image opened '
+          'on its own belongs in the middle, or it sits high with the spare '
+          'space under it',
+    );
   });
 }

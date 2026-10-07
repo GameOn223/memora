@@ -663,7 +663,14 @@ class _FullImage extends ConsumerWidget {
             child: InteractiveViewer(
               minScale: 1,
               maxScale: 5,
-              child: MemoryImageView(path: path, fit: BoxFit.contain),
+              // Centred, not the top alignment the grid tiles want. A
+              // screenshot that is not the shape of the screen otherwise
+              // sits against the top edge with the spare space below it.
+              child: MemoryImageView(
+                path: path,
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+              ),
             ),
           ),
           Positioned(
