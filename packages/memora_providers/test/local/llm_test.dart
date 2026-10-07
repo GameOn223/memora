@@ -335,6 +335,17 @@ void main() {
       );
     });
 
+    test('a general question gets its plain answer, not a search', () async {
+      llmFiles.install('gemma-3-1b-it-int4');
+      llm.script.add(['A kilowatt hour is a unit of energy.']);
+
+      final turn = await chatService().complete(_ask('what does kWh mean?'));
+
+      expect(turn.text, 'A kilowatt hour is a unit of energy.');
+      expect(turn.toolCalls, isEmpty);
+      expect(turn.stopReason, ChatStopReason.endTurn);
+    });
+
     test('an invented tool name is not a call', () async {
       llmFiles.install('gemma-3-1b-it-int4');
       llm.script.add(['{"tool": "ask_the_user", "arguments": {}}']);

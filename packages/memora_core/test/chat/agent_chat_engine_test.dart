@@ -138,6 +138,38 @@ void main() {
       expect(toolResult.isError, isFalse);
     });
 
+    test('a general question is answered without searching', () async {
+      final chat = ScriptedChatService([
+        answerTurn('A kilowatt hour is a unit of energy, one kW for an hour.'),
+      ]);
+      final ai = await AiHarness.create(chat: chat);
+      final engine = await engineWith(ai);
+
+      final (events, conversation) = await ask(engine, 'what does kWh mean?');
+
+      // No tool was used, and the model's own words survive intact.
+      expect(events.whereType<ChatToolUsed>(), isEmpty);
+      final message = (events.last as ChatAnswered).message;
+      expect(
+        message.content,
+        'A kilowatt hour is a unit of energy, one kW for an hour.',
+      );
+      expect(message.references, isEmpty);
+      expect(message.toolTrace, isEmpty);
+      expect(
+        message.presentation?.headline,
+        isNull,
+        reason: 'nothing was found, so there is no headline to show',
+      );
+
+      final saved = await db.messages(conversation.id);
+      expect(saved.last.content, contains('kilowatt hour'));
+
+      // The instructions have to tell it when each one applies.
+      expect(chat.requests.single.system, contains('two things'));
+      expect(chat.requests.single.system, contains('plainly general'));
+    });
+
     test('a second search in the same turn becomes the active set', () async {
       final chat = ScriptedChatService([
         toolTurn([

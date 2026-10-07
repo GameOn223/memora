@@ -14,6 +14,7 @@ All notable changes to Memora are recorded here. The format follows [Keep a Chan
 - **Problems interrupt instead of whispering.** A refused download or import is a dialog with the page that settles it on it, rather than a line of small print under the section that was easy to miss after tapping a button and watching nothing happen.
 - A small model does not always manage a tool call. When it cannot, Ask answers from search instead of from something the model made up, and the answer still names the model it tried.
 - **Categories you can actually reach.** The row above the grid is a fixed two chips and a button now, instead of a sideways list that ran off the end once you had thirty categories. The button opens a picker you can search, and you can pick several at once: Bills and Travel shows both. What the row cannot fit, the button counts.
+- **Ask answers ordinary questions too.** It used to only talk about your saved images, so anything else got told the memories do not hold the answer. Now it searches when the question could be about something you saved, and just answers when it is a general one. When both readings are possible it searches, because finding nothing is a better answer than a confident guess about your own bills.
 
 ## [0.1.1]
 
