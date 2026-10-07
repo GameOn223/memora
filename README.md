@@ -100,6 +100,8 @@ Adding a provider is a descriptor, a client and a few tests. See [docs/providers
 
 Grab the APK from [Releases](https://github.com/GameOn223/memora/releases) and install it. Android 8.0 or newer.
 
+Android may warn you about it, and Play Protect may ask twice. That is what happens to any app installed from outside the Play Store: nobody has paid Google to review it, so Android says so. The APKs are signed with Memora's own key and their checksums are published beside them in `SHA256SUMS.txt`, which is the only assurance a sideloaded build can honestly offer. Check it if you want to.
+
 ### Build from source
 
 ```bash
