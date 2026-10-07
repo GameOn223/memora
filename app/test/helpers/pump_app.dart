@@ -95,7 +95,16 @@ Future<void> scrollTo(
   Finder finder, {
   double bottomClearance = 130,
 }) async {
-  final scrollable = find.byType(Scrollable).last;
+  // Not simply the last Scrollable. A text field on the screen brings its
+  // own, which scrolls sideways, and dragging that one gets nowhere.
+  final scrollable = find
+      .byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable &&
+            (widget.axisDirection == AxisDirection.down ||
+                widget.axisDirection == AxisDirection.up),
+      )
+      .last;
   final height = tester.view.physicalSize.height / tester.view.devicePixelRatio;
   Rect? previous;
   for (var i = 0; i < 40; i++) {

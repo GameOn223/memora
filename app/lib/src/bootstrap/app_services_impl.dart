@@ -90,7 +90,9 @@ class MemoraAppServices implements AppServices {
     final llmRuntime = BridgeLocalLlmRuntime(host: hosts.llm);
     final llmFiles = BridgeLocalLlmFiles(
       settings: settings,
+      filesDir: filesDir,
       host: hosts.modelImport,
+      client: httpClient,
     );
     localLlm = LocalLlmModels(runtime: llmRuntime, files: llmFiles);
 

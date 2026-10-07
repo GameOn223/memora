@@ -115,6 +115,34 @@ class DemoLlmFiles implements LocalLlmFiles {
     yield ModelImportDone(model);
   }
 
+  /// Tokens the downloads were handed, so a test can check one came out of
+  /// the secret store rather than being invented here.
+  final List<String> tokensSeen = [];
+
+  @override
+  Stream<ModelImportEvent> download(
+    String modelId, {
+    required String token,
+  }) async* {
+    tokensSeen.add(token);
+    if (refuseNext case final reason?) {
+      refuseNext = null;
+      yield ModelImportRefused(reason);
+      return;
+    }
+    for (var done = 1; done <= 4; done++) {
+      await Future<void>.delayed(step);
+      yield ModelImportCopying(done / 4);
+    }
+    final model = InstalledLlmModel(
+      modelId: modelId,
+      relativePath: 'models/imported/$modelId.task',
+      sizeBytes: 550 * 1024 * 1024,
+    );
+    models.add(model);
+    yield ModelImportDone(model);
+  }
+
   @override
   Future<void> remove(String modelId) async =>
       models.removeWhere((model) => model.modelId == modelId);

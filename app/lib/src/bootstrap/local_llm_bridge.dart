@@ -1,9 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:memora_core/memora_core.dart';
+import 'package:memora_providers/memora_providers.dart';
 
 import '../platform/messages.g.dart' as bridge;
+
+/// A transfer that ended before the length the server declared.
+class _ShortDownload implements Exception {
+  const _ShortDownload();
+}
 
 /// [LocalLlmRuntime] over the MediaPipe runtime on the Kotlin side.
 ///
@@ -181,17 +189,29 @@ class BridgeLocalLlmRuntime implements LocalLlmRuntime {
 class BridgeLocalLlmFiles implements LocalLlmFiles {
   BridgeLocalLlmFiles({
     required this._settings,
+    required this.filesDir,
     bridge.ModelImportHostApi? host,
     Stream<bridge.ModelImportProgress>? progress,
+    http.Client? client,
   }) : _host = host ?? bridge.ModelImportHostApi(),
-       _progress = progress ?? bridge.importProgress();
+       _progress = progress ?? bridge.importProgress(),
+       _client = client ?? http.Client();
 
   /// Settings key holding `{model id: relative path}`.
   static const settingsKey = 'local_llm.imported';
 
+  /// Where a download lands, under the files dir. The same folder imports
+  /// copy into, so one listing covers both and nothing downstream has to
+  /// know which way a model arrived.
+  static const importedDir = 'models/imported';
+
+  /// Absolute path of the app files directory.
+  final String filesDir;
+
   final SettingsStore _settings;
   final bridge.ModelImportHostApi _host;
   final Stream<bridge.ModelImportProgress> _progress;
+  final http.Client _client;
 
   @override
   Future<List<InstalledLlmModel>> installed() async {
@@ -283,6 +303,110 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
       ),
     );
   }
+
+  /// Streams the weights out of the model's repository into app storage.
+  ///
+  /// Writes to a `.part` file and renames it once the whole length the
+  /// server declared has arrived, the same way an imported file lands, so a
+  /// file sitting there under its real name is a complete one. Cancelling
+  /// the returned stream abandons the transfer and leaves nothing behind.
+  @override
+  Stream<ModelImportEvent> download(
+    String modelId, {
+    required String token,
+  }) async* {
+    final spec = localLlmSpec(modelId);
+    if (spec == null) {
+      yield const ModelImportRefused(ModelImportRefusal.unreadable);
+      return;
+    }
+    final dir = Directory('$filesDir/$importedDir');
+    final target = File('${dir.path}/${spec.fileName}');
+    final part = File('${target.path}.part');
+
+    http.StreamedResponse response;
+    try {
+      await dir.create(recursive: true);
+      final request = http.Request('GET', spec.downloadUrl)
+        ..headers['Authorization'] = 'Bearer $token'
+        ..followRedirects = true;
+      response = await _client.send(request);
+    } on Object {
+      yield const ModelImportRefused(ModelImportRefusal.downloadFailed);
+      return;
+    }
+
+    if (response.statusCode != 200) {
+      await response.stream.drain<void>();
+      yield ModelImportRefused(refusalForStatus(response.statusCode, spec));
+      return;
+    }
+
+    // What the server says it is sending. Hugging Face always declares it,
+    // but a proxy in the way might not, and then there is no fraction to
+    // report and no length to check the result against.
+    final declared = response.contentLength;
+    final sink = part.openWrite();
+    var received = 0;
+    var lastReported = 0;
+    try {
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (declared != null && received - lastReported >= _reportEvery) {
+          lastReported = received;
+          yield ModelImportCopying((received / declared).clamp(0.0, 1.0));
+        }
+      }
+      await sink.close();
+      if (declared != null && received != declared) {
+        throw const _ShortDownload();
+      }
+      if (received == 0) throw const _ShortDownload();
+      await part.rename(target.path);
+    } on Object {
+      await sink.close().catchError((_) {});
+      if (part.existsSync()) await part.delete();
+      yield const ModelImportRefused(ModelImportRefusal.downloadFailed);
+      return;
+    }
+
+    final relativePath = '$importedDir/${spec.fileName}';
+    final record = await _record();
+    final previous = record[modelId];
+    if (previous != null && previous != relativePath) {
+      try {
+        await _host.deleteModel(previous);
+      } on PlatformException {
+        // It was already gone.
+      }
+    }
+    await _write({...record, modelId: relativePath});
+    yield ModelImportCopying(1);
+    yield ModelImportDone(
+      InstalledLlmModel(
+        modelId: modelId,
+        relativePath: relativePath,
+        sizeBytes: received,
+      ),
+    );
+  }
+
+  /// What an HTTP status from a gated repository means for the user.
+  ///
+  /// 401 is a token the server would not take at all. 403 is a token it
+  /// accepted from an account that may not have these files, which is the
+  /// licence, not the token.
+  static ModelImportRefusal refusalForStatus(int status, LocalLlmSpec spec) =>
+      switch (status) {
+        401 => ModelImportRefusal.tokenRejected,
+        403 || 404 => ModelImportRefusal.licenceNotAccepted,
+        _ => ModelImportRefusal.downloadFailed,
+      };
+
+  /// Bytes between progress events. A 3 GB download is then about 150 of
+  /// them rather than one per chunk.
+  static const _reportEvery = 20 << 20;
 
   @override
   Future<void> remove(String modelId) async {

@@ -75,6 +75,16 @@ adb push gemma-3-1b-it-int4.task /sdcard/Download/
 adb push gemma-3n-E2B-it-int4.litertlm /sdcard/Download/
 ```
 
+Downloading it:
+
+- [ ] Settings, on-device models: paste a Hugging Face read token, save it. The row turns from Import into Download.
+- [ ] Download Gemma 3 1B. The bar moves the whole way and the row ends up installed, with the real file size.
+- [ ] Save a token with a character missing. The download comes back saying the token was not taken, and nothing is left in `files/models/imported`.
+- [ ] Use a valid token on an account that has not accepted the Gemma licence. It says the licence, not the token, and points at the model page.
+- [ ] Try Gemma 3n E2B without a granted access request. It says that one is granted by hand, rather than telling you to try again.
+- [ ] Turn the network off halfway through a download. It reports a download that stopped, keeps nothing, and downloading again starts clean.
+- [ ] Check the token is not in an export: run an export and grep it for `hf_`.
+
 Bringing a file in:
 
 - [ ] Settings, on-device models: import a model. The system file picker opens, and the chosen file ends up listed with its real size.
