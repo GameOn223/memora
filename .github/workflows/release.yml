@@ -140,6 +140,14 @@ jobs:
             echo "install on a normal phone."
             echo
             echo "Verify your download against \`SHA256SUMS.txt\`."
+            echo
+            echo "## Android will warn you"
+            echo
+            echo "Play Protect may ask twice before it lets this install. That"
+            echo "happens to any app from outside the Play Store: nobody has paid"
+            echo "Google to review it, so Android says so. These APKs are signed"
+            echo "with Memora's own key and their checksums are above, which is the"
+            echo "only assurance a sideloaded build can honestly offer."
           } >> "$notes"
           if [ "$SIGNED" != "true" ]; then
             {
