@@ -9,6 +9,7 @@ All notable changes to Memora are recorded here. The format follows [Keep a Chan
 - **A model that runs on your phone.** Settings can import a Gemma model file and use it for Ask and for reading images, so a device-only setup answers questions in sentences instead of listing search results. The section lists Gemma 3 1B and Gemma 3n E2B with their size, what each one adds and whether this phone has the memory for it, and it says plainly when the phone does not, rather than letting a three gigabyte download fail at the end. The file comes from the model's own page, because the licence is accepted there before the download link appears. Nothing leaves the phone, answers come more slowly than from a cloud model, and it uses battery while it works.
 - Importing a model shows how far the copy has got. A model file runs to three gigabytes and the copy takes minutes, so the bar moves instead of looking stuck. A source that will not say how large the file is gets a bar with no end rather than a wrong one.
 - A small model does not always manage a tool call. When it cannot, Ask answers from search instead of from something the model made up, and the answer still names the model it tried.
+- **Categories you can actually reach.** The row above the grid is a fixed two chips and a button now, instead of a sideways list that ran off the end once you had thirty categories. The button opens a picker you can search, and you can pick several at once: Bills and Travel shows both. What the row cannot fit, the button counts.
 
 ## [0.1.1]
 
