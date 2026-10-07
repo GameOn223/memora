@@ -65,6 +65,21 @@ object ModelDownloads {
     }
 
     /**
+     * Throws away whatever a download had fetched so far.
+     *
+     * A worker the system stopped keeps its part file, because the next run
+     * asks for the rest rather than starting again. One the user cancelled
+     * is not coming back, so its gigabytes go.
+     */
+    fun discardPartials(context: Context) {
+        val dir = java.io.File(context.filesDir, ModelFileNames.IMPORTED_DIR)
+        val files = dir.listFiles() ?: return
+        for (file in files) {
+            if (file.isFile && file.name.endsWith(".part")) file.delete()
+        }
+    }
+
+    /**
      * The model downloading right now, read from WorkManager rather than
      * from memory, because the screen asking may have been built after the
      * process was restarted under the download.

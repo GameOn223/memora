@@ -83,6 +83,9 @@ Downloading it:
 - [ ] Leave it minimised for several minutes with other apps open. The download finishes rather than being killed, and the notification says it is ready.
 - [ ] Tap Cancel on the notification. The download stops, the notification goes, and `adb shell run-as io.github.gameon223.memora ls files/models/imported` shows nothing left behind.
 - [ ] Reopen settings while a download runs. The row shows it downloading with the bar where it should be, and does not start a second one.
+- [ ] Download the 3 GB model and leave the phone alone until it finishes, with Memora closed the whole time. Reopen settings: it is installed, not offered for download again.
+- [ ] Let a long download be stopped by the system (or force-stop Memora mid-download). The next run picks up from where it got to rather than starting again: `adb shell run-as io.github.gameon223.memora ls -l files/models/imported` shows a `.part` file that keeps growing rather than restarting at zero.
+- [ ] Cancel from the notification during a 3 GB download. The .part file goes, rather than sitting there holding gigabytes.
 - [ ] Force-stop Memora mid-download, then reopen it. Nothing claims to be downloading that is not, and the model is either installed or offered again.
 - [ ] Turn notifications off for Memora, then download. It still works, which is the point of the toast fallback.
 - [ ] Save a token with a character missing. The download comes back saying the token was not taken, and nothing is left in `files/models/imported`.

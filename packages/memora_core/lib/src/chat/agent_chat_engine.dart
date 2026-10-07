@@ -274,16 +274,40 @@ class AgentChatEngine implements ChatEngine {
       );
       final definitions = [for (final tool in tools) tool.definition];
 
+      final streaming = CitationStreamFilter();
       for (var round = 0; round <= _maxToolRounds; round++) {
-        final turn = await chat.service.complete(
-          // A copy, so an adapter that keeps the request does not see the
-          // entries this loop adds later.
-          ChatRequest(
-            system: system,
-            entries: [...entries],
-            tools: definitions,
-          ),
+        // A copy, so an adapter that keeps the request does not see the
+        // entries this loop adds later.
+        final request = ChatRequest(
+          system: system,
+          entries: [...entries],
+          tools: definitions,
         );
+        final service = chat.service;
+        final ChatTurn turn;
+        if (service is StreamingChatService) {
+          ChatTurn? finished;
+          await for (final event in service.stream(request)) {
+            switch (event) {
+              case ChatTextDelta(:final text):
+                final shown = streaming.add(text);
+                if (shown.isNotEmpty) yield ChatAnswerDelta(shown);
+              case ChatTurnDone(:final turn):
+                finished = turn;
+            }
+          }
+          final tail = streaming.finish();
+          if (tail.isNotEmpty) yield ChatAnswerDelta(tail);
+          turn =
+              finished ??
+              const ChatTurn(
+                text: '',
+                toolCalls: [],
+                stopReason: ChatStopReason.other,
+              );
+        } else {
+          turn = await service.complete(request);
+        }
         if (turn.toolCalls.isEmpty) {
           answerText = turn.text.trim();
           break;
@@ -429,13 +453,26 @@ class AgentChatEngine implements ChatEngine {
     ];
   }
 
-  String _friendlyFailure(AiException error, String providerName) =>
-      switch (error) {
-        AiTransientException() => '$providerName did not respond. Try again.',
-        AiConfigurationException() =>
-          '$providerName refused the request. Check the API key and model '
-              'in settings.',
-        AiContentException() =>
-          '$providerName could not answer this question. Try rewording it.',
-      };
+  /// What to show when a provider fails.
+  ///
+  /// A configuration failure carries the only thing worth reading, so it is
+  /// passed through rather than replaced. The template it used to print
+  /// said to check the API key, which is no help at all for a model on the
+  /// phone, and it buried what the runtime actually said.
+  String _friendlyFailure(AiException error, String providerName) {
+    final detail = error.message.trim();
+    return switch (error) {
+      // The reason matters here too. "did not respond" is true of a model
+      // that failed to load and of a server that timed out, and the two
+      // need different things from the user.
+      AiTransientException() when detail.isEmpty =>
+        '$providerName did not respond. Try again.',
+      AiTransientException() => '$providerName: $detail',
+      AiConfigurationException() when detail.isEmpty =>
+        '$providerName refused the request. Check the model in settings.',
+      AiConfigurationException() => '$providerName: $detail',
+      AiContentException() =>
+        '$providerName could not answer this question. Try rewording it.',
+    };
+  }
 }

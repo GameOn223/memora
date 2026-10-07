@@ -13,6 +13,7 @@ import '../../theme/tokens.dart';
 import '../../widgets/bordered_list.dart';
 import '../../widgets/caps_label.dart';
 import '../../widgets/external_link.dart';
+import '../../widgets/llm_loading_bar.dart';
 import '../../widgets/memory_labels.dart';
 import '../../widgets/outline_action.dart';
 import '../../widgets/problem_dialog.dart';
@@ -61,6 +62,9 @@ class OnDeviceLlmSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: Space.s8),
+        // Selecting a model loads it, and that is seconds of nothing
+        // happening unless it is said out loud.
+        const LlmLoadingBar(),
         SettingsSection(
           label: 'Chat and vision on this device',
           footnote: _footnote(view),
@@ -78,7 +82,8 @@ class OnDeviceLlmSection extends ConsumerWidget {
                   onDownload: () =>
                       unawaited(controller.download(model.spec.id)),
                   onImport: () => unawaited(controller.import(model.spec.id)),
-                  onRemove: () => unawaited(controller.remove(model.spec.id)),
+                  onRemove: () =>
+                      unawaited(_confirmRemove(context, controller, model)),
                   onCancel: () => unawaited(controller.cancelDownload()),
                 ),
               if (view.models.any((model) => model.canImport))
@@ -92,6 +97,38 @@ class OnDeviceLlmSection extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// Asks before deleting, because the file took a download measured in
+  /// gigabytes and the button sits where "Import" sat a moment ago.
+  static Future<void> _confirmRemove(
+    BuildContext context,
+    LocalLlmController controller,
+    LocalLlmStatus model,
+  ) async {
+    final size = byteSize(model.installed?.sizeBytes ?? 0);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Remove ${model.spec.displayName}?'),
+        content: Text(
+          'The $size file is deleted from this phone. Getting it back means '
+          'downloading it again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await controller.remove(model.spec.id);
   }
 
   static String _footnote(LocalLlmView view) {

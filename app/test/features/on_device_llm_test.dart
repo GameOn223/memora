@@ -91,6 +91,19 @@ void main() {
     expect(find.text('REMOVE'), findsOneWidget);
 
     await tester.tap(find.text('REMOVE'));
+    await tester.pumpAndSettle();
+
+    // Asked first. The file took a download measured in hundreds of
+    // megabytes and the button sits where Import sat a moment ago.
+    expect(find.text('Remove Gemma 3 1B?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(services.llmFiles.models, isNotEmpty);
+
+    await openModels(tester);
+    await tester.tap(find.text('REMOVE'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
     await tester.pumpAndSettle(const Duration(milliseconds: 50));
 
     expect(services.llmFiles.models, isEmpty);

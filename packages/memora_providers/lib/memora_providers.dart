@@ -27,6 +27,7 @@ export 'src/local/descriptor.dart';
 export 'src/local/llm_chat.dart' show LocalLlmChatService;
 export 'src/local/llm_models.dart';
 export 'src/local/llm_prompt.dart';
+export 'src/local/llm_reply_filter.dart' show LocalReplyFilter;
 export 'src/local/llm_session.dart' show LocalLlmSession;
 export 'src/local/llm_vision.dart' show LocalLlmVisionService;
 export 'src/local/local_runtime.dart';

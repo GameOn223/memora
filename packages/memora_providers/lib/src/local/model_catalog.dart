@@ -190,7 +190,21 @@ class LocalLlmSpec {
   final List<String> fileExtensions;
 
   /// Context size the runtime is loaded with, covering prompt and reply.
+  ///
+  /// This is a request, not a fact about the file. A `.task` bundle is built
+  /// with a KV cache of a fixed size, which its name sometimes states
+  /// (`ekv1280`) and sometimes does not, and MediaPipe refuses to load one
+  /// when asked for more than it was built for. Its own default is 512. So
+  /// a load that fails falls back through [tokenFallbacks] rather than
+  /// leaving the model unusable over a number.
   final int maxTokens;
+
+  /// Context sizes to try, largest first, until one loads.
+  List<int> get tokenFallbacks => [
+    maxTokens,
+    for (final smaller in const [4096, 2048, 1280, 512])
+      if (smaller < maxTokens) smaller,
+  ];
 }
 
 /// Gemma 3 1B, 4-bit, text only. The smallest model that answers in
@@ -231,6 +245,18 @@ const gemma3nE2b = LocalLlmSpec(
 
 /// Generative models settings offers, smallest first.
 const localLlmCatalog = [gemma3_1b, gemma3nE2b];
+
+/// The catalog entry whose file is at [relativePath], if any.
+///
+/// The runtime reports the path it is loading, not the catalog id, so this
+/// is how the path becomes a name worth showing someone.
+LocalLlmSpec? localLlmSpecForPath(String relativePath) {
+  final name = relativePath.split('/').last;
+  for (final spec in localLlmCatalog) {
+    if (spec.fileName == name) return spec;
+  }
+  return null;
+}
 
 LocalLlmSpec? localLlmSpec(String id) {
   for (final spec in localLlmCatalog) {

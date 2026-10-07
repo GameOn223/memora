@@ -761,6 +761,52 @@ void main() {
       expect(host.cancels, hasLength(1));
     });
 
+    test('a download that finished unseen is still installed', () async {
+      // Three gigabytes takes minutes and Memora is in the background for
+      // most of them, so the worker renames the file with nothing listening
+      // and no record is ever written. The file has to speak for itself or
+      // the model looks like it vanished and has to be fetched again.
+      host.files.add(_file('gemma-3n-E2B-it-int4.task', size: 3 << 30));
+
+      final installed = await files.installed();
+
+      expect(installed.single.modelId, 'gemma-3n-e2b-it-int4');
+      expect(
+        installed.single.relativePath,
+        'models/imported/gemma-3n-E2B-it-int4.task',
+      );
+      expect(installed.single.sizeBytes, 3 << 30);
+      expect(settings.values, isNotEmpty, reason: 'and it is written down');
+    });
+
+    test('an unseen download can be removed again', () async {
+      host.files.add(_file('gemma-3n-E2B-it-int4.task', size: 3 << 30));
+
+      await files.remove('gemma-3n-e2b-it-int4');
+
+      expect(host.deletes, ['models/imported/gemma-3n-E2B-it-int4.task']);
+      expect(await files.installed(), isEmpty);
+    });
+
+    test('an imported file keeps its own name and its record', () async {
+      // Not a catalog name, so only the record says what it is.
+      host.files.add(_file('my-copy.task', size: 550));
+      await settings.write(BridgeLocalLlmFiles.settingsKey, {
+        'gemma-3-1b-it-int4': 'models/imported/my-copy.task',
+      });
+
+      final installed = await files.installed();
+
+      expect(installed.single.modelId, 'gemma-3-1b-it-int4');
+      expect(installed.single.relativePath, 'models/imported/my-copy.task');
+    });
+
+    test('a file that is neither is ignored', () async {
+      host.files.add(_file('something-else.task', size: 100));
+
+      expect(await files.installed(), isEmpty);
+    });
+
     test('downloading over an earlier file removes the old one', () async {
       await settings.write(BridgeLocalLlmFiles.settingsKey, {
         'gemma-3-1b-it-int4': 'models/imported/old.task',

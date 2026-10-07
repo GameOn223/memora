@@ -21,6 +21,8 @@ class ChatViewState {
     this.lastQuestion,
     this.focusMemoryId,
     this.loaded = false,
+    this.streamed,
+    this.retrying = false,
   });
 
   final String? conversationId;
@@ -42,6 +44,15 @@ class ChatViewState {
   /// False until the first load finishes, so the screen can stay quiet.
   final bool loaded;
 
+  /// The answer so far, while a provider that streams is producing it. Null
+  /// when nothing is streaming. Replaced by the saved message at the end.
+  final String? streamed;
+
+  /// True from tapping Retry until the attempt reports back. The error stays
+  /// on screen meanwhile, saying Retrying, because a failure that comes
+  /// straight back otherwise looks like the button did nothing.
+  final bool retrying;
+
   bool get isEmpty => messages.isEmpty && !thinking;
 
   ChatViewState copyWith({
@@ -55,10 +66,13 @@ class ChatViewState {
     String? lastQuestion,
     String? focusMemoryId,
     bool? loaded,
+    String? streamed,
+    bool? retrying,
     bool clearProgress = false,
     bool clearError = false,
     bool clearFocus = false,
     bool clearConversation = false,
+    bool clearStreamed = false,
   }) {
     return ChatViewState(
       conversationId: clearConversation
@@ -73,6 +87,8 @@ class ChatViewState {
       lastQuestion: lastQuestion ?? this.lastQuestion,
       focusMemoryId: clearFocus ? null : focusMemoryId ?? this.focusMemoryId,
       loaded: loaded ?? this.loaded,
+      streamed: clearStreamed ? null : streamed ?? this.streamed,
+      retrying: retrying ?? this.retrying,
     );
   }
 }
@@ -137,6 +153,7 @@ class ChatController extends Notifier<ChatViewState> {
       lastQuestion: question,
       clearError: true,
       clearProgress: true,
+      clearStreamed: true,
       loaded: true,
     );
     final services = ref.read(appServicesProvider);
@@ -162,17 +179,40 @@ class ChatController extends Notifier<ChatViewState> {
     await _ask(conversationId, question);
   }
 
+  /// How long a retry says it is retrying for, at the least.
+  ///
+  /// A local model can fail again in a few milliseconds. Without a floor the
+  /// screen changes and changes back faster than anyone can see, and the
+  /// button looks broken rather than unlucky.
+  static const retryFeedback = Duration(milliseconds: 450);
+
   /// Asks the last question again after a failure.
+  ///
+  /// The error stays up, marked as retrying, rather than being cleared.
+  /// Clearing it meant a failure that returned at once was invisible.
   Future<void> retry() async {
     final question = state.lastQuestion;
     final conversationId = state.conversationId;
     if (question == null || conversationId == null || state.thinking) return;
+    _retryFloor = Future<void>.delayed(retryFeedback);
     state = state.copyWith(
       thinking: true,
-      clearError: true,
+      retrying: true,
       clearProgress: true,
+      clearStreamed: true,
     );
     await _ask(conversationId, question);
+  }
+
+  /// Held open so a retry's outcome is not applied before it has been seen.
+  Future<void>? _retryFloor;
+
+  /// Waits for the retry floor, once, if one is running.
+  Future<void> _awaitRetryFloor() async {
+    final floor = _retryFloor;
+    if (floor == null) return;
+    _retryFloor = null;
+    await floor;
   }
 
   Future<void> _ask(String conversationId, String question) async {
@@ -189,12 +229,26 @@ class ChatController extends Notifier<ChatViewState> {
             if (!ref.mounted || token != _askToken) return;
             switch (progress) {
               case ChatToolUsed(:final entry):
+                // Something is happening, so the old error can go.
                 state = state.copyWith(
+                  retrying: false,
+                  clearError: true,
                   progress: entry.summary.isEmpty
                       ? entry.tool
                       : '${entry.tool} · ${entry.summary}',
                 );
+              case ChatAnswerDelta(:final text):
+                // Shown as it arrives. The saved message replaces it when
+                // the turn lands, so this is never the version kept.
+                state = state.copyWith(
+                  streamed: (state.streamed ?? '') + text,
+                  retrying: false,
+                  clearError: true,
+                  clearProgress: true,
+                );
               case ChatAnswered():
+                await _awaitRetryFloor();
+                if (!ref.mounted || token != _askToken) return;
                 final messages = await services.conversations.messages(
                   conversationId,
                 );
@@ -202,17 +256,26 @@ class ChatController extends Notifier<ChatViewState> {
                 state = state.copyWith(
                   messages: messages,
                   thinking: false,
+                  retrying: false,
                   clearProgress: true,
                   clearFocus: true,
+                  clearStreamed: true,
                 );
                 await _loadSources(messages);
                 await ref.read(dataVersionProvider.notifier).check();
               case ChatFailed(:final message, :final retryable):
+                // Not before the retry has been on screen long enough to
+                // see, or a failure that returns at once looks like the
+                // button did nothing.
+                await _awaitRetryFloor();
+                if (!ref.mounted || token != _askToken) return;
                 state = state.copyWith(
                   thinking: false,
                   error: message,
                   retryable: retryable,
+                  retrying: false,
                   clearProgress: true,
+                  clearStreamed: true,
                 );
             }
           },
@@ -224,7 +287,9 @@ class ChatController extends Notifier<ChatViewState> {
               thinking: false,
               error: 'Something went wrong. Try again.',
               retryable: true,
+              retrying: false,
               clearProgress: true,
+              clearStreamed: true,
             );
           },
           onDone: () {

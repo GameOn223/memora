@@ -93,6 +93,13 @@ class ScriptedLlmRuntime implements LocalLlmRuntime {
   int unloads = 0;
   String? _path;
 
+  /// Context sizes this fake refuses, so a fallback can be exercised.
+  final Set<int> refuseTokens = {};
+
+  /// Thrown by [load] whatever the context size, for the failures that are
+  /// not about the size at all.
+  Object? loadError;
+
   @override
   Future<void> load(
     String relativeModelPath, {
@@ -100,6 +107,13 @@ class ScriptedLlmRuntime implements LocalLlmRuntime {
     int maxTokens = 1024,
   }) async {
     loads.add((path: relativeModelPath, vision: vision, maxTokens: maxTokens));
+    if (loadError case final error?) throw error;
+    if (refuseTokens.contains(maxTokens)) {
+      throw AiConfigurationException(
+        "Couldn't load that model file. Max cache size is smaller.",
+        providerId: 'local',
+      );
+    }
     _path = relativeModelPath;
   }
 
@@ -150,6 +164,11 @@ class ScriptedLlmRuntime implements LocalLlmRuntime {
     );
     return controller.stream;
   }
+
+  /// No controller to close: these fakes outlive no test, and nothing here
+  /// reports a load in progress.
+  @override
+  Stream<LlmLoading?> get loading => const Stream<LlmLoading?>.empty();
 
   @override
   Future<DeviceMemory> memory() async => memoryState;

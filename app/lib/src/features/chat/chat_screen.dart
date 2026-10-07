@@ -8,7 +8,6 @@ import 'package:memora_core/memora_core.dart';
 
 import '../../routing/router.dart';
 import '../../state/chat_controller.dart';
-import '../../state/memories.dart';
 import '../../state/settings.dart';
 import '../../theme/memora_colors.dart';
 import '../../theme/memora_icons.dart';
@@ -16,8 +15,8 @@ import '../../theme/text_styles.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/caps_label.dart';
 import '../../widgets/fading_rule.dart';
+import '../../widgets/llm_loading_bar.dart';
 import '../../widgets/memora_icon_button.dart';
-import '../../widgets/memory_labels.dart';
 import '../../widgets/motion.dart';
 import '../../widgets/screen_header.dart';
 import '../../widgets/tap_area.dart';
@@ -64,14 +63,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final c = context.colors;
     final state = ref.watch(chatControllerProvider);
     final availability = ref.watch(chatAvailabilityProvider).value;
-    final total = ref.watch(storageStatsProvider).value?.memoryCount ?? 0;
     final messages = visibleMessages(state.messages);
     // Keep the newest turn in view as messages, progress and errors land.
+    // The streamed length is in here so the view follows the text as it is
+    // written, rather than once at the end.
     final signature = Object.hash(
       messages.length,
       state.thinking,
       state.progress,
       state.error,
+      state.streamed?.length,
     );
     if (signature != _lastSignature) {
       _lastSignature = signature;
@@ -133,15 +134,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         );
                       }
                       if (state.thinking) {
-                        return _ThinkingRow(
-                          text:
-                              state.progress ??
-                              'Searching ${memoryCount(total)}',
-                        );
+                        // Text as it arrives, once there is any. The saved
+                        // message replaces it when the turn lands.
+                        if (state.streamed case final streamed?) {
+                          return _StreamingAnswer(text: streamed);
+                        }
+                        // A retry keeps the error up and says it is trying,
+                        // so a failure that comes straight back is still a
+                        // visible change rather than a flicker.
+                        if (state.retrying && state.error != null) {
+                          return _ErrorRow(
+                            message: state.error!,
+                            retryable: true,
+                            retrying: true,
+                            onRetry: () {},
+                          );
+                        }
+                        // Not "Searching N memories" until something has
+                        // actually searched. Asking what two and five make
+                        // does not go near the memories, and saying it did
+                        // is a small lie that makes the app look confused.
+                        return _ThinkingRow(text: state.progress ?? 'Thinking');
                       }
                       return _ErrorRow(
                         message: state.error!,
                         retryable: state.retryable,
+                        retrying: false,
                         onRetry: () => unawaited(
                           ref.read(chatControllerProvider.notifier).retry(),
                         ),
@@ -149,6 +167,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
+          // Right above the composer, where someone waiting is looking.
+          const LlmLoadingBar(),
           _Composer(
             controller: _input,
             onSend: _send,
@@ -189,6 +209,32 @@ String providerLabel(ChatAvailability? availability) {
   return '${availability.providerName} · ${availability.modelId}';
 }
 
+/// The answer while it is still being written.
+///
+/// Styled like the finished message so the text does not jump when the saved
+/// one replaces it, with a pulse to say more is coming.
+class _StreamingAnswer extends StatelessWidget {
+  const _StreamingAnswer({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Semantics(
+      liveRegion: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(text, style: MemoraText.style(14, height: 1.55, color: c.text)),
+          const SizedBox(height: Space.s3),
+          const PulseDot(),
+        ],
+      ),
+    );
+  }
+}
+
 class _ThinkingRow extends StatelessWidget {
   const _ThinkingRow({required this.text});
 
@@ -216,11 +262,16 @@ class _ErrorRow extends StatelessWidget {
   const _ErrorRow({
     required this.message,
     required this.retryable,
+    required this.retrying,
     required this.onRetry,
   });
 
   final String message;
   final bool retryable;
+
+  /// True while the attempt is under way, which the button says and does
+  /// not take another tap for.
+  final bool retrying;
   final VoidCallback onRetry;
 
   @override
@@ -246,8 +297,8 @@ class _ErrorRow extends StatelessWidget {
           if (retryable) ...[
             const SizedBox(width: Space.s3),
             TapArea(
-              onTap: onRetry,
-              semanticLabel: 'Retry the question',
+              onTap: retrying ? null : onRetry,
+              semanticLabel: retrying ? 'Retrying' : 'Retry the question',
               minSize: 0,
               child: Container(
                 height: 28,
@@ -255,12 +306,28 @@ class _ErrorRow extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(Radii.sm),
-                  border: Border.all(color: c.accent),
+                  border: Border.all(color: retrying ? c.line : c.accent),
                 ),
-                child: Text(
-                  'Retry',
-                  style: MemoraText.style(12, medium: true, color: c.accentInk),
-                ),
+                child: retrying
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const PulseDot(),
+                          const SizedBox(width: Space.s2),
+                          Text(
+                            'Retrying',
+                            style: MemoraText.style(12, color: c.muted),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        'Retry',
+                        style: MemoraText.style(
+                          12,
+                          medium: true,
+                          color: c.accentInk,
+                        ),
+                      ),
               ),
             ),
           ],

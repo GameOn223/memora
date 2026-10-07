@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/features/detail/detail_screen.dart';
 import 'package:memora/src/routing/router.dart';
+import 'package:memora/src/state/chat_controller.dart';
 
 import '../helpers/pump_app.dart';
 
@@ -79,7 +80,10 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Send'));
     await tester.pump();
     await tester.pump();
-    expect(find.text('SEARCHING 17 MEMORIES'), findsOneWidget);
+    // Before anything has searched, it says it is thinking. Claiming a
+    // search that has not happened is wrong for "what is 2 plus 5".
+    expect(find.text('THINKING'), findsOneWidget);
+    expect(find.textContaining('SEARCHING'), findsNothing);
 
     await tester.pumpAndSettle();
     expect(services.chat.asked, ['which one was highest?']);
@@ -97,12 +101,44 @@ void main() {
     expect(find.text('Groq did not respond. Try again.'), findsOneWidget);
 
     await tester.tap(find.text('Retry'));
+    await tester.pump();
+
+    // The attempt says so, on the button, with the error still up. A retry
+    // that cleared the error and failed again at once was invisible.
+    expect(find.text('Retrying'), findsOneWidget);
+    expect(find.text('Groq did not respond. Try again.'), findsOneWidget);
+
+    // Past the floor the retry is held on screen for.
+    await tester.pump(ChatController.retryFeedback);
     await tester.pumpAndSettle();
 
+    expect(find.text('Retrying'), findsNothing);
     expect(find.text('Groq did not respond. Try again.'), findsNothing);
     expect(services.chat.asked.length, 2);
     // The question is only shown once, even though it was asked twice.
     expect(find.text('how much did I spend?'), findsOneWidget);
+  });
+
+  testWidgets('a retry that fails again still shows it tried', (tester) async {
+    final services = await pumpApp(tester, initialLocation: Routes.ask);
+    services.chat.failNextAsk = true;
+
+    await tester.enterText(find.byType(TextField), 'how much did I spend?');
+    await tester.tap(find.bySemanticsLabel('Send'));
+    await tester.pumpAndSettle();
+
+    // Fails again, as fast as the first time.
+    services.chat.failNextAsk = true;
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(find.text('Retrying'), findsOneWidget);
+
+    // Held on screen long enough to be seen, then the outcome lands.
+    await tester.pump(ChatController.retryFeedback);
+    await tester.pumpAndSettle();
+    expect(find.text('Retrying'), findsNothing);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(services.chat.asked.length, 2);
   });
 
   testWidgets('the history sheet starts a new conversation', (tester) async {
@@ -120,5 +156,53 @@ void main() {
       findsNothing,
     );
     expect(find.text('Ask about anything you saved.'), findsOneWidget);
+  });
+
+  testWidgets('a streamed answer appears as it is written', (tester) async {
+    final services = demoServices();
+    services.chat.streamAnswer = true;
+    services.chat.step = const Duration(milliseconds: 20);
+    await pumpApp(tester, services: services, initialLocation: Routes.ask);
+
+    await tester.enterText(find.byType(TextField), 'which one was highest?');
+    await tester.tap(find.bySemanticsLabel('Send'));
+    await tester.pump();
+
+    // Part way through: some of the answer is on screen and the row no
+    // longer claims to be thinking.
+    for (var tick = 0; tick < 4; tick++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.text('THINKING'), findsNothing);
+    expect(find.textContaining('The highest'), findsWidgets);
+
+    // Let the rest of the words and their timers run out.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    // The saved message is what is left.
+    expect(find.textContaining('The highest was August 2026'), findsWidgets);
+  });
+
+  testWidgets('citation markers never reach the screen while streaming', (
+    tester,
+  ) async {
+    final services = demoServices();
+    services.chat.streamAnswer = true;
+    services.chat.step = const Duration(milliseconds: 20);
+    await pumpApp(tester, services: services, initialLocation: Routes.ask);
+
+    await tester.enterText(find.byType(TextField), 'which one was highest?');
+    await tester.tap(find.bySemanticsLabel('Send'));
+
+    for (var tick = 0; tick < 30; tick++) {
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(
+        find.textContaining('[[m:'),
+        findsNothing,
+        reason: 'half a citation marker must never be shown',
+      );
+    }
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
   });
 }

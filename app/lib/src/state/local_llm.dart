@@ -51,6 +51,12 @@ class LocalLlmView {
   }
 }
 
+/// Fires while a generative model is being read into memory, and again with
+/// null once it is loaded or has failed.
+final llmLoadingProvider = StreamProvider<LlmLoading?>(
+  (ref) => ref.watch(appServicesProvider).localLlm.loading,
+);
+
 final localLlmProvider =
     AsyncNotifierProvider<LocalLlmController, LocalLlmView>(
       LocalLlmController.new,

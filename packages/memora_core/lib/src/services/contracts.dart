@@ -169,6 +169,18 @@ final class ChatToolUsed extends ChatProgress {
   final ToolTraceEntry entry;
 }
 
+/// Text of the answer as it is produced, when the provider can stream.
+///
+/// [text] is new text, not the answer so far. Citation markers are already
+/// out, so this is safe to show as it arrives. The answer that lands in
+/// [ChatAnswered] is the one that was saved, and it is what the pieces add
+/// up to, so a view can either append these or wait for that.
+final class ChatAnswerDelta extends ChatProgress {
+  const ChatAnswerDelta(this.text);
+
+  final String text;
+}
+
 /// The final assistant message, already saved.
 final class ChatAnswered extends ChatProgress {
   const ChatAnswered(this.message);
