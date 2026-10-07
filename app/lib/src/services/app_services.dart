@@ -32,6 +32,10 @@ abstract interface class AppServices {
   LocalLlmModels get localLlm;
   ExportService get export;
   AppPreferences get preferences;
+
+  /// Opens a web page outside Memora: a model's licence, a provider's key
+  /// settings. Every address is one Memora names itself.
+  Links get links;
 }
 
 // ---------------------------------------------------------------------------

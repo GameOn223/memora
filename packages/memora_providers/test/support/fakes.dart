@@ -93,6 +93,13 @@ class ScriptedLlmRuntime implements LocalLlmRuntime {
   int unloads = 0;
   String? _path;
 
+  /// Context sizes this fake refuses, so a fallback can be exercised.
+  final Set<int> refuseTokens = {};
+
+  /// Thrown by [load] whatever the context size, for the failures that are
+  /// not about the size at all.
+  Object? loadError;
+
   @override
   Future<void> load(
     String relativeModelPath, {
@@ -100,6 +107,13 @@ class ScriptedLlmRuntime implements LocalLlmRuntime {
     int maxTokens = 1024,
   }) async {
     loads.add((path: relativeModelPath, vision: vision, maxTokens: maxTokens));
+    if (loadError case final error?) throw error;
+    if (refuseTokens.contains(maxTokens)) {
+      throw AiConfigurationException(
+        "Couldn't load that model file. Max cache size is smaller.",
+        providerId: 'local',
+      );
+    }
     _path = relativeModelPath;
   }
 
@@ -151,6 +165,11 @@ class ScriptedLlmRuntime implements LocalLlmRuntime {
     return controller.stream;
   }
 
+  /// No controller to close: these fakes outlive no test, and nothing here
+  /// reports a load in progress.
+  @override
+  Stream<LlmLoading?> get loading => const Stream<LlmLoading?>.empty();
+
   @override
   Future<DeviceMemory> memory() async => memoryState;
 }
@@ -196,6 +215,44 @@ class FakeLocalLlmFiles implements LocalLlmFiles {
     yield const ModelImportCopying(0.5);
     install(modelId);
     yield ModelImportDone(models.last);
+  }
+
+  /// Events the next [download] emits. The default accepts the file.
+  List<ModelImportEvent>? downloadScript;
+  final List<({String modelId, String token})> downloads = [];
+
+  @override
+  Stream<ModelImportEvent> download(
+    String modelId, {
+    required String token,
+  }) async* {
+    downloads.add((modelId: modelId, token: token));
+    final script = downloadScript;
+    if (script != null) {
+      downloadScript = null;
+      yield* Stream.fromIterable(script);
+      return;
+    }
+    yield const ModelImportCopying(0.5);
+    install(modelId);
+    yield ModelImportDone(models.last);
+  }
+
+  /// What [activeDownload] reports.
+  String? running;
+  var cancelled = false;
+
+  @override
+  Stream<ModelImportEvent> watchDownload(String modelId) =>
+      download(modelId, token: 'watching');
+
+  @override
+  Future<String?> activeDownload() async => running;
+
+  @override
+  Future<void> cancelDownload() async {
+    cancelled = true;
+    running = null;
   }
 
   @override

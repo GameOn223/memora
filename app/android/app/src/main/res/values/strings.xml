@@ -26,5 +26,12 @@
     <string name="share_nothing">Nothing to save. Memora only accepts images.</string>
 
     <string name="processing">Understanding images</string>
+    <string name="downloading_model">Downloading %1$s</string>
+    <string name="downloading_model_percent">%1$d%% of %2$s</string>
+    <string name="downloading_model_unknown">Downloading, %1$s so far</string>
+    <string name="download_cancel">Cancel</string>
+    <string name="download_failed_title">Download stopped</string>
+    <string name="download_failed">%1$s did not finish downloading. Nothing was kept.</string>
+    <string name="download_done">%1$s is ready</string>
     <string name="ingesting">Filing new images</string>
 </resources>

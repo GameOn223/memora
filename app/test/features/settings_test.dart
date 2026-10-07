@@ -171,4 +171,43 @@ void main() {
 
     expect(await services.preferences.theme(), ThemePreference.light);
   });
+
+  testWidgets('a key screen links straight to that provider key page', (
+    tester,
+  ) async {
+    final services = demoServices();
+    await pumpApp(
+      tester,
+      services: services,
+      initialLocation: Routes.providerKey('groq'),
+    );
+
+    // The exact page, not the console home page someone then has to search.
+    await scrollTo(tester, find.text('Get a Groq key'));
+    await tester.tap(find.text('Get a Groq key'));
+    await tester.pumpAndSettle();
+    expect(services.links.opened, ['https://console.groq.com/keys']);
+  });
+
+  testWidgets("Gemini gets its own key page, not Groq's", (tester) async {
+    final services = demoServices();
+    await pumpApp(
+      tester,
+      services: services,
+      initialLocation: Routes.providerKey('gemini'),
+    );
+
+    await scrollTo(tester, find.text('Get a Google Gemini key'));
+    await tester.tap(find.text('Get a Google Gemini key'));
+    await tester.pumpAndSettle();
+    expect(services.links.opened, ['https://aistudio.google.com/apikey']);
+  });
+
+  testWidgets('a provider that needs no key offers no key link', (
+    tester,
+  ) async {
+    await pumpApp(tester, initialLocation: Routes.providerKey('ollama'));
+
+    expect(find.textContaining('Get a'), findsNothing);
+  });
 }

@@ -75,6 +75,25 @@ adb push gemma-3-1b-it-int4.task /sdcard/Download/
 adb push gemma-3n-E2B-it-int4.litertlm /sdcard/Download/
 ```
 
+Downloading it:
+
+- [ ] Settings, on-device models: paste a Hugging Face read token, save it. The row turns from Import into Download.
+- [ ] Download Gemma 3 1B. The bar moves the whole way and the row ends up installed, with the real file size.
+- [ ] Minimise Memora while the download runs. A notification shows the model name and the percentage, and it keeps climbing.
+- [ ] Leave it minimised for several minutes with other apps open. The download finishes rather than being killed, and the notification says it is ready.
+- [ ] Tap Cancel on the notification. The download stops, the notification goes, and `adb shell run-as io.github.gameon223.memora ls files/models/imported` shows nothing left behind.
+- [ ] Reopen settings while a download runs. The row shows it downloading with the bar where it should be, and does not start a second one.
+- [ ] Download the 3 GB model and leave the phone alone until it finishes, with Memora closed the whole time. Reopen settings: it is installed, not offered for download again.
+- [ ] Let a long download be stopped by the system (or force-stop Memora mid-download). The next run picks up from where it got to rather than starting again: `adb shell run-as io.github.gameon223.memora ls -l files/models/imported` shows a `.part` file that keeps growing rather than restarting at zero.
+- [ ] Cancel from the notification during a 3 GB download. The .part file goes, rather than sitting there holding gigabytes.
+- [ ] Force-stop Memora mid-download, then reopen it. Nothing claims to be downloading that is not, and the model is either installed or offered again.
+- [ ] Turn notifications off for Memora, then download. It still works, which is the point of the toast fallback.
+- [ ] Save a token with a character missing. The download comes back saying the token was not taken, and nothing is left in `files/models/imported`.
+- [ ] Use a valid token on an account that has not accepted the Gemma licence. It says the licence, not the token, and points at the model page.
+- [ ] Try Gemma 3n E2B without a granted access request. It says that one is granted by hand, rather than telling you to try again.
+- [ ] Turn the network off halfway through a download. It reports a download that stopped, keeps nothing, and downloading again starts clean.
+- [ ] Check the token is not in an export: run an export and grep it for `hf_`.
+
 Bringing a file in:
 
 - [ ] Settings, on-device models: import a model. The system file picker opens, and the chosen file ends up listed with its real size.

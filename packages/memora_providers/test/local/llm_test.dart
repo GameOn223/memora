@@ -335,6 +335,67 @@ void main() {
       );
     });
 
+    test('a context size the file cannot hold is tried smaller', () async {
+      llmFiles.install('gemma-3-1b-it-int4');
+      // The .task bundle was built for less than the catalog asks for.
+      llm.refuseTokens.addAll({4096, 2048});
+      llm.script.add(['Hello.']);
+
+      final turn = await chatService().complete(_ask('hi', tools: const []));
+
+      expect(turn.text, 'Hello.');
+      expect(llm.loads.map((l) => l.maxTokens), [
+        4096,
+        2048,
+        1280,
+      ], reason: 'largest first, until one loads');
+    });
+
+    test('a model nothing can load gives up and says why', () async {
+      llmFiles.install('gemma-3-1b-it-int4');
+      llm.refuseTokens.addAll({4096, 2048, 1280, 512});
+
+      await expectLater(
+        chatService().complete(_ask('hi', tools: const [])),
+        throwsA(isA<AiConfigurationException>()),
+      );
+      expect(llm.loads.map((l) => l.maxTokens), [
+        4096,
+        2048,
+        1280,
+        512,
+      ], reason: 'every size tried before giving up');
+    });
+
+    test('running out of memory is not retried at a smaller size', () async {
+      llmFiles.install('gemma-3-1b-it-int4');
+      llm.loadError = AiConfigurationException(
+        'The device ran out of memory while loading the model.',
+        providerId: 'local',
+      );
+
+      await expectLater(
+        chatService().complete(_ask('hi', tools: const [])),
+        throwsA(isA<AiConfigurationException>()),
+      );
+      expect(
+        llm.loads,
+        hasLength(1),
+        reason: 'a smaller context does not conjure up memory',
+      );
+    });
+
+    test('a general question gets its plain answer, not a search', () async {
+      llmFiles.install('gemma-3-1b-it-int4');
+      llm.script.add(['A kilowatt hour is a unit of energy.']);
+
+      final turn = await chatService().complete(_ask('what does kWh mean?'));
+
+      expect(turn.text, 'A kilowatt hour is a unit of energy.');
+      expect(turn.toolCalls, isEmpty);
+      expect(turn.stopReason, ChatStopReason.endTurn);
+    });
+
     test('an invented tool name is not a call', () async {
       llmFiles.install('gemma-3-1b-it-int4');
       llm.script.add(['{"tool": "ask_the_user", "arguments": {}}']);

@@ -64,6 +64,11 @@ class LocalLlmModels {
 
   bool get supported => _runtime != null && _files != null;
 
+  /// Fires while a model is being read into memory, and again with null when
+  /// it is done. Empty when this build has no runtime to load into.
+  Stream<LlmLoading?> get loading =>
+      _runtime?.loading ?? const Stream<LlmLoading?>.empty();
+
   /// Every catalog entry, smallest first.
   Future<List<LocalLlmStatus>> list() async {
     final runtime = _runtime;
@@ -99,6 +104,30 @@ class LocalLlmModels {
     }
     return files.import(modelId, extensions: spec.fileExtensions);
   }
+
+  /// Fetches the weights straight from the model's repository with [token].
+  Stream<ModelImportEvent> download(String modelId, {required String token}) {
+    final files = _files;
+    if (files == null || localLlmSpec(modelId) == null) {
+      return Stream.value(
+        const ModelImportRefused(ModelImportRefusal.unreadable),
+      );
+    }
+    return files.download(modelId, token: token);
+  }
+
+  /// Follows a download that is already running, without starting one.
+  Stream<ModelImportEvent> watchDownload(String modelId) {
+    final files = _files;
+    if (files == null) return const Stream.empty();
+    return files.watchDownload(modelId);
+  }
+
+  /// The model downloading right now, or null when nothing is.
+  Future<String?> activeDownload() async => _files?.activeDownload();
+
+  /// Stops the running download.
+  Future<void> cancelDownload() async => _files?.cancelDownload();
 
   /// Deletes the file and unloads the model if it was the one running.
   Future<void> remove(String modelId) async {

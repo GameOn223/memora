@@ -17,7 +17,6 @@ import '../../theme/text_styles.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/added_toast.dart';
 import '../../widgets/bottom_tabs.dart';
-import '../../widgets/chip_bar.dart';
 import '../../widgets/density_toggle.dart';
 import '../../widgets/fading_rule.dart';
 import '../../widgets/memory_labels.dart';
@@ -25,6 +24,7 @@ import '../../widgets/memory_tile.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/tap_area.dart';
 import '../queue/block_notice.dart';
+import 'category_filter.dart';
 import 'empty_state.dart';
 import 'home_header.dart';
 
@@ -43,15 +43,16 @@ class HomeScreen extends ConsumerWidget {
       return const EmptyState();
     }
     final options = ref.watch(categoryOptionsProvider).value ?? const [];
-    final filterLabel = ref.watch(homeFilterProvider);
-    final selected = options.where((o) => o.label == filterLabel).firstOrNull;
+    final chosen = ref.watch(homeFilterProvider);
+    // Several labels are a union, so the raw categories behind each chosen
+    // one are gathered up. Nothing chosen is no filter at all.
+    final categories = <String>{
+      for (final option in options)
+        if (chosen.contains(option.label)) ...option.categories,
+    };
     final columns = ref.watch(gridColumnsProvider).value ?? 2;
     final memories = ref
-        .watch(
-          memoriesProvider(
-            MemoryFilter(categories: selected?.categories ?? const {}),
-          ),
-        )
+        .watch(memoriesProvider(MemoryFilter(categories: categories)))
         .value;
     final now = ref.watch(clockProvider).now();
     final groups = groupByTakenDate(memories ?? const [], now);
@@ -69,15 +70,7 @@ class HomeScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   const SizedBox(width: Space.s6),
-                  Expanded(
-                    child: ChipBar(
-                      labels: [for (final o in options) o.label],
-                      selected: filterLabel,
-                      onSelected: (label) =>
-                          ref.read(homeFilterProvider.notifier).select(label),
-                      height: controlsHeight,
-                    ),
-                  ),
+                  const Expanded(child: CategoryFilter(height: controlsHeight)),
                   const SizedBox(width: Space.s4),
                   DensityToggle(
                     columns: columns,

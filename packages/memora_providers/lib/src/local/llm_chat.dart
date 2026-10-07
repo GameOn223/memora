@@ -26,7 +26,7 @@ import 'model_catalog.dart';
 ///   made up.
 /// - Once a tool result is in the transcript, plain text is the answer. It
 ///   is grounded in what the tool returned, which is the point of the loop.
-class LocalLlmChatService implements ChatService {
+class LocalLlmChatService implements StreamingChatService {
   LocalLlmChatService({
     required LocalLlmRuntime runtime,
     required LocalLlmFiles files,
@@ -42,12 +42,36 @@ class LocalLlmChatService implements ChatService {
   final LocalLlmSpec spec;
 
   @override
-  Future<ChatTurn> complete(ChatRequest request) async {
-    final reply = await _session.run(
+  Stream<ChatStreamEvent> stream(ChatRequest request) async* {
+    final collected = StringBuffer();
+    // Text is only worth showing as it arrives when it is the answer. A
+    // reply that turns out to be a tool call is not shown at all, so the
+    // pieces are held until the shape of the turn is known.
+    final offered = {for (final tool in request.tools) tool.name};
+    final streamable = offered.isEmpty || _hasSearched(request.entries);
+    await for (final piece in _session.runStreaming(
       LocalLlmPrompt.chat(request),
       capability: Capability.chat,
       maxOutputTokens: request.maxOutputTokens,
-    );
+    )) {
+      collected.write(piece);
+      if (streamable) yield ChatTextDelta(piece);
+    }
+    yield ChatTurnDone(_turnFor(collected.toString(), request));
+  }
+
+  @override
+  Future<ChatTurn> complete(ChatRequest request) async => _turnFor(
+    await _session.run(
+      LocalLlmPrompt.chat(request),
+      capability: Capability.chat,
+      maxOutputTokens: request.maxOutputTokens,
+    ),
+    request,
+  );
+
+  /// Reads [reply] as either a tool call or an answer.
+  ChatTurn _turnFor(String reply, ChatRequest request) {
     final offered = {for (final tool in request.tools) tool.name};
     final call = offered.isEmpty
         ? null
@@ -59,7 +83,13 @@ class LocalLlmChatService implements ChatService {
         stopReason: ChatStopReason.toolUse,
       );
     }
-    if (offered.isNotEmpty && !_hasSearched(request.entries)) {
+    // Tools were offered and none was called. For a question about their
+    // own memories that is the model failing to search rather than choosing
+    // not to, and the two look identical from here, so the question decides.
+    // A plainly general question gets the plain answer it asked for.
+    if (offered.isNotEmpty &&
+        !_hasSearched(request.entries) &&
+        QuestionKind.needsMemories(_lastQuestion(request.entries))) {
       throw ToolCallingUnavailableException(
         providerId: providerId,
         modelId: spec.id,
@@ -70,6 +100,15 @@ class LocalLlmChatService implements ChatService {
       toolCalls: const [],
       stopReason: ChatStopReason.endTurn,
     );
+  }
+
+  /// The question this turn is answering, which is the last thing the user
+  /// said. Empty when there is nothing to go on, which reads as general.
+  static String _lastQuestion(List<ChatEntry> entries) {
+    for (final entry in entries.reversed) {
+      if (entry is UserEntry) return entry.text;
+    }
+    return '';
   }
 
   static bool _hasSearched(List<ChatEntry> entries) =>

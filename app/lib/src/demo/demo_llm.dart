@@ -66,6 +66,19 @@ class DemoLlmRuntime implements LocalLlmRuntime {
     }
   }
 
+  final _loading = StreamController<LlmLoading?>.broadcast();
+
+  @override
+  Stream<LlmLoading?> get loading => _loading.stream;
+
+  /// Pretends a load is under way, so the indicator can be seen.
+  void showLoading({
+    String path = 'models/imported/demo.task',
+    int tokens = 4096,
+  }) => _loading.add(LlmLoading(relativePath: path, maxTokens: tokens));
+
+  void finishLoading() => _loading.add(null);
+
   @override
   Future<DeviceMemory> memory() async => memoryState;
 }
@@ -114,6 +127,47 @@ class DemoLlmFiles implements LocalLlmFiles {
     models.add(model);
     yield ModelImportDone(model);
   }
+
+  /// Tokens the downloads were handed, so a test can check one came out of
+  /// the secret store rather than being invented here.
+  final List<String> tokensSeen = [];
+
+  @override
+  Stream<ModelImportEvent> download(
+    String modelId, {
+    required String token,
+  }) async* {
+    tokensSeen.add(token);
+    if (refuseNext case final reason?) {
+      refuseNext = null;
+      yield ModelImportRefused(reason);
+      return;
+    }
+    for (var done = 1; done <= 4; done++) {
+      await Future<void>.delayed(step);
+      yield ModelImportCopying(done / 4);
+    }
+    final model = InstalledLlmModel(
+      modelId: modelId,
+      relativePath: 'models/imported/$modelId.task',
+      sizeBytes: 550 * 1024 * 1024,
+    );
+    models.add(model);
+    yield ModelImportDone(model);
+  }
+
+  /// The download a demo build pretends is already running.
+  String? running;
+
+  @override
+  Stream<ModelImportEvent> watchDownload(String modelId) =>
+      download(modelId, token: 'demo');
+
+  @override
+  Future<String?> activeDownload() async => running;
+
+  @override
+  Future<void> cancelDownload() async => running = null;
 
   @override
   Future<void> remove(String modelId) async =>

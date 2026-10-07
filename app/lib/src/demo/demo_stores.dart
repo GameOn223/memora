@@ -621,6 +621,21 @@ class DemoSettingsStore implements SettingsStore {
   }
 }
 
+/// Records the links a demo build was asked to open, so a test can check
+/// the right page was reached without a browser.
+class DemoLinks implements Links {
+  final List<String> opened = [];
+
+  /// When false, [open] reports that nothing could handle the link.
+  bool handled = true;
+
+  @override
+  Future<bool> open(String url) async {
+    opened.add(url);
+    return handled;
+  }
+}
+
 class DemoSecretStore implements SecretStore {
   final Map<String, String> values = {};
 
