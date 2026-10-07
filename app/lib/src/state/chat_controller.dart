@@ -101,18 +101,34 @@ class ChatController extends Notifier<ChatViewState> {
   StreamSubscription<ChatProgress>? _subscription;
   int _askToken = 0;
 
+  /// Bumped by everything that decides which conversation is on screen.
+  ///
+  /// Reading one takes two awaits, and the controller is often built by the
+  /// very tap that wants a new conversation: "Ask about this" creates it,
+  /// which schedules the opening read of the most recent conversation, and
+  /// that read used to land afterwards and put the old messages back.
+  int _pick = 0;
+
   @override
   ChatViewState build() {
     ref.onDispose(() => unawaited(_subscription?.cancel()));
-    scheduleMicrotask(openLatest);
+    final pick = _pick;
+    scheduleMicrotask(() {
+      // Something may have chosen a conversation already: "Ask about this"
+      // starts one in the same tap that builds this controller. Whatever it
+      // chose wins, and the most recent conversation is not opened at all.
+      if (pick != _pick) return;
+      unawaited(openLatest());
+    });
     return const ChatViewState();
   }
 
   /// Opens the most recent conversation, or starts an empty one.
   Future<void> openLatest() async {
+    final pick = ++_pick;
     final services = ref.read(appServicesProvider);
     final conversations = await services.conversations.listConversations();
-    if (!ref.mounted) return;
+    if (!ref.mounted || pick != _pick) return;
     if (conversations.isEmpty) {
       state = state.copyWith(loaded: true);
       return;
@@ -121,9 +137,10 @@ class ChatController extends Notifier<ChatViewState> {
   }
 
   Future<void> open(String conversationId) async {
+    final pick = ++_pick;
     final services = ref.read(appServicesProvider);
     final messages = await services.conversations.messages(conversationId);
-    if (!ref.mounted) return;
+    if (!ref.mounted || pick != _pick) return;
     state = state.copyWith(
       conversationId: conversationId,
       messages: messages,
@@ -138,6 +155,7 @@ class ChatController extends Notifier<ChatViewState> {
 
   /// Starts a fresh conversation, optionally about one memory.
   void startNew({String? focusMemoryId}) {
+    _pick++;
     unawaited(_subscription?.cancel());
     _subscription = null;
     state = ChatViewState(loaded: true, focusMemoryId: focusMemoryId);
