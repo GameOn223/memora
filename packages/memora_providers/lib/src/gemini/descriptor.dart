@@ -15,5 +15,6 @@ const geminiDescriptor = ProviderDescriptor(
   requiresApiKey: true,
   apiKeyHint: 'AIza...',
   defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+  apiKeyUrl: 'https://aistudio.google.com/apikey',
   homepage: 'https://aistudio.google.com',
 );

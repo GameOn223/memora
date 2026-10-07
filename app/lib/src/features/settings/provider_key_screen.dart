@@ -12,6 +12,7 @@ import '../../theme/memora_colors.dart';
 import '../../theme/memora_icons.dart';
 import '../../theme/text_styles.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/external_link.dart';
 import '../../widgets/outline_action.dart';
 import '../../widgets/screen_header.dart';
 import 'settings_rows.dart';
@@ -234,11 +235,14 @@ class _ProviderKeyScreenState extends ConsumerState<ProviderKeyScreen> {
                     ],
                   ),
                 ],
-                if (descriptor.homepage != null) ...[
+                // The exact page the key is made on, not the home page
+                // someone then has to find their way around.
+                if (descriptor.apiKeyUrl case final url?) ...[
                   const SizedBox(height: Space.s8),
-                  Text(
-                    'Keys come from ${descriptor.homepage}.',
-                    style: MemoraText.style(12, color: c.dim),
+                  ExternalLink(
+                    label: 'Get a ${descriptor.displayName} key',
+                    url: url,
+                    size: 12,
                   ),
                 ],
               ],

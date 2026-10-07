@@ -14,5 +14,6 @@ const anthropicDescriptor = ProviderDescriptor(
   requiresApiKey: true,
   apiKeyHint: 'sk-ant-...',
   defaultBaseUrl: 'https://api.anthropic.com/v1',
+  apiKeyUrl: 'https://platform.claude.com/settings/keys',
   homepage: 'https://platform.claude.com',
 );

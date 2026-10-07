@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:memora_core/memora_core.dart';
+import 'package:memora_providers/memora_providers.dart';
 
 import '../platform/messages.g.dart' as bridge;
 
@@ -181,17 +182,29 @@ class BridgeLocalLlmRuntime implements LocalLlmRuntime {
 class BridgeLocalLlmFiles implements LocalLlmFiles {
   BridgeLocalLlmFiles({
     required this._settings,
+    required this.filesDir,
     bridge.ModelImportHostApi? host,
     Stream<bridge.ModelImportProgress>? progress,
+    Stream<bridge.ModelDownloadEvent>? downloads,
   }) : _host = host ?? bridge.ModelImportHostApi(),
-       _progress = progress ?? bridge.importProgress();
+       _progress = progress ?? bridge.importProgress(),
+       _downloads = downloads ?? bridge.downloadEvents();
 
   /// Settings key holding `{model id: relative path}`.
   static const settingsKey = 'local_llm.imported';
 
+  /// Where a download lands, under the files dir. The same folder imports
+  /// copy into, so one listing covers both and nothing downstream has to
+  /// know which way a model arrived.
+  static const importedDir = 'models/imported';
+
+  /// Absolute path of the app files directory.
+  final String filesDir;
+
   final SettingsStore _settings;
   final bridge.ModelImportHostApi _host;
   final Stream<bridge.ModelImportProgress> _progress;
+  final Stream<bridge.ModelDownloadEvent> _downloads;
 
   @override
   Future<List<InstalledLlmModel>> installed() async {
@@ -283,6 +296,150 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
       ),
     );
   }
+
+  /// Hands the download to a background worker and reports what it says.
+  ///
+  /// The worker is the one that fetches: a model runs to three gigabytes, so
+  /// the download has to outlive the screen and survive Memora going to the
+  /// background, which only a foreground service does. It shows a
+  /// notification with the progress while it runs.
+  ///
+  /// The token is not passed across. The worker reads it from the secret
+  /// store itself, so it never lands in WorkManager's database.
+  @override
+  Stream<ModelImportEvent> download(String modelId, {required String token}) {
+    final spec = localLlmSpec(modelId);
+    if (spec == null) {
+      return Stream.value(
+        const ModelImportRefused(ModelImportRefusal.unreadable),
+      );
+    }
+    final out = _watch(modelId, spec);
+    unawaited(
+      _host
+          .startDownload(
+            modelId,
+            spec.downloadUrl.toString(),
+            spec.fileName,
+            spec.displayName,
+          )
+          .onError<Object>((error, stack) {
+            if (out.isClosed) return;
+            out.add(
+              ModelImportRefused(
+                error is PlatformException
+                    ? refusalForCode(error.code)
+                    : ModelImportRefusal.downloadFailed,
+              ),
+            );
+            unawaited(out.close());
+          }),
+    );
+    return out.stream;
+  }
+
+  @override
+  Stream<ModelImportEvent> watchDownload(String modelId) {
+    final spec = localLlmSpec(modelId);
+    if (spec == null) {
+      return Stream.value(
+        const ModelImportRefused(ModelImportRefusal.unreadable),
+      );
+    }
+    return _watch(modelId, spec).stream;
+  }
+
+  /// Follows the worker's events for [modelId] and turns them into import
+  /// events. Starting the work is the caller's business.
+  StreamController<ModelImportEvent> _watch(String modelId, LocalLlmSpec spec) {
+    final out = StreamController<ModelImportEvent>();
+    final watching = _downloads.listen((event) {
+      if (out.isClosed || event.modelId != modelId) return;
+      if (event.error case final code?) {
+        out.add(ModelImportRefused(refusalForCode(code)));
+        unawaited(out.close());
+        return;
+      }
+      if (event.totalBytes > 0) {
+        out.add(
+          ModelImportCopying(
+            (event.copiedBytes / event.totalBytes).clamp(0.0, 1.0),
+          ),
+        );
+      }
+      if (event.done) {
+        unawaited(_finishDownload(out, modelId, spec, event.copiedBytes));
+      }
+    }, onError: (Object _) {});
+
+    // Leaving the screen does not stop a download. Cancelling it is the
+    // notification's job, and the user's.
+    out.onCancel = watching.cancel;
+    unawaited(out.done.then((_) => watching.cancel()));
+    return out;
+  }
+
+  /// Records the finished file and closes the stream.
+  Future<void> _finishDownload(
+    StreamController<ModelImportEvent> out,
+    String modelId,
+    LocalLlmSpec spec,
+    int sizeBytes,
+  ) async {
+    final relativePath = '$importedDir/${spec.fileName}';
+    final record = await _record();
+    final previous = record[modelId];
+    if (previous != null && previous != relativePath) {
+      try {
+        await _host.deleteModel(previous);
+      } on PlatformException {
+        // It was already gone.
+      }
+    }
+    await _write({...record, modelId: relativePath});
+    if (out.isClosed) return;
+    out.add(
+      ModelImportDone(
+        InstalledLlmModel(
+          modelId: modelId,
+          relativePath: relativePath,
+          sizeBytes: sizeBytes,
+        ),
+      ),
+    );
+    await out.close();
+  }
+
+  @override
+  Future<void> cancelDownload() async {
+    try {
+      await _host.cancelDownload('');
+    } on PlatformException {
+      // Nothing running.
+    }
+  }
+
+  @override
+  Future<String?> activeDownload() async {
+    try {
+      return await _host.activeDownload();
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// What the worker's error code means for the user.
+  ///
+  /// `unauthorized` is a token the server would not take at all.
+  /// `forbidden` is a token it accepted from an account that has not been
+  /// granted these files, which is the licence rather than the token.
+  static ModelImportRefusal refusalForCode(String code) => switch (code) {
+    'no_token' || 'unauthorized' => ModelImportRefusal.tokenRejected,
+    'forbidden' => ModelImportRefusal.licenceNotAccepted,
+    'no_space' => ModelImportRefusal.notEnoughStorage,
+    'unsupported_model' => ModelImportRefusal.wrongFileType,
+    _ => ModelImportRefusal.downloadFailed,
+  };
 
   @override
   Future<void> remove(String modelId) async {
