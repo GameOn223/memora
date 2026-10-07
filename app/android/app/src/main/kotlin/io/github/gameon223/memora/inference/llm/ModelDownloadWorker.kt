@@ -55,15 +55,23 @@ class ModelDownloadWorker(
         setForegroundQuietly(info(0, 0))
         return try {
             download(url, fileName, token)
+        } catch (error: StoppedEarly) {
+            // WorkManager stops a worker after about ten minutes, and three
+            // gigabytes does not always arrive in ten minutes. The part file
+            // stays where it is and the next run picks up from its length,
+            // so being stopped costs the time rather than the download.
+            clearOngoing()
+            Result.retry()
         } catch (error: CancellationException) {
-            // Cancelled, by the notification action or by a new download.
-            // The part file is already gone; say nothing more.
             clearOngoing()
             throw error
         } catch (error: Exception) {
             finish(error.message ?: ERROR_FAILED)
         }
     }
+
+    /** Stopped by the system rather than by the user. */
+    private class StoppedEarly : Exception()
 
     private suspend fun download(url: String, fileName: String, token: String): Result =
         withContext(Dispatchers.IO) {
@@ -72,33 +80,52 @@ class ModelDownloadWorker(
             val target = File(dir, fileName)
             val part = File(dir, "$fileName.part")
 
-            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                setRequestProperty("Authorization", "Bearer $token")
-                instanceFollowRedirects = true
-                connectTimeout = TIMEOUT_MILLIS
-                readTimeout = TIMEOUT_MILLIS
-            }
+            // What an earlier run already fetched. Asking for the rest is
+            // what makes a download survive being stopped.
+            val already = if (part.isFile) part.length() else 0L
+            val connection = open(url, token, from = already)
+                ?: return@withContext finish(ERROR_FAILED)
             try {
                 val status = connection.responseCode
-                if (status != HttpURLConnection.HTTP_OK) {
+                val resuming = status == HttpURLConnection.HTTP_PARTIAL
+                if (!isAcceptable(status)) {
+                    // A refusal is the end of it, so the part file goes too.
+                    part.delete()
                     return@withContext finish(errorForStatus(status))
                 }
-                val declared = connection.contentLengthLong.coerceAtLeast(0L)
-                if (declared > 0 && declared > dir.usableSpace) {
+                // The server ignored the range, so start again from nothing.
+                val from = if (resuming) already else 0L
+                val remaining = connection.contentLengthLong.coerceAtLeast(0L)
+                val declared = if (remaining > 0) remaining + from else 0L
+                if (declared > 0 && declared - from > dir.usableSpace) {
+                    part.delete()
                     return@withContext finish(ERROR_NO_SPACE)
                 }
-                var copied = 0L
+                var copied = from
                 connection.inputStream.use { input ->
-                    part.outputStream().use { output ->
-                        copied = ModelCopy.copy(input, output, declared) { soFar ->
-                            if (isStopped) throw CancellationException("stopped")
-                            report(soFar, declared)
+                    java.io.FileOutputStream(part, resuming).use { output ->
+                        ModelCopy.copy(input, output, declared) { soFar ->
+                            if (isStopped) throw StoppedEarly()
+                            copied = from + soFar
+                            report(copied, declared)
                         }
                     }
                 }
-                if (copied <= 0L) return@withContext finish(ERROR_EMPTY)
+                if (copied <= 0L) {
+                    part.delete()
+                    return@withContext finish(ERROR_EMPTY)
+                }
                 if (declared > 0 && copied != declared) {
-                    return@withContext finish(ERROR_SHORT)
+                    // Short, but the bytes so far are good, so keep them and
+                    // let the retry ask for the rest.
+                    return@withContext Result.retry()
+                }
+                // Checked before it is given its real name, because a file
+                // sitting there under its real name is taken to be a model.
+                // A gated download can hand back a page instead of weights.
+                ModelBundle.check(part)?.let {
+                    part.delete()
+                    return@withContext finish("$ERROR_NOT_A_MODEL: $it")
                 }
                 if (!part.renameTo(target)) return@withContext finish(ERROR_FAILED)
                 ModelDownloads.send(
@@ -114,7 +141,6 @@ class ModelDownloadWorker(
                 Result.success()
             } finally {
                 connection.disconnect()
-                if (part.exists()) part.delete()
             }
         }
 
@@ -217,8 +243,48 @@ class ModelDownloadWorker(
         const val ERROR_SHORT = "short_download"
         const val ERROR_EMPTY = "empty_download"
         const val ERROR_FAILED = "download_failed"
+        const val ERROR_NOT_A_MODEL = "not_a_model"
 
         private const val TIMEOUT_MILLIS = 30_000
+
+        /** Redirects to follow before giving up. */
+        private const val MAX_REDIRECTS = 5
+
+        /**
+         * Opens [url], following redirects by hand.
+         *
+         * Hugging Face answers a request for gated weights with a redirect to
+         * a CDN whose own signed URL carries the authorization. Sending the
+         * bearer token on there as well is what HttpURLConnection would do
+         * with instanceFollowRedirects, and the CDN refuses the request for
+         * having two sets of credentials. So the token goes to
+         * huggingface.co only, and the redirect is followed without it.
+         */
+        private fun open(url: String, token: String, from: Long = 0L): HttpURLConnection? {
+            var next = url
+            var carryToken = true
+            repeat(MAX_REDIRECTS + 1) {
+                val connection = (URL(next).openConnection() as HttpURLConnection).apply {
+                    if (carryToken) setRequestProperty("Authorization", "Bearer $token")
+                    // Ask for the rest of a file an earlier run started.
+                    if (from > 0) setRequestProperty("Range", "bytes=$from-")
+                    instanceFollowRedirects = false
+                    connectTimeout = TIMEOUT_MILLIS
+                    readTimeout = TIMEOUT_MILLIS
+                }
+                val status = connection.responseCode
+                if (status !in REDIRECTS) return connection
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (location.isNullOrBlank()) return null
+                next = URL(URL(next), location).toString()
+                // Only huggingface.co is told who we are.
+                carryToken = URL(next).host.endsWith("huggingface.co")
+            }
+            return null
+        }
+
+        private val REDIRECTS = setOf(301, 302, 303, 307, 308)
 
         /**
          * What an HTTP status from a gated repository means. 401 is a token
@@ -227,6 +293,15 @@ class ModelDownloadWorker(
          * the licence rather than the token: a gated repository answers a
          * request it will not serve with a 404 as readily as a 403.
          */
+        /**
+         * Whether the server is sending the file. 206 means it honoured the
+         * Range header and is sending the rest of one already started;
+         * treating that as a failure would restart a download from nothing.
+         */
+        fun isAcceptable(status: Int): Boolean =
+            status == HttpURLConnection.HTTP_OK ||
+                status == HttpURLConnection.HTTP_PARTIAL
+
         fun errorForStatus(status: Int): String = when (status) {
             HttpURLConnection.HTTP_UNAUTHORIZED -> ERROR_UNAUTHORIZED
             HttpURLConnection.HTTP_FORBIDDEN, HttpURLConnection.HTTP_NOT_FOUND ->
@@ -240,5 +315,9 @@ class ModelDownloadWorker(
 class ModelDownloadCancelReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         ModelDownloads.cancelAll(context)
+        // A stopped worker keeps its part file so a retry can carry on. A
+        // cancelled one is not coming back, and a few gigabytes is not
+        // something to leave lying around.
+        ModelDownloads.discardPartials(context)
     }
 }

@@ -336,10 +336,26 @@ void main() {
       );
 
       final failure = events.single as ChatFailed;
-      expect(failure.message, 'Fake AI did not respond. Try again.');
+      // What went wrong, not just that something did: "did not respond" is
+      // equally true of a timed-out server and a model that failed to load.
+      expect(failure.message, 'Fake AI: Upstream timeout');
       expect(failure.retryable, isTrue);
       final saved = await db.messages(conversation.id);
       expect(saved.map((m) => m.role), [MessageRole.user]);
+    });
+
+    test('a failure with nothing to say still asks for a retry', () async {
+      final chat = ScriptedChatService([const AiTransientException('')]);
+
+      final (events, _) = await ask(
+        await engineWith(await AiHarness.create(chat: chat)),
+        'anything about bills?',
+      );
+
+      expect(
+        (events.single as ChatFailed).message,
+        'Fake AI did not respond. Try again.',
+      );
     });
 
     test('a store failure while saving keeps the question', () async {
@@ -369,7 +385,22 @@ void main() {
 
       final failure = events.single as ChatFailed;
       expect(failure.retryable, isFalse);
-      expect(failure.message, contains('settings'));
+      // The reason the provider gave, not a template about API keys. For a
+      // model on the phone that advice was no help at all, and it buried
+      // what the runtime said.
+      expect(failure.message, contains('key rejected'));
+      expect(failure.message, contains('Fake AI'));
+    });
+
+    test('a configuration failure with nothing to say still advises', () async {
+      final chat = ScriptedChatService([const AiConfigurationException('')]);
+
+      final (events, _) = await ask(
+        await engineWith(await AiHarness.create(chat: chat)),
+        'hello',
+      );
+
+      expect((events.single as ChatFailed).message, contains('settings'));
     });
   });
 

@@ -122,7 +122,8 @@ class DemoChatEngine implements ChatEngine {
   final CapabilityRouter router;
 
   /// Pause between progress events, so the thinking row is visible.
-  final Duration step;
+  /// Delay between the steps of a turn. Tests shorten it.
+  Duration step;
 
   /// When set, the next [ask] fails with a retryable error.
   bool failNextAsk = false;
@@ -262,8 +263,29 @@ class DemoChatEngine implements ChatEngine {
       db.clock.now(),
       searchOnly: searchOnly,
     );
+    // A word at a time, the way a provider that streams arrives. The saved
+    // message still lands at the end and is the one kept.
+    if (streamAnswer) {
+      for (final piece in _words(message.content)) {
+        await Future<void>.delayed(step);
+        yield ChatAnswerDelta(piece);
+      }
+    }
     await conversations.addMessage(message);
     yield ChatAnswered(message);
+  }
+
+  /// Whether answers arrive a piece at a time. Off by default so the tests
+  /// written before streaming existed still describe what they meant.
+  bool streamAnswer = false;
+
+  /// Words with their trailing space, so joining them is the original.
+  static List<String> _words(String text) {
+    final parts = <String>[];
+    for (final word in text.split(' ')) {
+      parts.add(parts.isEmpty ? word : ' $word');
+    }
+    return parts;
   }
 
   _Script _scriptFor(String text, String? focusMemoryId) {

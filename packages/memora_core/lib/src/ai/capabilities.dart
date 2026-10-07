@@ -170,6 +170,41 @@ abstract interface class ChatService {
   Future<ChatTurn> complete(ChatRequest request);
 }
 
+/// A [ChatService] that can hand text over as it is produced.
+///
+/// Separate from [ChatService] rather than part of it, so an adapter that
+/// cannot stream needs no change and the engine can ask with a type check.
+/// A model on the phone produces a token at a time anyway: collecting the
+/// whole reply before showing any of it threw away something the user had
+/// already paid for.
+abstract interface class StreamingChatService implements ChatService {
+  /// Runs the request, emitting text as it arrives and the finished turn
+  /// last.
+  ///
+  /// Every piece is new text, not the reply so far. Exactly one
+  /// [ChatTurnDone] arrives, at the end, and it carries the same turn
+  /// [ChatService.complete] would have returned, tool calls included.
+  Stream<ChatStreamEvent> stream(ChatRequest request);
+}
+
+sealed class ChatStreamEvent {
+  const ChatStreamEvent();
+}
+
+/// New text, not the whole reply so far.
+final class ChatTextDelta extends ChatStreamEvent {
+  const ChatTextDelta(this.text);
+
+  final String text;
+}
+
+/// The finished turn, last.
+final class ChatTurnDone extends ChatStreamEvent {
+  const ChatTurnDone(this.turn);
+
+  final ChatTurn turn;
+}
+
 /// Some embedding models encode queries and documents differently.
 enum EmbeddingPurpose { document, query }
 

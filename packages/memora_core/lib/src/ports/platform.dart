@@ -125,7 +125,30 @@ class DeviceMemory {
 }
 
 /// A generative model running on this device.
+/// Whether a generative model is being read into memory right now.
+///
+/// Loading half a gigabyte of weights takes seconds, and the first question
+/// of a session pays for it. Without this the app looks stuck, so it says
+/// what it is doing instead.
+///
+/// There is no fraction. MediaPipe loads a model in one call and reports
+/// nothing while it works, so a percentage here would be invented.
+@immutable
+class LlmLoading {
+  const LlmLoading({required this.relativePath, required this.maxTokens});
+
+  /// The file being read in.
+  final String relativePath;
+
+  /// Context size this attempt asked for, which a retry lowers.
+  final int maxTokens;
+}
+
 abstract interface class LocalLlmRuntime {
+  /// Fires while a model is being read into memory, and again with null once
+  /// it is loaded or has failed.
+  Stream<LlmLoading?> get loading;
+
   /// Loads a model file already in app storage. Safe to call again with the
   /// same path and settings.
   Future<void> load(

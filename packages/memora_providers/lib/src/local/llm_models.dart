@@ -64,6 +64,11 @@ class LocalLlmModels {
 
   bool get supported => _runtime != null && _files != null;
 
+  /// Fires while a model is being read into memory, and again with null when
+  /// it is done. Empty when this build has no runtime to load into.
+  Stream<LlmLoading?> get loading =>
+      _runtime?.loading ?? const Stream<LlmLoading?>.empty();
+
   /// Every catalog entry, smallest first.
   Future<List<LocalLlmStatus>> list() async {
     final runtime = _runtime;

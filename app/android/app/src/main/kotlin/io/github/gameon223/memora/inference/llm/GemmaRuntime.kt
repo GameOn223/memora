@@ -153,6 +153,12 @@ object GemmaRuntime {
                     throw FlutterError(headroom.code, headroom.message, null)
                 }
 
+                // Said plainly, before MediaPipe says "Unable to open zip
+                // archive" from somewhere deep inside the native engine.
+                ModelBundle.check(file)?.let {
+                    throw FlutterError("not_a_model", it, null)
+                }
+
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(file.absolutePath)
                     .setMaxTokens(tokens)
@@ -445,13 +451,25 @@ object GemmaRuntime {
         return scaled
     }
 
-    private fun loadFailureMessage(error: Throwable): String = when (error) {
-        is OutOfMemoryError ->
-            "The device ran out of memory while loading the model."
-        is UnsatisfiedLinkError ->
-            "This build can't run on-device models on this processor."
-        else ->
-            "Couldn't load that model file. It may be for a different runtime."
+    /**
+     * Why a load failed, with what the runtime actually said.
+     *
+     * The native message is the only thing that distinguishes a file built
+     * for another runtime from one whose context size is smaller than the
+     * tokens asked for, and the user is the one who has to act on it, so it
+     * is passed through rather than swallowed.
+     */
+    private fun loadFailureMessage(error: Throwable): String {
+        val detail = error.message?.trim()?.takeIf { it.isNotEmpty() }
+        val summary = when (error) {
+            is OutOfMemoryError ->
+                "The device ran out of memory while loading the model."
+            is UnsatisfiedLinkError ->
+                "This build can't run on-device models on this processor."
+            else ->
+                "Couldn't load that model file."
+        }
+        return if (detail == null) summary else "$summary $detail"
     }
 
     private fun generationFailureMessage(error: Throwable): String = when {

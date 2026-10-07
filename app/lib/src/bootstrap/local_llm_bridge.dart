@@ -25,16 +25,27 @@ class BridgeLocalLlmRuntime implements LocalLlmRuntime {
   final bridge.LlmHostApi _host;
   final Stream<bridge.LlmChunk> _chunks;
 
+  final _loading = StreamController<LlmLoading?>.broadcast();
+
+  @override
+  Stream<LlmLoading?> get loading => _loading.stream;
+
   @override
   Future<void> load(
     String relativeModelPath, {
     required bool vision,
     int maxTokens = 4096,
   }) async {
+    // Said before the call, because the call is where the seconds go.
+    _loading.add(
+      LlmLoading(relativePath: relativeModelPath, maxTokens: maxTokens),
+    );
     try {
       await _host.load(relativeModelPath, vision, maxTokens);
     } on PlatformException catch (error) {
       throw loadFailure(error);
+    } finally {
+      _loading.add(null);
     }
   }
 
@@ -155,8 +166,20 @@ class BridgeLocalLlmRuntime implements LocalLlmRuntime {
   static AiException loadFailure(PlatformException error) {
     final message = error.message ?? 'The model could not be loaded.';
     return switch (error.code) {
-      'low_ram_device' || 'model_too_large' || 'max_tokens_too_large' =>
-        AiConfigurationException(message, providerId: providerId),
+      // None of these come good on their own. A model that will not load is
+      // not a transient failure: retrying it forever hides the reason and
+      // the user is the only one who can settle it, by choosing a smaller
+      // model or fetching the file again.
+      'low_ram_device' ||
+      'model_too_large' ||
+      'max_tokens_too_large' ||
+      'invalid_max_tokens' ||
+      'model_failed' ||
+      'not_a_model' ||
+      'invalid_path' => AiConfigurationException(
+        message,
+        providerId: providerId,
+      ),
       _ => AiTransientException(message, providerId: providerId),
     };
   }
@@ -209,26 +232,59 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
   @override
   Future<List<InstalledLlmModel>> installed() async {
     final record = await _record();
-    if (record.isEmpty) return const [];
-    final onDisk = {
-      for (final file in await _host.listModels()) file.relativePath: file,
-    };
+    final onDisk = await _host.listModels();
     final result = <InstalledLlmModel>[];
     final kept = <String, String>{};
-    for (final entry in record.entries) {
-      final file = onDisk[entry.value];
-      if (file == null) continue;
-      kept[entry.key] = entry.value;
+    final claimed = <String>{};
+
+    // A downloaded file carries the name the catalog asked for, so it says
+    // which entry it is without being told. This is what survives a long
+    // download: three gigabytes takes minutes, Memora is in the background
+    // for most of them, and the worker finishes and renames the file with
+    // nothing on the Dart side left listening to write anything down.
+    for (final file in onDisk) {
+      final spec = localLlmSpecForPath(file.relativePath);
+      if (spec == null) continue;
+      kept[spec.id] = file.relativePath;
+      claimed.add(file.relativePath);
       result.add(
         InstalledLlmModel(
-          modelId: entry.key,
+          modelId: spec.id,
           relativePath: file.relativePath,
           sizeBytes: file.byteSize,
         ),
       );
     }
-    if (kept.length != record.length) await _write(kept);
+
+    // An imported file has whatever name it had on the phone, so the record
+    // is the only thing that says which entry it stands for.
+    final byPath = {for (final file in onDisk) file.relativePath: file};
+    for (final entry in record.entries) {
+      if (kept.containsKey(entry.key) || claimed.contains(entry.value)) {
+        continue;
+      }
+      final file = byPath[entry.value];
+      if (file == null) continue;
+      kept[entry.key] = entry.value;
+      result.add(
+        InstalledLlmModel(
+          modelId: entry.key,
+          relativePath: entry.value,
+          sizeBytes: file.byteSize,
+        ),
+      );
+    }
+
+    if (!_sameRecord(kept, record)) await _write(kept);
     return result;
+  }
+
+  static bool _sameRecord(Map<String, String> a, Map<String, String> b) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (b[entry.key] != entry.value) return false;
+    }
+    return true;
   }
 
   /// Opens the picker, copies the file in and reports how far the copy has
@@ -433,18 +489,26 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
   /// `unauthorized` is a token the server would not take at all.
   /// `forbidden` is a token it accepted from an account that has not been
   /// granted these files, which is the licence rather than the token.
-  static ModelImportRefusal refusalForCode(String code) => switch (code) {
+  /// The worker appends its detail after a colon, so only the code is
+  /// matched: `not_a_model: the file is only 4 KB...`.
+  static ModelImportRefusal refusalForCode(String code) => switch (code
+      .split(':')
+      .first
+      .trim()) {
     'no_token' || 'unauthorized' => ModelImportRefusal.tokenRejected,
     'forbidden' => ModelImportRefusal.licenceNotAccepted,
     'no_space' => ModelImportRefusal.notEnoughStorage,
-    'unsupported_model' => ModelImportRefusal.wrongFileType,
+    'unsupported_model' || 'not_a_model' => ModelImportRefusal.wrongFileType,
     _ => ModelImportRefusal.downloadFailed,
   };
 
   @override
   Future<void> remove(String modelId) async {
     final record = await _record();
-    final path = record[modelId];
+    // The record names an imported file. A downloaded one may not be in
+    // there at all, if the app was not running when it finished, so the
+    // catalog name is the other way to find it.
+    final path = record[modelId] ?? await _downloadedPath(modelId);
     if (path == null) return;
     try {
       await _host.deleteModel(path);
@@ -452,6 +516,18 @@ class BridgeLocalLlmFiles implements LocalLlmFiles {
       // Already gone. The record still has to go.
     }
     await _write({...record}..remove(modelId));
+  }
+
+  /// Where [modelId] would be if it had been downloaded, when a file of that
+  /// name is actually there.
+  Future<String?> _downloadedPath(String modelId) async {
+    final spec = localLlmSpec(modelId);
+    if (spec == null) return null;
+    final wanted = '$importedDir/${spec.fileName}';
+    for (final file in await _host.listModels()) {
+      if (file.relativePath == wanted) return wanted;
+    }
+    return null;
   }
 
   /// What the picker refused, from the code Kotlin sent.

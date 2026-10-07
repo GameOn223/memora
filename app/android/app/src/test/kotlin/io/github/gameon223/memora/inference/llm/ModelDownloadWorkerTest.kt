@@ -2,6 +2,8 @@ package io.github.gameon223.memora.inference.llm
 
 import java.net.HttpURLConnection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ModelDownloadWorkerTest {
@@ -36,6 +38,21 @@ class ModelDownloadWorkerTest {
                 ModelDownloadWorker.ERROR_FAILED,
                 ModelDownloadWorker.errorForStatus(status),
             )
+        }
+    }
+
+    @Test
+    fun theServerIsSendingTheFileOnBoth200And206() {
+        // 206 answers a Range request for the rest of a download an earlier
+        // run started. Refusing it would restart three gigabytes.
+        assertTrue(ModelDownloadWorker.isAcceptable(HttpURLConnection.HTTP_OK))
+        assertTrue(ModelDownloadWorker.isAcceptable(HttpURLConnection.HTTP_PARTIAL))
+    }
+
+    @Test
+    fun nothingElseCountsAsTheFile() {
+        for (status in intArrayOf(401, 403, 404, 500, 204, 301)) {
+            assertFalse("status $status", ModelDownloadWorker.isAcceptable(status))
         }
     }
 

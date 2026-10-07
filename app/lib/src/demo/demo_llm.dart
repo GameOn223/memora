@@ -66,6 +66,19 @@ class DemoLlmRuntime implements LocalLlmRuntime {
     }
   }
 
+  final _loading = StreamController<LlmLoading?>.broadcast();
+
+  @override
+  Stream<LlmLoading?> get loading => _loading.stream;
+
+  /// Pretends a load is under way, so the indicator can be seen.
+  void showLoading({
+    String path = 'models/imported/demo.task',
+    int tokens = 4096,
+  }) => _loading.add(LlmLoading(relativePath: path, maxTokens: tokens));
+
+  void finishLoading() => _loading.add(null);
+
   @override
   Future<DeviceMemory> memory() async => memoryState;
 }
