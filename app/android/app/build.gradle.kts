@@ -59,6 +59,17 @@ android {
             signingConfig =
                 if (hasReleaseKey) signingConfigs.getByName("release")
                 else signingConfigs.getByName("debug")
+            // Said out loud rather than inherited. R8 is what the release
+            // build does by default here, and MediaPipe reads its protobuf
+            // fields by name, so the keep rules are not optional: without
+            // them a release build fails at load with "Field modelPath_ for
+            // xy not found" while the debug build is perfectly happy.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
