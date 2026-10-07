@@ -6,6 +6,8 @@ import 'package:memora/src/features/home/home_screen.dart';
 import 'package:memora/src/services/app_services.dart';
 import 'package:memora/src/state/queue.dart';
 import 'package:memora/src/state/ui_state.dart';
+import 'package:memora/src/theme/memora_colors.dart';
+import 'package:memora/src/theme/memora_icons.dart';
 import 'package:memora/src/widgets/chip_bar.dart';
 import 'package:memora/src/widgets/memory_tile.dart';
 import 'package:memora_core/memora_core.dart';
@@ -218,6 +220,33 @@ void main() {
         findsOneWidget,
       );
       expect(find.bySemanticsLabel('All categories'), findsOneWidget);
+    });
+
+    testWidgets('a picked category is marked with a tick, not a block', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+
+      await tester.tap(find.bySemanticsLabel('All categories'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel(RegExp(r'^Bills, \d+ memories$')));
+      await tester.pumpAndSettle();
+
+      final tick = find.byIcon(MemoraIconsFill.check);
+      expect(tick, findsOneWidget);
+      final c = tester.element(tick).colors;
+      expect(tester.widget<Icon>(tick).color, c.accent);
+
+      final box = tester.widget<Container>(
+        find.ancestor(of: tick, matching: find.byType(Container)).first,
+      );
+      final decoration = box.decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        isNull,
+        reason: 'the tick carries the accent, the box is not filled with it',
+      );
+      expect((decoration.border! as Border).top.color, c.line);
     });
 
     testWidgets('Clear empties the picker without leaving it', (tester) async {

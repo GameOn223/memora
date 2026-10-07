@@ -342,16 +342,19 @@ class _CategoryTick extends StatelessWidget {
         ),
         child: Row(
           children: [
+            // The box keeps its own quiet outline whether or not it is
+            // ticked, and the tick is the mark that carries the accent. A
+            // filled accent square reads as a block of colour, which is not
+            // how the accent is used anywhere else.
             Container(
               width: 18,
               height: 18,
               decoration: BoxDecoration(
-                color: ticked ? c.accent : null,
-                border: Border.all(color: ticked ? c.accent : c.line),
+                border: Border.all(color: c.line),
                 borderRadius: BorderRadius.circular(Radii.sm),
               ),
               child: ticked
-                  ? Icon(MemoraIconsFill.check, size: 13, color: c.bg)
+                  ? Icon(MemoraIconsFill.check, size: 13, color: c.accent)
                   : null,
             ),
             const SizedBox(width: Space.s3),
