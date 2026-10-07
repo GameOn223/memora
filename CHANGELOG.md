@@ -4,6 +4,8 @@ All notable changes to Memora are recorded here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.2.1]
+
 ### Fixed
 
 - **Ask about this starts its own conversation.** Coming from a memory, it used to drop you into the last conversation you had, with that conversation's messages on screen and the memory forgotten. Opening Ask reads the most recent conversation, and that read was finishing after the new conversation had already been started.
