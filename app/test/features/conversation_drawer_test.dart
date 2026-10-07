@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memora/src/demo/demo_app_services.dart';
+import 'package:memora/src/features/chat/conversation_drawer.dart';
 import 'package:memora/src/routing/router.dart';
 
 import '../helpers/pump_app.dart';
@@ -111,6 +112,30 @@ void main() {
       findsNothing,
     );
     expect(find.text('Ask about anything you saved.'), findsOneWidget);
+  });
+
+  testWidgets('the row menu opens beside the dots that were tapped', (
+    tester,
+  ) async {
+    await _openDrawer(tester);
+    const title = 'show me all my reliance bills';
+    final dots = tester.getRect(find.bySemanticsLabel('More for $title'));
+    await _openRowMenu(tester, title);
+    final rename = tester.getRect(find.text('Rename'));
+
+    // showMenu was given the row, which is as wide as the drawer, so it read
+    // the row's left edge as the anchor and opened the menu against the left
+    // edge of the screen instead.
+    expect(
+      rename.center.dx,
+      greaterThan(dots.center.dx - 120),
+      reason: 'the menu belongs under the dots, not off at the far left',
+    );
+    expect(
+      rename.right,
+      lessThan(ConversationDrawer.maxWidth),
+      reason: 'and it still has to fit inside the drawer',
+    );
   });
 
   testWidgets('pinning moves a conversation above the rest', (tester) async {

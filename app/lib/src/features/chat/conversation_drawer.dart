@@ -238,6 +238,12 @@ class _ConversationRow extends ConsumerWidget {
     await _refresh(ref);
   }
 
+  /// Opens the row's menu under the dots that were tapped.
+  ///
+  /// [context] has to be the button's own, not the row's. showMenu reads the
+  /// anchor's two edges to decide which way the menu grows, and the row is
+  /// as wide as the drawer: given that, the menu opened against the left
+  /// edge of the screen, a long way from the dots.
   Future<void> _showMenu(BuildContext context, WidgetRef ref) async {
     final box = context.findRenderObject()! as RenderBox;
     final overlay =
@@ -349,12 +355,16 @@ class _ConversationRow extends ConsumerWidget {
               ),
             ),
           ),
-          MemoraIconButton(
-            icon: MemoraIcons.dotsThreeVertical,
-            semanticLabel: 'More for ${conversation.title}',
-            box: 30,
-            iconSize: 16,
-            onPressed: () => unawaited(_showMenu(context, ref)),
+          // A context of its own, so the menu is placed against the button
+          // and not against the row, which is the full width of the drawer.
+          Builder(
+            builder: (context) => MemoraIconButton(
+              icon: MemoraIcons.dotsThreeVertical,
+              semanticLabel: 'More for ${conversation.title}',
+              box: 30,
+              iconSize: 16,
+              onPressed: () => unawaited(_showMenu(context, ref)),
+            ),
           ),
           const SizedBox(width: Space.s2),
         ],

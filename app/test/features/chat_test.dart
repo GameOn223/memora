@@ -71,6 +71,25 @@ void main() {
     expect(find.byType(DetailScreen), findsOneWidget);
   });
 
+  testWidgets('Ask about this starts a conversation of its own', (
+    tester,
+  ) async {
+    // Straight from a memory, with Ask never opened, so this tap is what
+    // builds the controller. Its opening read of the most recent
+    // conversation used to finish last and replace the new one.
+    await pumpApp(tester, initialLocation: '/memory/m9');
+    await scrollTo(tester, find.text('Ask about this'));
+    await tester.tap(find.text('Ask about this'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ask about this memory.'), findsOneWidget);
+    expect(
+      find.textContaining('I found 8 Reliance electricity bills'),
+      findsNothing,
+      reason: 'the seeded conversation is not the one being asked about',
+    );
+  });
+
   testWidgets('asking shows the thinking row and then the answer', (
     tester,
   ) async {
