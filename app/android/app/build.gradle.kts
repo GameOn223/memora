@@ -104,7 +104,7 @@ flutter {
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("androidx.activity:activity-ktx:1.13.0")
-    implementation("androidx.fragment:fragment-ktx:1.9.0")
+    implementation("androidx.fragment:fragment-ktx:1.9.1")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("androidx.exifinterface:exifinterface:1.4.2")
     // Bundled Latin model, so OCR works offline from the first launch.
