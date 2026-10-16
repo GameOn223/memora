@@ -9,7 +9,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  archive: ^4.3.0
+  archive: ^4.5.2
   crypto: ^3.0.7
   flutter:
     sdk: flutter
