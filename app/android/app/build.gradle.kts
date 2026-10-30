@@ -109,7 +109,7 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.4.2")
     // Bundled Latin model, so OCR works offline from the first launch.
     implementation("com.google.mlkit:text-recognition:16.0.1")
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.30.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.31.1")
     // Runs a Gemma model file the user brings in. tasks-core carries the
     // MPImage types the vision path needs; tasks-genai does not bundle them,
     // and the two are kept on the same version on purpose.
