@@ -13,4 +13,4 @@ dependencies:
     path: ../memora_core
 dev_dependencies:
   lints: ^6.1.0
-  test: ^1.31.1
+  test: ^1.32.0
